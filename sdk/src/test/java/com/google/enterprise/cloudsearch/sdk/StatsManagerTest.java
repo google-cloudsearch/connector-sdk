@@ -94,6 +94,24 @@ public class StatsManagerTest {
     }
 
     @Test
+    public void testSuccessCount() {
+      StatsManager.OperationStats component = StatsManager.getComponent("testComponent5");
+      int before = component.getSuccessCount("operation");
+      component.event("operation").start().success();
+      int after = component.getSuccessCount("operation");
+      assertEquals(1, after - before);
+    }
+
+    @Test
+    public void testFailureCount() {
+      StatsManager.OperationStats component = StatsManager.getComponent("testComponent5");
+      int before = component.getFailureCount("operation");
+      component.event("operation").start().failure();
+      int after = component.getFailureCount("operation");
+      assertEquals(1, after - before);
+    }
+
+    @Test
     public void testLogResult() {
       StatsManager.OperationStats component = StatsManager.getComponent("testComponent4");
       int beforeOne = component.getLogResultCounter("operation", "one");
