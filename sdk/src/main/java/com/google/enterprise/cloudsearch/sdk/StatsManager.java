@@ -224,6 +224,16 @@ public class StatsManager {
       return opCounter.count(operation);
     }
 
+    @VisibleForTesting
+    int getSuccessCount(String operation) {
+      return successCounter.count(operation);
+    }
+
+    @VisibleForTesting
+    int getFailureCount(String operation) {
+      return failureCounter.count(operation);
+    }
+
     public void logResult(String operation, String result) {
       if (running) {
         Multiset<String> multiset =
