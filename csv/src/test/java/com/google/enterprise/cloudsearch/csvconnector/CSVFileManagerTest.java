@@ -37,6 +37,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Properties;
 import org.apache.commons.csv.CSVRecord;
 import org.junit.Rule;
@@ -432,6 +433,79 @@ public class CSVFileManagerTest {
     Multimap<String, Object> multimap = csvFileManager.generateMultiMap(csvRecord);
     assertTrue(multimap.get("author").contains("ID1"));
     assertTrue(multimap.get("author").contains("ID2,A"));
+  }
+
+  @Test
+  public void testCSVDefaultFormat() throws IOException {
+    File tmpfile = temporaryFolder.newFile("CSVDefaultFormat.csv");
+    createFile(tmpfile, testCSVSingle);
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    config.put(CONTENT_HIGH, "term,definition");
+    config.put(CSVFileManager.SKIP_HEADER, "true");
+    config.put(CSVFileManager.CSVCOLUMNS, "term, definition");
+    config.put(CSVFileManager.CSV_FORMAT, "default");
+    setupConfig.initConfig(config);
+
+    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+    CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
+    CSVRecord csvRecord = getOnlyElement(csvFile);
+
+    Item item = csvFileManager.createItem(csvRecord);
+    assertEquals("moma search", item.getName());
+    assertEquals(" Google internal search ", csvRecord.get("definition"));
+  }
+
+  @Test
+  public void testCSVInvalidFormat() throws IOException {
+    File tmpfile = temporaryFolder.newFile("CSVInvalidFormat.csv");
+    createFile(tmpfile, testCSVSingle);
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    config.put(CONTENT_HIGH, "term,definition");
+    config.put(CSVFileManager.SKIP_HEADER, "true");
+    config.put(CSVFileManager.CSVCOLUMNS, "term, definition");
+    config.put(CSVFileManager.CSV_FORMAT, "unknownformat");
+    setupConfig.initConfig(config);
+
+    thrown.expect(InvalidConfigurationException.class);
+    thrown.expectMessage(containsString("Invalid CSVFormat unknownformat"));
+    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+  }
+
+  @Test
+  public void testCSVExcelFormat() throws IOException {
+    File tmpfile = temporaryFolder.newFile("CSVExcelFormat.csv");
+    createFile(tmpfile, testCSVSingle);
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    config.put(CONTENT_HIGH, "term,definition");
+    config.put(CSVFileManager.SKIP_HEADER, "true");
+    config.put(CSVFileManager.CSVCOLUMNS, "term,definition");
+    config.put(CSVFileManager.CSV_FORMAT, "excel");
+    setupConfig.initConfig(config);
+
+    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+    CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
+
+    Item item = csvFileManager.createItem(csvFile.iterator().next());
+    assertEquals("moma search", item.getName());
+    int count = 0;
+    Iterator<CSVRecord> iter = csvFile.iterator();
+    while (iter.hasNext()) {
+      iter.next();
+      count++;
+    }
+    assertEquals(3, count);
   }
 }
 
