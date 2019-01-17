@@ -48,6 +48,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -56,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.commons.csv.CSVFormat;
@@ -113,6 +115,7 @@ class CSVFileManager {
   static final String CSVCOLUMNS = "csv.csvColumns";
   static final String MULTIVALUE_COLUMNS = "csv.multiValueColumns";
   static final String MULTIVALUE_FORMAT_COLUMN = "csv.multiValue.%s";
+  static final String CSV_FORMAT = "csv.format";
 
   private final CSVFormat csvFormat;
   private final Path csvFilePath;
@@ -152,6 +155,8 @@ class CSVFileManager {
       columnsToDelimiter.put(column, delimiter);
     }
 
+    String csvFormat = Configuration.getString(CSV_FORMAT, "").get();
+
     UrlBuilder urlBuilder = UrlBuilder.fromConfiguration();
     if (!csvColumns.isEmpty()) {
       Set<String> missing = urlBuilder.getMissingColumns(new LinkedHashSet<String>(csvColumns));
@@ -165,6 +170,7 @@ class CSVFileManager {
         .setSkipHeader(skipHeader)
         .setUniqueKeyColumns(uniqueKeyColumns)
         .setCsvColumns(csvColumns)
+        .setCsvFormat(csvFormat)
         .setContentTemplate(ContentTemplate.fromConfiguration("csv"))
         .setColumnsToDelimiter(columnsToDelimiter)
         .setUrlBuilder(urlBuilder)
@@ -291,6 +297,7 @@ class CSVFileManager {
     private Path csvFilePath;
     private Map<String, String> columnsToDelimiter;
     private UrlBuilder urlBuilder;
+    private String csvFormat;
 
     Builder() {}
 
@@ -311,6 +318,11 @@ class CSVFileManager {
 
     Builder setCsvColumns(List<String> csvColumns) {
       this.csvColumns = csvColumns;
+      return this;
+    }
+
+    Builder setCsvFormat(String csvFormat) {
+      this.csvFormat = csvFormat;
       return this;
     }
 
@@ -354,17 +366,38 @@ class CSVFileManager {
   }
 
   private CSVFormat createCsvFormat(Builder builder) {
+    CSVFormat csvFormat = null;
+    if (builder.csvFormat.isEmpty()) {
+      csvFormat = CSVFormat.DEFAULT.withIgnoreSurroundingSpaces();
+    } else {
+      Set<CSVFormat.Predefined> csvFormats = getPredefinedCsvFormats();
+      for (CSVFormat.Predefined format : csvFormats) {
+        if (format.toString().equalsIgnoreCase(builder.csvFormat)) {
+          csvFormat = format.getFormat();
+          break;
+        }
+      }
+      if (csvFormat == null) {
+        throw new InvalidConfigurationException(
+            "Invalid CSVFormat " + builder.csvFormat + ", must be one of " + csvFormats);
+      }
+    }
+
     if (builder.csvColumns.isEmpty()) {
       checkState(
           !builder.skipHeader,
           "csv.csvColumns property must be specified "
               + "if csv.skipHeaderRecord is true");
-      return CSVFormat.DEFAULT.withHeader().withIgnoreSurroundingSpaces();
+      return csvFormat.withHeader();
     } else {
-      return CSVFormat.DEFAULT
-              .withHeader(builder.csvColumns.toArray(new String[0]))
-              .withSkipHeaderRecord(builder.skipHeader).withIgnoreSurroundingSpaces();
+      return csvFormat
+          .withHeader(builder.csvColumns.toArray(new String[0]))
+          .withSkipHeaderRecord(builder.skipHeader);
     }
+  }
+
+  private Set<CSVFormat.Predefined> getPredefinedCsvFormats() {
+    return new TreeSet<>(Arrays.asList(CSVFormat.Predefined.values()));
   }
 
   private static void checkNotNullNotEmpty(String value, String field) {
