@@ -44,6 +44,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.URI;
+import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
+import java.nio.charset.UnsupportedCharsetException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -90,6 +93,11 @@ import org.apache.commons.csv.CSVRecord;
  *       multiple values.
  *   <li>{@value #MULTIVALUE_FORMAT_COLUMN} - Specifies the delimiter used for each multivalue field
  *       defined in {@value #MULTIVALUE_COLUMNS}. The default delimiter is a comma.
+ *   <li>{@value #FILE_ENCODING} - Specifies the character encoding of the file. The
+ *       default value is the default character encoding of the system where the connector
+ *       is running. Refer to
+ *       {@link "https://docs.oracle.com/javase/8/docs/api/java/nio/charset/Charset.html"}
+ *       for details about supported charsets.
  * </ul>
  *
  * <p>Additional configuration parameters:
@@ -110,6 +118,7 @@ class CSVFileManager {
 
   @VisibleForTesting
   static final String FILEPATH = "csv.filePath";
+  static final String FILE_ENCODING = "csv.fileEncoding";
   static final String UNIQUE_KEY_COLUMNS = "csv.uniqueKeyColumns";
   static final String SKIP_HEADER = "csv.skipHeaderRecord";
   static final String CSVCOLUMNS = "csv.csvColumns";
@@ -119,6 +128,7 @@ class CSVFileManager {
 
   private final CSVFormat csvFormat;
   private final Path csvFilePath;
+  private final Charset fileCharset;
   private final ContentTemplate contentTemplate;
   private final LinkedHashSet<String> uniqueKeyColumns;
   private final Map<String, String> columnsToDelimiter;
@@ -135,8 +145,17 @@ class CSVFileManager {
    */
   public static CSVFileManager fromConfiguration() {
     checkState(Configuration.isInitialized(), "configuration not initialized");
-    //required fields
+
     String filePath = Configuration.getString(FILEPATH, null).get();
+    Charset fileCharset = Configuration.getValue(FILE_ENCODING, defaultCharset(),
+        value -> {
+          try {
+            return Charset.forName(value);
+          } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
+            throw new InvalidConfigurationException("Invalid charset: " + value, e);
+          }
+        }
+      ).get();
     Boolean skipHeader = Configuration.getBoolean(SKIP_HEADER, false).get();
     List<String> uniqueKeyColumns =
         Configuration.getMultiValue(
@@ -167,6 +186,7 @@ class CSVFileManager {
 
     return new Builder()
         .setFilePath(filePath)
+        .setFileCharset(fileCharset)
         .setSkipHeader(skipHeader)
         .setUniqueKeyColumns(uniqueKeyColumns)
         .setCsvColumns(csvColumns)
@@ -279,6 +299,7 @@ class CSVFileManager {
   private CSVFileManager(Builder builder) {
     this.contentTemplate = builder.contentTemplate;
     this.csvFilePath = builder.csvFilePath;
+    this.fileCharset = builder.fileCharset;
     this.columnsToDelimiter = builder.columnsToDelimiter;
     // parse unique key columns, required field
     this.uniqueKeyColumns = new LinkedHashSet<>(builder.uniqueKeyColumns);
@@ -290,6 +311,7 @@ class CSVFileManager {
 
   static class Builder {
     private String filePath;
+    private Charset fileCharset;
     private boolean skipHeader = false;
     private List<String> csvColumns;
     private List<String> uniqueKeyColumns;
@@ -303,6 +325,11 @@ class CSVFileManager {
 
     Builder setFilePath(String filePath) {
       this.filePath = filePath;
+      return this;
+    }
+
+    Builder setFileCharset(Charset charset) {
+      this.fileCharset = charset;
       return this;
     }
 
@@ -347,6 +374,7 @@ class CSVFileManager {
       if (!Files.exists(csvFilePath)) {
         throw new InvalidConfigurationException("csv file " + filePath + " does not exists");
       }
+      checkNotNull(fileCharset);
       checkNotNull(uniqueKeyColumns);
       checkNotNull(csvColumns);
       checkNotNull(contentTemplate);
@@ -362,7 +390,7 @@ class CSVFileManager {
   private Reader getReader() throws IOException {
     URI csvUri = csvFilePath.toUri();
     return new BufferedReader(
-        new InputStreamReader(csvUri.toURL().openStream(), defaultCharset()), 16 * 1024 * 1024);
+        new InputStreamReader(csvUri.toURL().openStream(), fileCharset), 16 * 1024 * 1024);
   }
 
   private CSVFormat createCsvFormat(Builder builder) {
