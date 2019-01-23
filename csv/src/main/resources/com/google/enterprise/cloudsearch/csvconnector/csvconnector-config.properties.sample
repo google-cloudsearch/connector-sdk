@@ -1,0 +1,83 @@
+api.serviceAccountPrivateKeyFile = keyfile.json
+api.oauthClientCredentialsFile = keyfile.json
+# Data source id from Cloud Search. This id is generated when adding a source to search.
+api.sourceId = b2d83a583508117ad2cf72ddeb622a43
+
+# Default ACL behavior. The default here makes all records public.
+defaultAcl.mode = FALLBACK
+defaultAcl.public = true
+
+# Flag to enable the use of queues to handle delete detection. The default is true.
+traverse.useQueues = true
+
+# User-specified queue tag. The default is "CSVRepository".
+traverse.queueTag = CSVRepository
+
+# Number of exceptions to allow before aborting the traversal. Can be one of:
+#   “0”: always abort
+#   "ignore": never abort ()
+#   (number): abort only after this number of exceptions are encountered
+traverse.exceptionHandler = 500
+
+# Number of threads used by the connector.
+traverse.threadPoolSize = 50
+
+# Absolute path of the CSV file.
+csv.filePath = sample.csv
+
+# Columns to use to form a unique key for each CSV record. If this property is not
+# defined, then the hashcode of the CSV record will be used as the unique key.
+csv.uniqueKeyColumns = term
+
+# Flag to cause the connector to ignore the first (header) line of the CSV file.
+csv.skipHeaderRecord = true
+
+# Names for each column in the CSV file, in order. This will be used if there is no
+# header information in the CSV file and csv.skipHeaderRecord is set to false, or to
+# redefine the column names in the CSV file.
+csv.csvColumns = term,description,author,links,lastModified,created,synonyms,labels
+
+# Default date-time format.
+csv.defaultDateTimeFormat = yyyy-mm-dd'T'HH:mm:ss.SSSSSSXXX
+
+# All the date-time column names in the CSV file.
+csv.dateTimeColumns = created,lastModified
+
+# Date-time format for the "created" column.
+csv.datetimeFormat.created = yyyy-mm-dd'T'HH:mm:ss.SSSSSSXXX
+
+# Column whose value will be used as the title for the HTML content generated for each CSV
+# record.
+contentTemplate.csv.title = term
+
+# Absolute path of the local structured data schema file.
+structuredData.localSchema = glossarySchema.json
+
+# URL format string used to generate the URL.
+# For example, if url.columns = term,description, then the generated URL will be
+# https://csv.example.com/terms?q=<term>/d=<description>.
+url.format = https://csv.example.com/terms?q={0}/d={1}
+
+# Columns that will be used to construct the URL.
+url.columns = term,description
+
+# Name of the column whose value will be used as title of the item. Only one column may be
+# used.
+item.metadataTitleField = term
+
+# Name of the column whose value indicates the last modified date-time of each record.
+item.metadataModifiedField = lastModified
+
+# Name of the column whose value indicates the creation date-time of each record.
+item.metadataCreatedField = created
+
+# Language used for the records.
+item.metadatalanguageField = en-US
+
+# Object type for the structured data built for each record. This object type must be
+# defined in the schema. (Note this is not the name of a column.)
+item.metadataObjectTypeField = glossary
+
+
+
+

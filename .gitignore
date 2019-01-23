@@ -1,0 +1,18 @@
+bin/
+target/
+lib/client-library/
+/*.json
+/*.properties
+*~
+sdk/.idea/
+
+# Eclipse
+.project
+.classpath
+.settings/
+
+# IntelliJ
+**/*.iml
+
+# Vim
+**/*.swp

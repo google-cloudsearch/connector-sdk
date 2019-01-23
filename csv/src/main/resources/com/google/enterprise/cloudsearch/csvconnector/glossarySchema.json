@@ -1,0 +1,59 @@
+{
+  "objectDefinitions" : [ {
+    "name" : "glossary",
+    "propertyDefinitions" : [ {
+      "isRepeatable" : false,
+      "isStored" : true,
+      "name" : "term",
+      "textPropertyOptions" : {
+        "operatorOptions" : {
+          "operatorName" : "glossary"
+        },
+        "tokenImportance" : {
+          "importance" : "CRITICAL"
+        },
+        "tokenization" : "TEXT"
+      }
+    }, {
+      "isRepeatable": true,
+      "isStored" : true,
+      "name" : "description",
+      "textPropertyOptions" : {
+        "tokenImportance" : {
+          "importance" : "NORMAL"
+        },
+        "tokenization" : "TEXT"
+      }
+    }, {
+      "isRepeatable": true,
+      "isStored" : true,
+      "name" : "synonyms",
+      "textPropertyOptions" : {
+        "tokenImportance" : {
+          "importance" : "NORMAL"
+        },
+        "tokenization" : "TEXT"
+      }
+    }, {
+      "isRepeatable": true,
+      "isStored" : true,
+      "name" : "labels",
+      "textPropertyOptions" : {
+        "tokenImportance" : {
+          "importance" : "NORMAL"
+        },
+        "tokenization" : "TEXT"
+      }
+    }, {
+      "isRepeatable": true,
+      "isStored" : true,
+      "name" : "links",
+      "textPropertyOptions" : {
+        "tokenImportance" : {
+          "importance" : "NORMAL"
+        },
+        "tokenization" : "TEXT"
+      }
+    } ]
+  } ]
+}

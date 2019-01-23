@@ -1,0 +1,73 @@
+api.serviceAccountPrivateKeyFile=keyfile.json
+#source id from cloudsearch, it is generated when adding a source to search
+api.sourceId=b2d83a583508117ad2cf72ddeb622a43
+api.oauthClientCredentialsFile=keyfile.json
+
+#Absolute path of csv file
+csv.filePath=sample.csv
+
+#Columns whose values are unique for csv record
+#It's an optional field. If it is not defined, then hashcode of csv record will be used as unique key
+csv.uniqueKeyColumns=term
+
+#If true, connector ignores the first record of the CSV file
+csv.skipHeaderRecord=true
+
+#Name of columns in the CSV file. These columns will be used to replace any header exists in csv file.
+csv.csvColumns=term,description,author,links,lastModified,created,synonyms, labels
+
+#Columns that will be used to construct viewURL
+url.columns=term, description
+
+#URL format string used to generate the viewURL from the term
+#if url.columns = term, description
+#the generated url will be https://csv.example.com/terms?q=term/d=description
+url.format=https://csv.example.com/terms?q={0}/d={1}
+
+#This specify the name of column whose value will be used as title of the item when it to Indexing API
+#note it only allows one column to be used for title
+item.metadataTitleField=term
+
+#This specify the name of column in CSV file whose value indicates the last modified datetime of this csv record
+#datetime here follows format in http://tools.ietf.org/html/rfc3339
+item.metadataModifiedField=lastModified
+
+#This specify the name of column in CSV file whose value indicates the creation datetime of this csv record
+#datetime here follows format in http://tools.ietf.org/html/rfc3339
+item.metadataCreatedField=created
+
+#This specify the language used for csv record
+item.metadatalanguageField=en-US
+
+#This specify the type of csv file
+item.metadataObjectTypeField=glossary
+
+#Specify the ACL behavior.
+defaultAcl.mode = FALLBACK
+defaultAcl.public = true
+
+#a boolean to indicate if use user specified container Tag
+#by default it is true
+traverse.useContainers=true
+
+#user specified container Tag
+#by default this will be CSVRepository
+traverse.containerTag=Glossary
+
+#abort uploading when the number of failure larger than traverse.abortAfterExceptions
+traverse.abortAfterExceptions=500
+
+#number of threads used by connector
+traverse.threadPoolSize=50
+
+#default date time format
+csv.defaultDateTimeFormat=yyyy-mm-dd'T'HH:mm:ss.SSSSSSXXX
+
+#all the date time column names in csv file
+csv.dateTimeColumns=created, lastModified
+
+csv.datetimeFormat.created=yyyy-mm-dd'T'HH:mm:ss.SSSSSSXXX
+
+contentTemplate.csv.title=term
+structuredData.localSchema=glossarySchema.json
+

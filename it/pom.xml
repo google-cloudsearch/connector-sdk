@@ -1,0 +1,151 @@
+<!-- Integration tests for the indexing and identity SDKs. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.google.enterprise.cloudsearch</groupId>
+    <artifactId>google-cloudsearch-connector-parent</artifactId>
+    <version>v1-0.0.3</version>
+  </parent>
+
+  <name>Google Cloud Search Connector Integration Tests Common</name>
+  <artifactId>google-cloudsearch-connector-it-common</artifactId>
+  <packaging>jar</packaging>
+
+  <properties>
+    <java_version>1.8</java_version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.oauth.version>1.23.0</project.oauth.version>
+    <project.sdk.version>v1-0.0.3</project.sdk.version>
+    <!-- Integration tests for connectors have special requirements, so
+         skip them by default. -->
+    <skipITs>true</skipITs>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <!-- Compiler Configuration -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.5.1</version>
+        <configuration>
+          <source>${java_version}</source>
+          <target>${java_version}</target>
+        </configuration>
+      </plugin>
+      <plugin>
+        <artifactId>maven-assembly-plugin</artifactId>
+        <configuration>
+          <descriptors>
+            <descriptor>src/main/assembly/assembly.xml</descriptor>
+          </descriptors>
+          <appendAssemblyId>false</appendAssemblyId>
+        </configuration>
+        <executions>
+          <execution>
+            <id>make-assembly</id>
+            <phase>package</phase>
+            <goals>
+              <goal>single</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <!-- Tests -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>2.19.1</version>
+        <configuration>
+          <!-- Print the full stack trace. Without this, the stack printed to the console
+          won't include any frames in the code under test, which makes failures harder to
+          debug. -->
+          <trimStackTrace>false</trimStackTrace>
+          <includes>
+            <include>**/*Test.java</include>
+          </includes>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>2.22.0</version>
+        <configuration>
+          <skipITs>${skipITs}</skipITs>
+          <!-- Print the full stack trace. Without this, the stack printed to the console
+          won't include any frames in the code under test, which makes failures harder to
+          debug. -->
+          <trimStackTrace>false</trimStackTrace>
+        </configuration>
+        <executions>
+          <execution>
+            <id>integration-test</id>
+            <goals>
+              <goal>integration-test</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>verify</id>
+            <goals>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <version>0.8.2</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>prepare-agent</goal>
+            </goals>
+          </execution>
+          <execution>
+            <id>jacoco-report</id>
+            <phase>test</phase>
+            <goals>
+              <goal>report</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <dependencies>
+    <!-- Avoid adding dependencies that override SDK dependencies (e.g., something that overrides
+         the guava version defined in the parent POM), even if their scope is "test" as that can
+         render the test invalid. -->
+    <!-- Google libraries. -->
+    <dependency>
+      <groupId>com.google.enterprise.cloudsearch</groupId>
+      <artifactId>google-cloudsearch-identity-connector-sdk</artifactId>
+      <version>${project.sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.enterprise.cloudsearch</groupId>
+      <artifactId>google-cloudsearch-indexing-connector-sdk</artifactId>
+      <version>${project.sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.truth</groupId>
+      <artifactId>truth</artifactId>
+      <version>0.41</version>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Awaitility helps to avoid using flake-prone fixed sleeps when waiting for async
+      events. -->
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
+      <version>3.1.1</version>
+    </dependency>
+  </dependencies>
+</project>

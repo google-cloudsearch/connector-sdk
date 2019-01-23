@@ -1,0 +1,4 @@
+term, description, author, links, lastModified, created, synonyms, labels
+"Apple", "A pomaceous fruit of the Apple tree.", testid1, https://en.wikipedia.org/wiki/Apple, 2018-06-08T08:01:23.4-08:00, 2018-06-08T08:01:23.4-08:00, "Alice,Aroma,Delicious,McIntosh,Granny Smith", "Food,Fruit"
+"Banana", "The banana is an edible fruit, botanically a berry, produced by several kinds of large herbaceous, flowering plants in the genus <i>Musa</i>.", testid2, https://en.wikipedia.org/wiki/Banana, 2018-06-08T08:01:23.4-08:00, 2018-06-08T08:01:23.4-08:00, "", "Food,Fruit"
+"Pear", "A pomaceous fruit of the Pear tree.", testid3, "https://en.wikipedia.org/wiki/Pear", 2018-06-08T08:01:23.4-08:00, 2018-06-08T08:01:23.4-08:00, "", "Food,Fruit"
