@@ -443,10 +443,9 @@ public class CSVFileManagerTest {
     assertTrue(multimap.get("author").contains("ID2,A"));
   }
 
-  @Test
-  public void testCSVDefaultFormat() throws IOException {
-    File tmpfile = temporaryFolder.newFile("CSVDefaultFormat.csv");
-    createFile(tmpfile, UTF_8, testCSVSingle);
+  private Properties getCSVFormatConfig(String input, String csvFormat) throws IOException {
+    File tmpfile = temporaryFolder.newFile("CSVFormat.csv");
+    createFile(tmpfile, UTF_8, input);
     Properties config = new Properties();
     config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
     config.put(UrlBuilder.CONFIG_COLUMNS, "term");
@@ -455,7 +454,13 @@ public class CSVFileManagerTest {
     config.put(CONTENT_HIGH, "term,definition");
     config.put(CSVFileManager.SKIP_HEADER, "true");
     config.put(CSVFileManager.CSVCOLUMNS, "term, definition");
-    config.put(CSVFileManager.CSV_FORMAT, "default");
+    config.put(CSVFileManager.CSV_FORMAT, csvFormat);
+    return config;
+  }
+
+  @Test
+  public void testCSVDefaultFormat() throws IOException {
+    Properties config = getCSVFormatConfig(testCSVSingle, "default");
     setupConfig.initConfig(config);
 
     CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
@@ -469,37 +474,17 @@ public class CSVFileManagerTest {
 
   @Test
   public void testCSVInvalidFormat() throws IOException {
-    File tmpfile = temporaryFolder.newFile("CSVInvalidFormat.csv");
-    createFile(tmpfile, UTF_8, testCSVSingle);
-    Properties config = new Properties();
-    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
-    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
-    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
-    config.put(CONTENT_TITLE, "term");
-    config.put(CONTENT_HIGH, "term,definition");
-    config.put(CSVFileManager.SKIP_HEADER, "true");
-    config.put(CSVFileManager.CSVCOLUMNS, "term, definition");
-    config.put(CSVFileManager.CSV_FORMAT, "unknownformat");
+    Properties config = getCSVFormatConfig(testCSVSingle, "unknownformat");
     setupConfig.initConfig(config);
 
     thrown.expect(InvalidConfigurationException.class);
     thrown.expectMessage(containsString("Invalid CSVFormat unknownformat"));
-    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+    CSVFileManager.fromConfiguration();
   }
 
   @Test
   public void testCSVExcelFormat() throws IOException {
-    File tmpfile = temporaryFolder.newFile("CSVExcelFormat.csv");
-    createFile(tmpfile, UTF_8, testCSVSingle);
-    Properties config = new Properties();
-    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
-    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
-    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
-    config.put(CONTENT_TITLE, "term");
-    config.put(CONTENT_HIGH, "term,definition");
-    config.put(CSVFileManager.SKIP_HEADER, "true");
-    config.put(CSVFileManager.CSVCOLUMNS, "term,definition");
-    config.put(CSVFileManager.CSV_FORMAT, "excel");
+    Properties config = getCSVFormatConfig(testCSVSingle, "excel");
     setupConfig.initConfig(config);
 
     CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
@@ -514,6 +499,52 @@ public class CSVFileManagerTest {
       count++;
     }
     assertEquals(3, count);
+  }
+
+  @Test
+  public void testCSVExcelFormat_withMethods() throws IOException {
+    String input = "term; definition; author\n"
+        + "moma, search; Google internal search ; ID1\n\n\n\n";
+    Properties config = getCSVFormatConfig(input, "excel");
+    config.put(String.format(CSVFileManager.CSV_FORMAT_METHOD_VALUE, "withDelimiter"), ";");
+    config.put(String.format(CSVFileManager.CSV_FORMAT_METHOD_VALUE, "withIgnoreEmptyLines"),
+        "true");
+    setupConfig.initConfig(config);
+
+    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+    CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
+    CSVRecord csvRecord = getOnlyElement(csvFile);
+
+    Item item = csvFileManager.createItem(csvRecord);
+    assertEquals("moma, search", item.getName());
+  }
+
+  @Test
+  public void testCSVExcelFormat_withMethodsInvalidCharValue() throws IOException {
+    Properties config = getCSVFormatConfig(testCSVSingle, "excel");
+    config.put(String.format(CSVFileManager.CSV_FORMAT_METHOD_VALUE, "withDelimiter"), ".:;");
+    setupConfig.initConfig(config);
+
+    thrown.expect(InvalidConfigurationException.class);
+    thrown.expectMessage(containsString(
+        "Invalid configuration: '.:;', must be a single character."));
+    CSVFileManager.fromConfiguration();
+  }
+
+  // Smoke test to make sure the "withRecordSeparator(char)" overload method is not invoked.
+  @Test
+  public void testCSVExcelFormat_withRecordSeparator() throws IOException {
+    Properties config = getCSVFormatConfig(testCSVSingle, "default");
+    config.put(String.format(CSVFileManager.CSV_FORMAT_METHOD_VALUE, "withRecordSeparator"),
+        "\t\r\n");
+    setupConfig.initConfig(config);
+
+    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+    CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
+    CSVRecord csvRecord = getOnlyElement(csvFile);
+
+    Item item = csvFileManager.createItem(csvRecord);
+    assertEquals("moma search", item.getName());
   }
 
   // Write, read using UTF-8
