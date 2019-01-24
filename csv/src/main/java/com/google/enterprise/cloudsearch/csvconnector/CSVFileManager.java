@@ -43,6 +43,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
@@ -125,6 +127,7 @@ class CSVFileManager {
   static final String MULTIVALUE_COLUMNS = "csv.multiValueColumns";
   static final String MULTIVALUE_FORMAT_COLUMN = "csv.multiValue.%s";
   static final String CSV_FORMAT = "csv.format";
+  static final String CSV_FORMAT_METHOD_VALUE = "csv.format.%s";
 
   private final CSVFormat csvFormat;
   private final Path csvFilePath;
@@ -410,7 +413,7 @@ class CSVFileManager {
             "Invalid CSVFormat " + builder.csvFormat + ", must be one of " + csvFormats);
       }
     }
-
+    csvFormat = applyConfiguredMethods(csvFormat);
     if (builder.csvColumns.isEmpty()) {
       checkState(
           !builder.skipHeader,
@@ -426,6 +429,60 @@ class CSVFileManager {
 
   private Set<CSVFormat.Predefined> getPredefinedCsvFormats() {
     return new TreeSet<>(Arrays.asList(CSVFormat.Predefined.values()));
+  }
+
+  private Map<String, Class<?>> getCsvFormatMethodsInfo() {
+    HashMap<String, Class<?>> map = new HashMap<String, Class<?>>();
+    for (Method method : CSVFormat.class.getDeclaredMethods()) {
+      if (method.getName().startsWith("with") && method.getParameterCount() == 1) {
+        Class<?> param = method.getParameterTypes()[0];
+        if (param == char.class) {
+          //methods with String overloads take precedence.
+          map.putIfAbsent(method.getName(), param);
+        } else if (param == boolean.class || param == String.class) {
+          map.put(method.getName(), param);
+        }
+      }
+    }
+    return map;
+  }
+
+  private CSVFormat applyConfiguredMethods(CSVFormat csvFormat) {
+    Map<String, Class<?>> csvMethodsMap = getCsvFormatMethodsInfo();
+
+    for (String name : csvMethodsMap.keySet()) {
+      String value =
+          Configuration.getString(String.format(CSV_FORMAT_METHOD_VALUE, name), "").get();
+      if (value.isEmpty()) {
+        continue;
+      }
+      try {
+        Class<?> type = csvMethodsMap.get(name);
+        if (type == boolean.class) {
+          Boolean booleanValue = Configuration.BOOLEAN_PARSER.parse(value);
+          Method method = CSVFormat.class.getMethod(name, boolean.class);
+          csvFormat = (CSVFormat) method.invoke(csvFormat, booleanValue);
+        } else if (type == char.class) {
+          if (value.length() > 1) {
+            throw new InvalidConfigurationException(
+                "Invalid configuration: '" + value + "'" + ", must be a single character.");
+          }
+          Method method = CSVFormat.class.getMethod(name, char.class);
+          csvFormat = (CSVFormat) method.invoke(csvFormat, value.charAt(0));
+        } else if (type == String.class) {
+          Method method = CSVFormat.class.getMethod(name, String.class);
+          csvFormat = (CSVFormat) method.invoke(csvFormat, value);
+        }
+      } catch (IllegalAccessException | IllegalArgumentException | NoSuchMethodException
+          | SecurityException e) {
+        throw new InvalidConfigurationException(
+            String.format("Unable to configure %s(%s)", name, value), e);
+      } catch (InvocationTargetException e) {
+        throw new InvalidConfigurationException(
+            String.format("Unable to configure %s(%s)", name, value), e.getCause());
+      }
+    }
+    return csvFormat;
   }
 
   private static void checkNotNullNotEmpty(String value, String field) {
