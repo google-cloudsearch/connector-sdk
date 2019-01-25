@@ -70,8 +70,8 @@ public class CsvIT {
   private static final String TEST_CSV_SINGLE = "empID, empName, Org\n"
       + "1, GoogleCloudSearch1, GCS-Connectors\n";
   private static final String TEST_CSV_STRUCTURED_DATA =
-      "intValue, textValue, booleanValue, dateValue, doubleValue, enumValue\n"
-      + "2, GoogleCloudSearch1, true, 2017-06-19, 2000.00, 1\n";
+      "intValue, textValue, booleanValue, dateValue, doubleValue, enumValue, timestampValue\n"
+          + "2, GoogleCloudSearch1, true, 2017-06-19, 2000.00, 1, 2017-10-10T14:01:23.400Z \n";
 
   private void createFile(File file, String content) throws IOException {
     try (PrintWriter pw = new PrintWriter(new FileWriter(file))){
@@ -172,6 +172,7 @@ public class CsvIT {
           .addValue("date", dateValue)
           .addValue("double", "2000.00")
           .addValue("enum", 1)
+          .addValue("timestamp", "2017-10-10T14:01:23.400Z")
           .setObjectType(schemaObjectType)
           .build();
       Item actualItem1 = v1Client.getItem(mockItemId1);

@@ -237,6 +237,8 @@ public class StructuredData {
                     objDefinition -> objDefinition.getName(),
                     objDefinition -> new StructuredData(objDefinition)));
     structuredDataMapping.putAll(mappings);
+    logger.log(Level.INFO, "Initializing schema: structuredDataMapping = \n{0}",
+        new Object[] { structuredDataMapping.toString()});
     initialized.set(true);
   }
 
@@ -310,6 +312,8 @@ public class StructuredData {
   }
 
   private static synchronized void reset() {
+    logger.log(Level.INFO, "Resetting schema: structuredDataMapping = \n{0}",
+        new Object[] { structuredDataMapping.toString()});
     dateTimeParsers.clear();
     structuredDataMapping.clear();
     initialized.set(false);
