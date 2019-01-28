@@ -15,9 +15,12 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
+import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
+
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
@@ -33,6 +36,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
@@ -40,6 +44,8 @@ import java.util.logging.Logger;
 
 /**
  * Service wrapper for Cloud Search API client.
+ *
+ * Example usage:
  * <pre>
  *   CloudSearchService service = new CloudSearchService(serviceAccountKeyPath, sourceId);
  *   Item item = service.getItem(itemName);
@@ -74,6 +80,31 @@ public class CloudSearchService {
   }
 
   /**
+   * Deletes items if they exist in the indexing API.
+   *
+   * This method attempts to delete the remaining items in the list even if deletion of one fails.
+   *
+   * @param itemIds - the IDs of the items to delete.
+   */
+  public void deleteItemsIfExist(List<String> itemIds) {
+    for (String itemId : itemIds) {
+      logger.log(Level.INFO, "Attempting to delete item {0}...", itemId);
+      try {
+        Item item = getItem(itemId);
+        deleteItem(item.getName(), item.getVersion());
+      } catch(GoogleJsonResponseException e) {
+        if (e.getStatusCode() != HTTP_NOT_FOUND) {
+          logger.log(
+              Level.WARNING, "Unexpected exception while deleting item:", e);
+        }
+        // else the item doesn't exist.
+      } catch (IOException e) {
+        logger.log(Level.WARNING, "Unexpected exception while deleting item:", e);
+      }
+    }
+  }
+
+  /**
    * Gets an item from indexing service using item name.
    */
   public Item getItem(String itemName) throws IOException {
@@ -95,13 +126,12 @@ public class CloudSearchService {
    * Gets all items available in data source.
    */
   ListItemsResponse listItems() throws IOException {
-    ListItemsResponse response = service
+    return service
         .indexing()
         .datasources()
         .items()
         .list("datasources/" + indexingSourceId)
         .execute();
-    return response;
   }
 
   public Operation deleteItem(String itemName, String version) throws IOException {
