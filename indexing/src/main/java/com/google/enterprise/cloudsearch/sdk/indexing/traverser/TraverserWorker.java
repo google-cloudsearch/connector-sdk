@@ -33,7 +33,7 @@ public interface TraverserWorker {
    *
    * @return name of worker thread
    */
-  public String getName();
+  String getName();
 
   /**
    * Performs the Cloud Search queue poll.
@@ -44,10 +44,10 @@ public interface TraverserWorker {
    * method to deliver the queue item to the {@link com.google.enterprise.cloudsearch.sdk.Connector}
    * instance.
    */
-  public void poll();
+  void poll();
 
   /**
    * Shuts down this worker thread.
    */
-  public void shutdown();
+  void shutdown();
 }

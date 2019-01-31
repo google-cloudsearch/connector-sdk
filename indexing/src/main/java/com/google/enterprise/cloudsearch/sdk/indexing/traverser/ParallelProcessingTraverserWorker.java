@@ -22,7 +22,6 @@ import com.google.enterprise.cloudsearch.sdk.RepositoryException;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService;
 import com.google.enterprise.cloudsearch.sdk.indexing.ItemRetriever;
 import java.io.IOException;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
@@ -33,17 +32,14 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
- * Implementation of the multiprocess Traverser. This implementation uses CachedThreadPool to create
- * new threads dynamically. Count of processing threads will vary from 1 to <i>hostload</i>. First
- * processing thread will be created after first successful run. For fast-response processing we
- * keep one thread alive.
+ * Implementation of the multiprocess Traverser. This implementation uses CachedThreadpool, which
+ * can use maximum of <i>hostload</i> threads to process periodically polled items.
  */
 class ParallelProcessingTraverserWorker extends AbstractTraverserWorker implements TraverserWorker {
   private final Logger logger = Logger.getLogger(ParallelProcessingTraverserWorker.class.getName());
@@ -55,7 +51,8 @@ class ParallelProcessingTraverserWorker extends AbstractTraverserWorker implemen
 
   private final boolean sharedExecutor;
   private final ExecutorService executor;
-  private final LinkedList<Runner> runners;
+  private final AtomicInteger currentLoad = new AtomicInteger(0);
+
   private final AtomicBoolean isShutdown = new AtomicBoolean(false);
   private final ConcurrentLinkedQueue<Item> queue;
 
@@ -68,9 +65,7 @@ class ParallelProcessingTraverserWorker extends AbstractTraverserWorker implemen
     this.hostload = conf.getHostload();
     this.sharedExecutor = executor != null;
     this.executor = sharedExecutor ? executor : Executors.newCachedThreadPool();
-
     queue = new ConcurrentLinkedQueue<>();
-    runners = new LinkedList<>();
   }
 
   @Override
@@ -110,14 +105,10 @@ class ParallelProcessingTraverserWorker extends AbstractTraverserWorker implemen
       return false;
     }
     queue.addAll(entries);
-    if (runners.size() == 0) {
-      synchronized (runners) {
-        if (runners.size() == 0) {
-          Runner runner = new Runner();
-          runners.add(runner);
-          executor.execute(runner);
-        }
-      }
+
+    while (currentLoad.get() < hostload) {
+      executor.execute(new PollAndProcessRunnable());
+      currentLoad.incrementAndGet();
     }
     return true;
   }
@@ -149,58 +140,40 @@ class ParallelProcessingTraverserWorker extends AbstractTraverserWorker implemen
     }
   }
 
-  class Runner implements Runnable {
-    final Lock lock = new ReentrantLock();
+  class PollAndProcessRunnable implements Runnable {
 
     @Override
     public void run() {
-      Thread.currentThread()
-          .setName("TraverserRunner-" + name + "-" + Thread.currentThread().getId());
-      lock.lock();
-      Item polledItem = null;
       try {
+        Thread.currentThread()
+            .setName("TraverserRunner-" + name + "-" + Thread.currentThread().getId());
+        Item polledItem = null;
         while ((polledItem = queue.poll()) != null) {
-          if (runners.size() < hostload) {
-            synchronized (runners) {
-              if (runners.size() < hostload) {
-                Runner runner = new Runner();
-                runners.add(runner);
-                executor.execute(runner);
-              }
-            }
+          try {
+            timeLimiter.callWithTimeout(new ProcessingFunction(polledItem), timeout, timeunit);
+            // TODO(imysak): should we return entry in Queue in case of TimeOutException ?
+          } catch (InterruptedException e) {
+            logger.log(
+                Level.WARNING,
+                String.format("Interrupted while processing queue entry %s", polledItem),
+                e);
+            Thread.currentThread().interrupt();
+          } catch (TimeoutException e) {
+            logger.log(
+                Level.WARNING,
+                String.format(
+                    "Processing queue entry %s timed out, limit %d %s",
+                    polledItem, timeout, timeunit),
+                e);
+          } catch (ExecutionException e) {
+            logger.log(
+                Level.WARNING,
+                String.format("Exception while processing queue entry %s", polledItem),
+                e);
           }
-          timeLimiter.callWithTimeout(new ProcessingFunction(polledItem), timeout, timeunit);
-          // TODO(imysak): should we return entry in Queue in case of TimeOutException ?
         }
-      } catch (InterruptedException e) {
-        logger.log(
-            Level.WARNING,
-            String.format("Interrupted while processing queue entry %s", polledItem),
-            e);
-        Thread.currentThread().interrupt();
-      } catch (TimeoutException e) {
-        logger.log(
-            Level.WARNING,
-            String.format(
-                "Processing queue entry %s timed out, limit %d %s", polledItem, timeout, timeunit),
-            e);
-      } catch (ExecutionException e) {
-        logger.log(
-            Level.WARNING,
-            String.format("Exception while processing queue entry %s", polledItem),
-            e);
       } finally {
-        // remove all threads unless we are the last runner
-        synchronized (runners) {
-          if ((runners.size() == 1)
-              && !Thread.currentThread().isInterrupted()
-              && !executor.isShutdown()) {
-            executor.execute(this);
-          } else {
-            runners.remove(this);
-          }
-        }
-        lock.unlock();
+        currentLoad.decrementAndGet();
       }
     }
 
