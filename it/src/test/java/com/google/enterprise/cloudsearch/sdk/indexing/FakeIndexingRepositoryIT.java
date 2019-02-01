@@ -30,16 +30,20 @@ import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRul
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
 import com.google.enterprise.cloudsearch.sdk.indexing.StructuredData.ResetStructuredDataRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.FullTraversalConnector;
+import com.google.enterprise.cloudsearch.sdk.sdk.ConnectorStats;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.awaitility.Awaitility;
+import org.awaitility.Duration;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -192,9 +196,19 @@ public class FakeIndexingRepositoryIT {
           .setItemType(ItemType.CONTAINER_ITEM.toString())
           .build();
       FakeIndexingRepository mockRepoIterate = new FakeIndexingRepository.Builder()
-          .addPage(asList(updateItemXml))
+          .addPage(Collections.singletonList(updateItemXml))
           .build();
-      runFullTraversalConnector(mockRepoIterate);
+      // If there are unfinished operations in the Indexing API, then the connector will exit
+      // without completing a full traversal (see b/123352680), so keep running the connector until
+      // it completes another traversal.
+      final int completedTraversals = ConnectorStats.getSuccessfulFullTraversalsCount();
+      Awaitility.await()
+          .atMost(Duration.FIVE_MINUTES)
+          .pollInSameThread()
+          .until(() -> {
+            runFullTraversalConnector(mockRepoIterate);
+            return ConnectorStats.getSuccessfulFullTraversalsCount() > completedTraversals;
+          });
       testUtils.waitUntilEqual(accessResourceItemId, updateItemXml.getItem());
       // servicesItemId should have been deleted after the second full traversal since it no longer
       // exists in the repository.
