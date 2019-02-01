@@ -219,14 +219,13 @@ public class StatsManager {
       }
     }
 
-    @VisibleForTesting
-    int getRegisteredCount(String operation) {
-      return opCounter.count(operation);
+    public int getSuccessCount(String operation) {
+      return successCounter.count(operation);
     }
 
     @VisibleForTesting
-    int getSuccessCount(String operation) {
-      return successCounter.count(operation);
+    int getRegisteredCount(String operation) {
+      return opCounter.count(operation);
     }
 
     @VisibleForTesting
