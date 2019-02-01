@@ -15,6 +15,7 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 
 import com.google.api.client.auth.oauth2.Credential;
@@ -92,7 +93,7 @@ public class CloudSearchService {
       try {
         Item item = getItem(itemId);
         deleteItem(item.getName(), item.getVersion());
-      } catch(GoogleJsonResponseException e) {
+      } catch (GoogleJsonResponseException e) {
         if (e.getStatusCode() != HTTP_NOT_FOUND) {
           logger.log(
               Level.WARNING, "Unexpected exception while deleting item:", e);
@@ -125,13 +126,15 @@ public class CloudSearchService {
   /**
    * Gets all items available in data source.
    */
-  ListItemsResponse listItems() throws IOException {
-    return service
+  public List<Item> listItems() throws IOException {
+    ListItemsResponse response = service
         .indexing()
         .datasources()
         .items()
         .list("datasources/" + indexingSourceId)
         .execute();
+    List<Item> dataItem = response.getItems();
+    return dataItem;
   }
 
   public Operation deleteItem(String itemName, String version) throws IOException {
@@ -152,5 +155,58 @@ public class CloudSearchService {
         .datasources()
         .getSchema("datasources/" + indexingSourceId)
         .execute();
+  }
+
+  /**
+   * Deletes all items available in the datasource.
+   */
+  public void deleteAllItems() throws IOException {
+    List<String> datasourceItemIds =
+        listItems()
+            .stream()
+            .map(Item::getName)
+            .collect(toImmutableList());
+    deleteItemsIfExist(datasourceItemIds);
+    logger.log(Level.INFO, "Deleted {0} items from the datasource.", datasourceItemIds.size());
+  }
+
+  private static void getCsInstanceAndDeleteAllItems(String serviceAccountKeyPath,
+      String sourceId, Optional<String> rootUrl) throws IOException, GeneralSecurityException {
+    new CloudSearchService(serviceAccountKeyPath, sourceId, rootUrl).deleteAllItems();
+  }
+
+  /**
+   * The purpose of the main method is to explicitly call utility method deleteAllItems().
+   * Deletes all items from the datasource if they exist in the indexing API.
+   * Can be used as periodic cleanup of items in the datasource.
+   */
+  public static void main(String[] args) throws IOException, GeneralSecurityException {
+    final String NL = System.lineSeparator();
+    String command = args[0];
+    if (args.length != 4) {
+      System.err.println(
+          "Wrong number of arguments" + NL
+              + " Usage: java CloudSearchService <delete> <serviceKeyPath> <datasourceId> <rootUrl>"
+              + "where" + NL
+              + "  delete: command/operation to delete all items from the given datasource.... "
+              + "  serviceKeyPath: path to the service account key" + NL
+              + "  dataSourceId: indexing source ID" + NL
+              + "  rootUrl: URL of the Indexing API endpoint." + NL);
+      System.exit(1);
+    } else {
+      System.out.println("Right number of arguments supplied");
+      if (!command.equalsIgnoreCase("delete")) {
+        System.err.println("\nWrong command supplied. Expected \"delete\", but got \"" + command
+            + "\"");
+        System.exit(1);
+      }
+      String serviceKeyPath = Paths.get(args[1]).toAbsolutePath().toString();
+      String dataSourceId = args[2];
+      Optional<String>rootUrl = Optional.ofNullable(args[3]);
+      System.out.println("Deleting all items from the datasource - " + dataSourceId);
+      CloudSearchService.getCsInstanceAndDeleteAllItems(
+          serviceKeyPath, dataSourceId, rootUrl);
+      System.exit(0);
+    }
   }
 }
