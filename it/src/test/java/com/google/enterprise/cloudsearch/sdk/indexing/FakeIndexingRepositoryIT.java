@@ -22,9 +22,9 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.google.api.client.repackaged.com.google.common.base.Strings;
 import com.google.api.services.cloudsearch.v1.model.Date;
 import com.google.api.services.cloudsearch.v1.model.Item;
+import com.google.common.base.Strings;
 import com.google.enterprise.cloudsearch.sdk.Util;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;

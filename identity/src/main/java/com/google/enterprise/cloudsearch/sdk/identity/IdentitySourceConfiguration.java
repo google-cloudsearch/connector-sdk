@@ -19,7 +19,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.api.services.cloudidentity.v1beta1.model.Group;
+import com.google.api.services.cloudidentity.v1.model.Group;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMap;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;

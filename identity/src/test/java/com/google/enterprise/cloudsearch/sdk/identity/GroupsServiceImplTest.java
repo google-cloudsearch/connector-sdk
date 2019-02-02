@@ -29,15 +29,15 @@ import com.google.api.client.googleapis.testing.auth.oauth2.MockGoogleCredential
 import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
-import com.google.api.services.cloudidentity.v1beta1.CloudIdentity;
-import com.google.api.services.cloudidentity.v1beta1.CloudIdentity.Groups;
-import com.google.api.services.cloudidentity.v1beta1.CloudIdentity.Groups.Memberships;
-import com.google.api.services.cloudidentity.v1beta1.model.EntityKey;
-import com.google.api.services.cloudidentity.v1beta1.model.Group;
-import com.google.api.services.cloudidentity.v1beta1.model.ListMembershipsResponse;
-import com.google.api.services.cloudidentity.v1beta1.model.Membership;
-import com.google.api.services.cloudidentity.v1beta1.model.Operation;
-import com.google.api.services.cloudidentity.v1beta1.model.SearchGroupsResponse;
+import com.google.api.services.cloudidentity.v1.CloudIdentity;
+import com.google.api.services.cloudidentity.v1.CloudIdentity.Groups;
+import com.google.api.services.cloudidentity.v1.CloudIdentity.Groups.Memberships;
+import com.google.api.services.cloudidentity.v1.model.EntityKey;
+import com.google.api.services.cloudidentity.v1.model.Group;
+import com.google.api.services.cloudidentity.v1.model.ListMembershipsResponse;
+import com.google.api.services.cloudidentity.v1.model.Membership;
+import com.google.api.services.cloudidentity.v1.model.Operation;
+import com.google.api.services.cloudidentity.v1.model.SearchGroupsResponse;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -199,7 +199,7 @@ public class GroupsServiceImplTest {
   @Test
   public void testListGroups() throws Exception {
     String namespace = "ns";
-    String query = "namespace = ns AND labels:system/groups/external";
+    String query = "parent == 'ns' && 'system/groups/external' in labels";
     Groups.Search search1 = mock(Groups.Search.class);
     Group group1 = new Group().setName("groups/g1");
     SearchGroupsResponse page1 =
