@@ -15,7 +15,7 @@
  */
 package com.google.enterprise.cloudsearch.sdk.identity;
 
-import com.google.api.services.cloudidentity.v1beta1.model.EntityKey;
+import com.google.api.services.cloudidentity.v1.model.EntityKey;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.enterprise.cloudsearch.sdk.ExceptionHandler;
 import java.io.Closeable;

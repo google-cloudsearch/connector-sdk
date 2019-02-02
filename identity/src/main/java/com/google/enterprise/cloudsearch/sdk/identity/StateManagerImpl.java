@@ -23,8 +23,8 @@ import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 
 import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.services.admin.directory.model.User;
-import com.google.api.services.cloudidentity.v1beta1.model.EntityKey;
-import com.google.api.services.cloudidentity.v1beta1.model.Membership;
+import com.google.api.services.cloudidentity.v1.model.EntityKey;
+import com.google.api.services.cloudidentity.v1.model.Membership;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -339,7 +339,8 @@ class StateManagerImpl implements StateManager {
       logger.log(Level.WARNING, "Group with Key {0} is not available in identity state", groupKey);
       return;
     }
-    identityGroup.addMember(new Membership().setMemberKey(memberKey).setRoles(null), service);
+    identityGroup.addMember(
+        new Membership().setPreferredMemberKey(memberKey).setRoles(null), service);
   }
 
   /**

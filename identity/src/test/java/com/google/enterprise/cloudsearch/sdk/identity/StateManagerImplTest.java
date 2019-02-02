@@ -28,8 +28,8 @@ import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.http.HttpResponseException.Builder;
 import com.google.api.services.admin.directory.model.User;
-import com.google.api.services.cloudidentity.v1beta1.model.EntityKey;
-import com.google.api.services.cloudidentity.v1beta1.model.Membership;
+import com.google.api.services.cloudidentity.v1.model.EntityKey;
+import com.google.api.services.cloudidentity.v1.model.Membership;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.Futures;
@@ -482,10 +482,11 @@ public class StateManagerImplTest {
     IdentityState identityState = new IdentityState.Builder().addGroup(existing).build();
     StateManagerImpl manager = new StateManagerImpl();
     manager.init(() -> identityState);
-    Membership member = new Membership().setMemberKey(new EntityKey().setId("user@domain.com"));
+    Membership member =
+        new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com"));
     Membership memberToReturn =
         new Membership()
-            .setMemberKey(new EntityKey().setId("user@domain.com"))
+            .setPreferredMemberKey(new EntityKey().setId("user@domain.com"))
             .setName("groups/id1/memberships/member1");
     IdentityGroup delegate =
         new IdentityGroup.Builder()
@@ -529,7 +530,8 @@ public class StateManagerImplTest {
     IdentityState identityState = new IdentityState.Builder().addGroup(existing).build();
     StateManagerImpl manager = new StateManagerImpl();
     manager.init(() -> identityState);
-    Membership member = new Membership().setMemberKey(new EntityKey().setId("user@domain.com"));
+    Membership member =
+        new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com"));
     IdentityGroup delegate =
         new IdentityGroup.Builder()
             .setGroupIdentity("domain\\group1")
@@ -601,7 +603,8 @@ public class StateManagerImplTest {
             .setGroupResourceName("groups/id1")
             .setMembers(ImmutableSet.of())
             .build();
-    Membership member = new Membership().setMemberKey(new EntityKey().setId("user@domain.com"));
+    Membership member =
+        new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com"));
     EntityKey olderKey = new EntityKey().setNamespace("ns1").setId("older");
     IdentityGroup older =
         new IdentityGroup.Builder()

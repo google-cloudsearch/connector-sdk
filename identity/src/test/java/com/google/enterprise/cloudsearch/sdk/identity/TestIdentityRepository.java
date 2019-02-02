@@ -18,7 +18,7 @@ package com.google.enterprise.cloudsearch.sdk.identity;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-import com.google.api.services.cloudidentity.v1beta1.model.EntityKey;
+import com.google.api.services.cloudidentity.v1.model.EntityKey;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.enterprise.cloudsearch.sdk.CheckpointCloseableIterable;
