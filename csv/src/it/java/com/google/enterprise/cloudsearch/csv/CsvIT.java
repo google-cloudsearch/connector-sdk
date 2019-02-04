@@ -28,6 +28,7 @@ import com.google.enterprise.cloudsearch.sdk.indexing.CloudSearchService;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingApplication;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
 import com.google.enterprise.cloudsearch.sdk.indexing.MockItem;
+import com.google.enterprise.cloudsearch.sdk.indexing.StructuredData.ResetStructuredDataRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.StructuredDataHelper;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.FullTraversalConnector;
 import java.io.File;
@@ -66,6 +67,7 @@ public class CsvIT {
   @Rule public TemporaryFolder configFolder = new TemporaryFolder();
   @Rule public TemporaryFolder csvFileFolder = new TemporaryFolder();
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
+  @Rule public ResetStructuredDataRule resetStructuredData = new ResetStructuredDataRule();
 
   private static final String TEST_CSV_SINGLE = "empID, empName, Org\n"
       + "1, GoogleCloudSearch1, GCS-Connectors\n";
