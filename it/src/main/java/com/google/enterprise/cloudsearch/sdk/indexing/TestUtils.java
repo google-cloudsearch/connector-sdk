@@ -16,7 +16,7 @@
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
-import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 
 import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.services.cloudsearch.v1.model.Item;
@@ -86,9 +86,9 @@ public class TestUtils {
   private void assertItemsMatch(Item expected, Item actual) {
     logger.log(Level.INFO, "Verifying item {0}...", actual);
     // TODO(lchandramouli): verify all applicable meta data
-    assertThat(actual.getStatus().getCode()).isEqualTo("ACCEPTED");
-    assertThat(expected.getItemType()).isEqualTo(actual.getItemType());
-    assertThat(expected.getMetadata()).isEqualTo(actual.getMetadata());
-    assertThat(expected.getName()).isEqualTo(actual.getName());
+    assertEquals("ACCEPTED", actual.getStatus().getCode());
+    assertEquals(actual.getItemType(), expected.getItemType());
+    assertEquals(actual.getMetadata(), expected.getMetadata());
+    assertEquals(actual.getName(), expected.getName());
   }
 }
