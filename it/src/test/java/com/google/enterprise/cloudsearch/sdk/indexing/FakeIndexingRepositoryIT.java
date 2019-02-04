@@ -15,11 +15,12 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
-import static com.google.common.truth.Truth.assertThat;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.SERVICE_KEY_PROPERTY_NAME;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.qualifyTestProperty;
 import static com.google.enterprise.cloudsearch.sdk.Util.getRandomId;
 import static java.util.Arrays.asList;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.google.api.client.repackaged.com.google.common.base.Strings;
 import com.google.api.services.cloudsearch.v1.model.Date;
@@ -85,8 +86,8 @@ public class FakeIndexingRepositoryIT {
       dataSourceId = System.getProperty(DATA_SOURCE_ID_PROPERTY_NAME);
       serviceKeyPath = Paths.get(System.getProperty(SERVICE_KEY_PROPERTY_NAME));
       rootUrl = Optional.ofNullable(System.getProperty(ROOT_URL_PROPERTY_NAME));
-      assertThat(serviceKeyPath.toFile().exists()).isTrue();
-      assertThat(Strings.isNullOrEmpty(dataSourceId)).isFalse();
+      assertTrue(serviceKeyPath.toFile().exists());
+      assertFalse(Strings.isNullOrEmpty(dataSourceId));
     } catch (AssertionError error) {
       logger.log(Level.SEVERE,
           "Missing input parameters. Rerun the test as \\\"mvn integration-test"
