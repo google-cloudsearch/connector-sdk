@@ -16,6 +16,7 @@
 package com.google.enterprise.cloudsearch.sdk;
 
 import static com.google.common.base.Preconditions.checkState;
+import static java.net.HttpURLConnection.HTTP_BAD_GATEWAY;
 import static java.net.HttpURLConnection.HTTP_CONFLICT;
 import static java.net.HttpURLConnection.HTTP_GATEWAY_TIMEOUT;
 import static java.net.HttpURLConnection.HTTP_UNAVAILABLE;
@@ -40,7 +41,11 @@ public class RetryPolicy {
   private static final int HTTP_TOO_MANY_REQUESTS = 429;
   private static final ImmutableSet<Integer> RETRYABLE_STATUS_CODES =
       ImmutableSet.of(
-          HTTP_CONFLICT, HTTP_GATEWAY_TIMEOUT, HTTP_UNAVAILABLE, HTTP_TOO_MANY_REQUESTS);
+          HTTP_CONFLICT,
+          HTTP_GATEWAY_TIMEOUT,
+          HTTP_UNAVAILABLE,
+          HTTP_TOO_MANY_REQUESTS,
+          HTTP_BAD_GATEWAY);
   private final int maxRetries;
   private final BackOffFactory backOffFactory;
 
