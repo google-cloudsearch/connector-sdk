@@ -235,6 +235,21 @@ public class BaseApiServiceTest {
   }
 
   @Test
+  public void testRequestWithRetryableErrorFor502() throws Exception {
+    TestingHttpTransport transport =
+        new TestingHttpTransport(
+            ImmutableList.of(
+                buildRequest(502, new GenericJson()), buildRequest(200, new GenericJson())));
+    TestApiService apiService =
+        new TestApiService.Builder()
+            .setTransport(transport)
+            .setCredentialFactory(scopes -> new MockGoogleCredential.Builder().build())
+            .build();
+    validateEmptyItem(apiService.get());
+    assertFalse(transport.requests.hasNext());
+  }
+
+  @Test
   public void testRequestWithTimeouts() throws Exception {
     AtomicInteger connectionTimeoutHolder = new AtomicInteger();
     AtomicInteger readTimeoutHolder = new AtomicInteger();
