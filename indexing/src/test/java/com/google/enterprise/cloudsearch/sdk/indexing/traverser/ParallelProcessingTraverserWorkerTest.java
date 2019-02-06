@@ -64,7 +64,6 @@ public class ParallelProcessingTraverserWorkerTest {
   @Rule public SetupConfigRule setupConfig = SetupConfigRule.uninitialized();
 
   @Mock IndexingService indexingService;
-  PollItemsRequest pollQueueRequest = new PollItemsRequest();
   @Mock ItemRetriever itemRetriever;
   @Spy ExecutorService executorService = Executors.newCachedThreadPool();
   TraverserConfiguration conf;
