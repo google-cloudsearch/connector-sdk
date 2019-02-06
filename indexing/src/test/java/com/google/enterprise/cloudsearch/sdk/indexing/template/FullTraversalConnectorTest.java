@@ -96,6 +96,12 @@ public class FullTraversalConnectorTest {
       new QueueCheckpoint.QueueData().setQueueName(QUEUE_B);
   private static final byte[] QUEUE_A_CHECKPOINT_BYTES = QUEUE_A_CHECKPOINT.get();
   private static final byte[] QUEUE_B_CHECKPOINT_BYTES = QUEUE_B_CHECKPOINT.get();
+  private static final ItemAcl DOMAIN_PUBLIC_ACL =
+      new Acl.Builder()
+          .setReaders(ImmutableList.of(Acl.getCustomerPrincipal()))
+          .build()
+          .applyTo(new Item())
+          .getAcl();
 
   @Rule public ExpectedException thrown = ExpectedException.none();
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
@@ -114,11 +120,13 @@ public class FullTraversalConnectorTest {
   // Mocks don't call default interface methods, so use an implementation here, wrapped
   // with spy() to allow for verify calls.
   @Spy private ApiOperation errorOperation = new ApiOperation() {
+      @Override
       public List<GenericJson> execute(IndexingService service) throws IOException {
         throw new IOException();
       }
     };
   @Spy private ApiOperation successOperation = new ApiOperation() {
+      @Override
       public List<GenericJson> execute(IndexingService service) throws IOException {
         return Lists.newArrayList();
       }
@@ -219,7 +227,7 @@ public class FullTraversalConnectorTest {
   public void testDefaultAclModeIsInitialized() throws Exception {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "override");
-    config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
+    config.put(DefaultAcl.DEFAULT_ACL_READERS_USERS, "google:user1@example.com");
     setupConfig.initConfig(config);
     SettableFuture<Operation> updateFuture = SettableFuture.create();
     updateFuture.set(new Operation().setDone(true));
@@ -323,9 +331,7 @@ public class FullTraversalConnectorTest {
           CharStreams.toString(
               new InputStreamReader(allContent.get(i).getInputStream(), UTF_8));
       assertEquals(targetItems.get(allItems.get(i).getName()), html); // verify content
-      ItemAcl acl = allItems.get(i).getAcl();
-      assertEquals(DefaultAcl.DEFAULT_ACL_NAME_DEFAULT, acl.getInheritAclFrom());
-      assertEquals(InheritanceType.PARENT_OVERRIDE.name(), acl.getAclInheritanceType());
+      assertEquals(DOMAIN_PUBLIC_ACL, allItems.get(i).getAcl());
     }
     // closable iterable closed
     verify(opIterableSpy, times(1)).close();
@@ -388,8 +394,6 @@ public class FullTraversalConnectorTest {
     configProperties.put(FullTraversalConnector.TRAVERSE_QUEUE_TAG, "testQueue");
     setupConfig.initConfig(configProperties);
     connector.init(connectorContextMock);
-    // index the default acl's virtual item
-    verify(indexingServiceMock, times(1)).indexItem(any(), eq(RequestMode.SYNCHRONOUS));
     connector.traverse();
 
     // one update item with content for each of five targetItems in the db
@@ -411,9 +415,7 @@ public class FullTraversalConnectorTest {
           CharStreams.toString(
               new InputStreamReader(allContent.get(i).getInputStream(), UTF_8));
       assertEquals(targetItems.get(allItems.get(i).getName()), html); // verify content
-      ItemAcl acl = allItems.get(i).getAcl();
-      assertEquals(DefaultAcl.DEFAULT_ACL_NAME_DEFAULT, acl.getInheritAclFrom());
-      assertEquals(InheritanceType.PARENT_OVERRIDE.name(), acl.getAclInheritanceType());
+      assertEquals(DOMAIN_PUBLIC_ACL, allItems.get(i).getAcl());
     }
     // closable iterable closed
     verify(opIterableSpy, times(1)).close();
@@ -854,8 +856,6 @@ public class FullTraversalConnectorTest {
         new FullTraversalConnector(repositoryMock, checkpointHandlerMock);
     setConfig("0", DefaultAclChoices.PUBLIC);
     connector.init(connectorContextMock);
-    // index the default acl's virtual item
-    verify(indexingServiceMock, times(1)).indexItem(any(), eq(RequestMode.SYNCHRONOUS));
     connector.handleIncrementalChanges();
 
     // verify
@@ -888,9 +888,7 @@ public class FullTraversalConnectorTest {
           CharStreams.toString(
               new InputStreamReader(allContent.get(i).getInputStream(), UTF_8));
       assertEquals(targetItems.get(allItems.get(i).getName()), html); // verify content
-      ItemAcl acl = allItems.get(i).getAcl();
-      assertEquals(DefaultAcl.DEFAULT_ACL_NAME_DEFAULT, acl.getInheritAclFrom());
-      assertEquals(InheritanceType.PARENT_OVERRIDE.name(), acl.getAclInheritanceType());
+      assertEquals(DOMAIN_PUBLIC_ACL, allItems.get(i).getAcl());
     }
     verifyNoMoreInteractions(indexingServiceMock, checkpointHandlerMock);
   }
@@ -1411,6 +1409,7 @@ public class FullTraversalConnectorTest {
         new FullTraversalConnector(repositoryMock, checkpointHandlerMock);
     AtomicInteger counter1 = new AtomicInteger();
     ApiOperation fromPartition1 = new ApiOperation() {
+        @Override
         public List<GenericJson> execute(IndexingService service) throws IOException {
           counter1.incrementAndGet();
           return Collections.emptyList();
@@ -1418,6 +1417,7 @@ public class FullTraversalConnectorTest {
       };
     AtomicInteger counter2 = new AtomicInteger();
     ApiOperation fromPartition2 = new ApiOperation() {
+        @Override
         public List<GenericJson> execute(IndexingService service) throws IOException {
           assertEquals(
               "partition 2 should not be processed before partition 1 is all done",
@@ -1455,6 +1455,7 @@ public class FullTraversalConnectorTest {
         new FullTraversalConnector(repositoryMock, checkpointHandlerMock);
     AtomicInteger counter1 = new AtomicInteger();
     ApiOperation fromPartition1 = new ApiOperation() {
+        @Override
         public List<GenericJson> execute(IndexingService service) throws IOException {
           counter1.incrementAndGet();
           return Collections.emptyList();
@@ -1462,6 +1463,7 @@ public class FullTraversalConnectorTest {
       };
     AtomicInteger counter2 = new AtomicInteger();
     ApiOperation fromPartition2 = new ApiOperation() {
+        @Override
         public List<GenericJson> execute(IndexingService service) throws IOException {
           assertEquals(
               "partition 2 should not be processed before partition 1 is all done",
@@ -1497,11 +1499,13 @@ public class FullTraversalConnectorTest {
         new FullTraversalConnector(repositoryMock, checkpointHandlerMock);
     ApiOperation goodOperation = successOperation;
     ApiOperation badOperation = new ApiOperation() {
+        @Override
         public List<GenericJson> execute(IndexingService service) throws IOException {
           throw new IOException("error processing test item");
           }
         };
     ApiOperation dontExecute = spy(new ApiOperation() {
+        @Override
         public List<GenericJson> execute(IndexingService service) throws IOException {
           return null;
         }

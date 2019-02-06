@@ -146,6 +146,19 @@ public class DefaultAclTest {
     return targetItem;
   }
 
+  private Item getItemWithPublicAcl() {
+    return getItemWithPublicAcl(null);
+  }
+
+  private Item getItemWithPublicAcl(@Nullable List<Principal> owners) {
+    Acl.Builder builder =
+        new Acl.Builder().setReaders(ImmutableList.of(Acl.getCustomerPrincipal()));
+    if (owners != null) {
+      builder.setOwners(owners);
+    }
+    return builder.build().applyTo(new Item().setName("test"));
+  }
+
   @Test
   public void testConfigConstants() {
     assertEquals("defaultAcl.mode", DefaultAcl.DEFAULT_ACL_MODE);
@@ -162,21 +175,20 @@ public class DefaultAclTest {
   @Test
   public void testConstructorNoDefaultAcl() {
     setupConfig.initConfig(new Properties());
-    DefaultAcl defAcl = DefaultAcl.fromConfiguration(indexingServiceMock);
+    DefaultAcl.fromConfiguration(indexingServiceMock);
     verifyNoMoreInteractions(indexingServiceMock);
   }
 
   @Test
-  public void testConstructorPublicAcl() throws IOException {
+  public void testConstructorPublicAcl() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "fallback");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
     setupConfig.initConfig(config);
-    DefaultAcl defAcl = DefaultAcl.fromConfiguration(indexingServiceMock);
+    DefaultAcl.fromConfiguration(indexingServiceMock);
 
     publicAcl.applyTo(defaultAclContainer);
-    verify(indexingServiceMock, times(1))
-        .indexItem(defaultAclContainer, RequestMode.SYNCHRONOUS);
+    verifyNoMoreInteractions(indexingServiceMock);
   }
 
   @Test
@@ -189,7 +201,7 @@ public class DefaultAclTest {
     config.put(DefaultAcl.DEFAULT_ACL_DENIED_USERS, TEST_DENIED_USERS);
     config.put(DefaultAcl.DEFAULT_ACL_DENIED_GROUPS, TEST_DENIED_GROUPS);
     setupConfig.initConfig(config);
-    DefaultAcl defAcl = DefaultAcl.fromConfiguration(indexingServiceMock);
+    DefaultAcl.fromConfiguration(indexingServiceMock);
 
     readersAcl.applyTo(defaultAclContainer);
     verify(indexingServiceMock, times(1))
@@ -200,13 +212,16 @@ public class DefaultAclTest {
   public void testConstructorCustomContainerName() throws IOException {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "fallback");
-    config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
+    config.put(DefaultAcl.DEFAULT_ACL_READERS_USERS, "google:user1@example.com");
     config.put(DefaultAcl.DEFAULT_ACL_NAME, "My Acl Container Name");
     setupConfig.initConfig(config);
-    DefaultAcl defAcl = DefaultAcl.fromConfiguration(indexingServiceMock);
+    DefaultAcl.fromConfiguration(indexingServiceMock);
 
     defaultAclContainer.setName("My Acl Container Name");
-    publicAcl.applyTo(defaultAclContainer);
+    new Acl.Builder()
+        .setReaders(ImmutableList.of(Acl.getGoogleUserPrincipal("user1@example.com")))
+        .build()
+        .applyTo(defaultAclContainer);
     verify(indexingServiceMock, times(1))
         .indexItem(defaultAclContainer, RequestMode.SYNCHRONOUS);
   }
@@ -219,28 +234,28 @@ public class DefaultAclTest {
   }
 
   @Test
-  public void testPublicAclFallbackNoAcl() throws IOException {
+  public void testPublicAclFallbackNoAcl() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "fallback");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
     setupConfig.initConfig(config);
     DefaultAcl defAcl = DefaultAcl.fromConfiguration(indexingServiceMock);
 
-    Item expectedItem = getItemInheritFromDefaultAcl();
+    Item expectedItem = getItemWithPublicAcl();
     Item item = new Item().setName("test");
     assertTrue(defAcl.applyToIfEnabled(item));
     assertEquals(expectedItem, item);
   }
 
   @Test
-  public void testPublicAclFallbackWithOwner() throws IOException {
+  public void testPublicAclFallbackWithOwner() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "fallback");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
     setupConfig.initConfig(config);
     DefaultAcl defAcl = DefaultAcl.fromConfiguration(indexingServiceMock);
 
-    Item expectedItem = getItemInheritFromDefaultAcl(getExtraPrincipal("myOwner"));
+    Item expectedItem = getItemWithPublicAcl(getExtraPrincipal("myOwner"));
     Item item = new Item().setName("test");
     Acl itemAcl = new Acl.Builder().setOwners(getExtraPrincipal("myOwner")).build();
     itemAcl.applyTo(item);
@@ -249,7 +264,7 @@ public class DefaultAclTest {
   }
 
   @Test
-  public void testPublicAclFallbackWithAcl() throws IOException {
+  public void testPublicAclFallbackWithAcl() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "fallback");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
@@ -270,7 +285,7 @@ public class DefaultAclTest {
     assertEquals(itemClone, item);
   }
 
-  public void testDefaultAclFallback() throws IOException {
+  public void testDefaultAclFallback() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "fallback");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "false");
@@ -288,7 +303,7 @@ public class DefaultAclTest {
   }
 
   @Test
-  public void testDefaultAclAppendNoAcl() throws IOException {
+  public void testDefaultAclAppendNoAcl() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "append");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "false");
@@ -307,7 +322,7 @@ public class DefaultAclTest {
   }
 
   @Test
-  public void testDefaultAclAppendEmptyAcl() throws IOException {
+  public void testDefaultAclAppendEmptyAcl() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "append");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "false");
@@ -328,7 +343,7 @@ public class DefaultAclTest {
   }
 
   @Test
-  public void testDefaultAclAppendWithAcl() throws IOException {
+  public void testDefaultAclAppendWithAcl() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "append");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "false");
@@ -365,7 +380,7 @@ public class DefaultAclTest {
   }
 
   @Test
-  public void testDefaultAclAppendWithAclNoInheritance() throws IOException {
+  public void testDefaultAclAppendWithAclNoInheritance() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "append");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "false");
@@ -400,7 +415,7 @@ public class DefaultAclTest {
   }
 
   @Test
-  public void testDefaultAclOverrideNoAcl() throws IOException {
+  public void testDefaultAclOverrideNoAcl() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "override");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "false");
@@ -419,7 +434,7 @@ public class DefaultAclTest {
   }
 
   @Test
-  public void testDefaultAclOverrideEmptyAcl() throws IOException {
+  public void testDefaultAclOverrideEmptyAcl() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "override");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "false");
@@ -440,7 +455,7 @@ public class DefaultAclTest {
   }
 
   @Test
-  public void testDefaultAclOverrideWithAcl() throws IOException {
+  public void testDefaultAclOverrideWithAcl() {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "override");
     config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "false");
@@ -568,7 +583,7 @@ public class DefaultAclTest {
   public void testBuildException() throws IOException {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "fallback");
-    config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
+    config.put(DefaultAcl.DEFAULT_ACL_READERS_USERS, "google:user1@example.com");
     setupConfig.initConfig(config);
     when(indexingServiceMock.indexItem(any(), any())).thenThrow(new IOException("Testing Error"));
     thrown.expect(StartupException.class);
@@ -580,7 +595,7 @@ public class DefaultAclTest {
   public void testBuildExceptionOperationNotDone() throws IOException {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "fallback");
-    config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
+    config.put(DefaultAcl.DEFAULT_ACL_READERS_USERS, "google:user1@example.com");
     setupConfig.initConfig(config);
     SettableFuture<Operation> result = SettableFuture.create();
     result.set(new Operation().setDone(false));
@@ -594,7 +609,7 @@ public class DefaultAclTest {
   public void testBuildExceptionOperationError() throws IOException {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "fallback");
-    config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
+    config.put(DefaultAcl.DEFAULT_ACL_READERS_USERS, "google:user1@example.com");
     setupConfig.initConfig(config);
     SettableFuture<Operation> result = SettableFuture.create();
     result.set(new Operation().setDone(true).setError(new Status().setCode(500)));
@@ -608,7 +623,7 @@ public class DefaultAclTest {
   public void testBuildExceptionExecutionException() throws IOException {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "fallback");
-    config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
+    config.put(DefaultAcl.DEFAULT_ACL_READERS_USERS, "google:user1@example.com");
     setupConfig.initConfig(config);
     SettableFuture<Operation> result = SettableFuture.create();
     result.setException(new IOException("failed to create item"));
@@ -692,7 +707,7 @@ public class DefaultAclTest {
     setupConfig.initConfig(config);
     DefaultAcl defAcl = DefaultAcl.fromConfiguration(indexingServiceMock);
 
-    Item expectedItem = getItemInheritFromDefaultAcl();
+    Item expectedItem = getItemWithPublicAcl();
     // This item has an acl but getOwners will return null.
     Item item = new Item().setName("test").setAcl(new ItemAcl());
     assertEquals(null, item.getAcl().getOwners());

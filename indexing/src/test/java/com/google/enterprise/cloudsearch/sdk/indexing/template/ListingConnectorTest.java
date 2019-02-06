@@ -35,6 +35,7 @@ import com.google.api.services.cloudsearch.v1.model.ItemAcl;
 import com.google.api.services.cloudsearch.v1.model.ItemMetadata;
 import com.google.api.services.cloudsearch.v1.model.Operation;
 import com.google.api.services.cloudsearch.v1.model.PushItem;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -83,6 +84,13 @@ public class ListingConnectorTest {
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public SetupConfigRule setupConfig = SetupConfigRule.uninitialized();
 
+  private static final ItemAcl DOMAIN_PUBLIC_ACL =
+      new Acl.Builder()
+          .setReaders(ImmutableList.of(Acl.getCustomerPrincipal()))
+          .build()
+          .applyTo(new Item())
+          .getAcl();
+
   @Mock private IndexingService mockIndexingService;
   @Mock private Repository mockRepository;
   @Mock private IndexingConnectorContext mockConnectorContext;
@@ -92,6 +100,7 @@ public class ListingConnectorTest {
   // Mocks don't call default interface methods, so use an implementation here, wrapped
   // with spy() to allow for verify calls.
   @Spy private ApiOperation errorOperation = new ApiOperation() {
+      @Override
       public List<GenericJson> execute(IndexingService service) throws IOException {
         throw new IOException();
       }
@@ -183,7 +192,7 @@ public class ListingConnectorTest {
   public void testDefaultAclModeIsInitialized() throws Exception {
     Properties config = new Properties();
     config.put(DefaultAcl.DEFAULT_ACL_MODE, "override");
-    config.put(DefaultAcl.DEFAULT_ACL_PUBLIC, "true");
+    config.put(DefaultAcl.DEFAULT_ACL_READERS_USERS, "google:user1@example.com");
     overrideDefaultConfig(config);
     SettableFuture<Operation> updateFuture = SettableFuture.create();
     updateFuture.set(new Operation().setDone(true));
@@ -362,6 +371,7 @@ public class ListingConnectorTest {
     ApiOperation mockPush = errorOperation;
     AsyncApiOperation pushAsyncOperation = new AsyncApiOperation(mockPush);
     ApiOperation mockDelete = spy(new ApiOperation() {
+        @Override
         public List<GenericJson> execute(IndexingService service) throws IOException {
           return Lists.newArrayList();
         }
@@ -592,14 +602,53 @@ public class ListingConnectorTest {
     ListingConnector connector = new ListingConnector(mockRepository);
     connector.init(mockConnectorContext);
     connector.process(polledItem);
+    verify(mockIndexingService, times(1))
+        .indexItem(itemListCaptor.capture(), eq(RequestMode.SYNCHRONOUS));
+    assertEquals(DOMAIN_PUBLIC_ACL, itemListCaptor.getAllValues().get(0).getAcl());
+  }
+
+  @Test
+  public void testGetDocDefaultAclNonPublicOverride() throws Exception {
+    Properties config = new Properties();
+    config.put(DefaultAcl.DEFAULT_ACL_MODE, "override");
+    config.put(DefaultAcl.DEFAULT_ACL_READERS_USERS, "google:user1-override@example.com");
+    overrideDefaultConfig(config);
+    Item polledItem = new Item().setName("PollItem");
+    RepositoryDoc.Builder repositoryDoc = new Builder();
+    repositoryDoc
+        .setItem(
+            new IndexingItemBuilder("PollItem")
+                .setTitle(FieldOrValue.withValue("testItem"))
+                .setAcl(
+                    new Acl.Builder()
+                        .setReaders(Arrays.asList(Acl.getUserPrincipal("user-other")))
+                        .build())
+                .build())
+        .build();
+    SettableFuture<Operation> updateFuture = SettableFuture.create();
+    doAnswer(
+            invocation -> {
+              updateFuture.set(new Operation().setDone(true));
+              return updateFuture;
+            })
+        .when(mockIndexingService)
+        .indexItem(any(), any());
+    when(mockRepository.getDoc(polledItem)).thenReturn(repositoryDoc.build());
+
+    ListingConnector connector = new ListingConnector(mockRepository);
+    connector.init(mockConnectorContext);
+    connector.process(polledItem);
     verify(mockIndexingService, times(2))
         .indexItem(itemListCaptor.capture(), eq(RequestMode.SYNCHRONOUS));
-    ItemAcl actualAcl = itemListCaptor.getAllValues().get(1).getAcl();
-    // with override, item's acl should change to inherit from default acl
-    assertEquals(DefaultAcl.DEFAULT_ACL_NAME_DEFAULT, actualAcl.getInheritAclFrom());
-    assertEquals(InheritanceType.PARENT_OVERRIDE.name(), actualAcl.getAclInheritanceType());
-    assertEquals(0, actualAcl.getReaders().size());
-    assertEquals(0, actualAcl.getDeniedReaders().size());
+    ItemAcl expectedInheritedAcl = new Acl.Builder()
+        .setInheritFrom(DefaultAcl.DEFAULT_ACL_NAME_DEFAULT)
+        .setInheritanceType(InheritanceType.PARENT_OVERRIDE)
+        .build()
+        .applyTo(new Item())
+        .getAcl();
+    assertEquals(
+        expectedInheritedAcl,
+        itemListCaptor.getAllValues().get(1).getAcl());
   }
 
   @Test
@@ -630,8 +679,8 @@ public class ListingConnectorTest {
     ListingConnector connector = new ListingConnector(mockRepository);
     connector.init(mockConnectorContext);
     connector.process(polledItem);
-    verify(mockIndexingService, times(2)).indexItem(itemListCaptor.capture(), any());
-    Item actual = itemListCaptor.getAllValues().get(1);
+    verify(mockIndexingService, times(1)).indexItem(itemListCaptor.capture(), any());
+    Item actual = itemListCaptor.getAllValues().get(0);
     // with fallback, original acl shouldn't have changed
     assertEquals(originalAcl, actual.getAcl());
   }
