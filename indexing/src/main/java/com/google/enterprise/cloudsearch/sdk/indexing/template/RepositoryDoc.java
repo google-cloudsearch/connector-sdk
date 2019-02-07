@@ -17,16 +17,23 @@ package com.google.enterprise.cloudsearch.sdk.indexing.template;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.net.HttpURLConnection.HTTP_BAD_REQUEST;
+import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.http.AbstractInputStreamContent;
 import com.google.api.client.json.GenericJson;
 import com.google.api.client.repackaged.com.google.common.base.Strings;
 import com.google.api.services.cloudsearch.v1.model.Item;
+import com.google.api.services.cloudsearch.v1.model.Operation;
 import com.google.api.services.cloudsearch.v1.model.PushItem;
+import com.google.api.services.cloudsearch.v1.model.RepositoryError;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.enterprise.cloudsearch.sdk.indexing.Acl;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService.ContentFormat;
@@ -38,36 +45,42 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
  * Generic object for a single document in a repository.
  *
- * <p>This is a type of {@link ApiOperation} that performs an
- * {@link IndexingService#indexItem(Item, RequestMode)} request. This single request can
- * actually contain multiple requests if the data repository is hierarchical.
+ * <p>This is a type of {@link ApiOperation} that performs an {@link IndexingService#indexItem(Item,
+ * RequestMode)} request. This single request can actually contain multiple requests if the data
+ * repository is hierarchical.
  *
  * <p>Sample usage:
+ *
  * <pre>{@code
- *   Item item = ... // create an Item object
- *   ByteArrayContent content = ... // create item content, using HTML content for this example
- *   String contentHash = ... // optional content hash value
- *   RepositoryDoc.Builder builder = new RepositoryDoc.Builder()
- *       .setItem(item)
- *       .setContent(content, contentHash, ContentFormat.HTML)
- *       .setUpdateItemMode(RequestMode.SYNCHRONOUS);
- *   // if hierarchical, add children of this document
- *   List<String> childIds = ... // retrieve all child IDs
- *   for (childId : childIds) {
- *     PushItem pushItem = ... // populate a push item for this ID
- *     builder.addChildId(childId, pushItem);
- *   }
- *   RepositoryDoc document = builder.build();
- *   // now the document is ready for use, typically as a return value from a Repository method
+ * Item item = ... // create an Item object
+ * ByteArrayContent content = ... // create item content, using HTML content for this example
+ * String contentHash = ... // optional content hash value
+ * RepositoryDoc.Builder builder = new RepositoryDoc.Builder()
+ *     .setItem(item)
+ *     .setContent(content, contentHash, ContentFormat.HTML)
+ *     .setUpdateItemMode(RequestMode.SYNCHRONOUS);
+ * // if hierarchical, add children of this document
+ * List<String> childIds = ... // retrieve all child IDs
+ * for (childId : childIds) {
+ *   PushItem pushItem = ... // populate a push item for this ID
+ *   builder.addChildId(childId, pushItem);
+ * }
+ * RepositoryDoc document = builder.build();
+ * // now the document is ready for use, typically as a return value from a Repository method
  * }</pre>
  */
 public class RepositoryDoc implements ApiOperation {
+  private final Logger logger = Logger.getLogger(RepositoryDoc.class.getName());
+
   private final Item item;
   private final AbstractInputStreamContent content;
   private final ContentFormat contentFormat;
@@ -111,14 +124,15 @@ public class RepositoryDoc implements ApiOperation {
     /**
      * Sets the content and content format.
      *
-     * The {@code content} parameter should use a concrete implementation of
-     * {@code AbstractInputStreamContent} based on the natural source object:
+     * <p>The {@code content} parameter should use a concrete implementation of {@code
+     * AbstractInputStreamContent} based on the natural source object:
+     *
      * <ul>
-     *   <li> For {@code InputStream}, use {@code InputStreamContent}.
-     *        For best results, if the length of the content (in bytes) is known without
-     *        reading the stream, call {@code setLength} on the {@code InputStreamContent}.
-     *   <li> For {@code String} or {@code byte[]}, use {@code ByteArrayContent}.
-     *   <li> For existing files, use {@code FileContent}.
+     *   <li>For {@code InputStream}, use {@code InputStreamContent}. For best results, if the
+     *       length of the content (in bytes) is known without reading the stream, call {@code
+     *       setLength} on the {@code InputStreamContent}.
+     *   <li>For {@code String} or {@code byte[]}, use {@code ByteArrayContent}.
+     *   <li>For existing files, use {@code FileContent}.
      * </ul>
      *
      * <p>Use this method when the content hash is not being used.
@@ -130,22 +144,25 @@ public class RepositoryDoc implements ApiOperation {
     /**
      * Sets the content, content hash, and content format.
      *
-     * The {@code content} parameter should use a concrete implementation of
-     * {@code AbstractInputStreamContent} based on the natural source object:
+     * <p>The {@code content} parameter should use a concrete implementation of {@code
+     * AbstractInputStreamContent} based on the natural source object:
+     *
      * <ul>
-     *   <li> For {@code InputStream}, use {@code InputStreamContent}.
-     *        For best results, if the length of the content (in bytes) is known without
-     *        reading the stream, call {@code setLength} on the {@code InputStreamContent}.
-     *   <li> For {@code String} or {@code byte[]}, use {@code ByteArrayContent}.
-     *   <li> For existing files, use {@code FileContent}.
+     *   <li>For {@code InputStream}, use {@code InputStreamContent}. For best results, if the
+     *       length of the content (in bytes) is known without reading the stream, call {@code
+     *       setLength} on the {@code InputStreamContent}.
+     *   <li>For {@code String} or {@code byte[]}, use {@code ByteArrayContent}.
+     *   <li>For existing files, use {@code FileContent}.
      * </ul>
      *
      * <p>Use this method when the content hash is being used. The content hash allows the Cloud
-     * Search queue to determine whether a document's content has been modified during a
-     * subsequent push of the document. This allows the document's queue status to automatically
-     * change to a modified state.
+     * Search queue to determine whether a document's content has been modified during a subsequent
+     * push of the document. This allows the document's queue status to automatically change to a
+     * modified state.
      */
-    public Builder setContent(AbstractInputStreamContent content, @Nullable String contentHash,
+    public Builder setContent(
+        AbstractInputStreamContent content,
+        @Nullable String contentHash,
         ContentFormat contentFormat) {
       this.content = content;
       this.contentHash = contentHash;
@@ -277,12 +294,39 @@ public class RepositoryDoc implements ApiOperation {
     // adding data source prefix as well as escaping unsupported chars. Use original item name to
     // create fragments below to ensure consistent encoding is applied to fragments as well.
     String originalItemName = item.getName();
-    if (content == null) {
-      futures.add(service.indexItem(item, requestMode));
-    } else {
-      futures.add(
-          service.indexItemAndContent(item, content, contentHash, contentFormat, requestMode));
-    }
+    ListenableFuture<Operation> operation =
+        content == null
+            ? service.indexItem(item, requestMode)
+            : service.indexItemAndContent(item, content, contentHash, contentFormat, requestMode);
+
+    futures.add(
+        Futures.catchingAsync(
+            operation,
+            IOException.class,
+            /**
+             * Push failed index request into the queue if a backend error is returned, a failed
+             * future is always returned so that this operation is not treated as if it succeeded.
+             */
+            (AsyncFunction<IOException, Item>)
+                ex -> {
+                  logger.log(Level.WARNING, "Error indexing the item " + item, ex);
+                  Optional<RepositoryError> error = getRepositoryErrorForResponseException(ex);
+                  if (!error.isPresent()) {
+                    return Futures.immediateFailedFuture(ex);
+                  }
+                  logger.log(Level.INFO, "Pushing this failed item to queue " + item);
+                  return Futures.transformAsync(
+                      service.push(
+                          item.getName(),
+                          new PushItem()
+                              .setQueue(item.getQueue())
+                              .setType("REPOSITORY_ERROR")
+                              .setRepositoryError(error.get())
+                              .encodePayload(item.decodePayload())),
+                      input -> Futures.<Item>immediateFailedFuture(ex),
+                      MoreExecutors.directExecutor());
+                },
+            MoreExecutors.directExecutor()));
 
     for (Map.Entry<String, PushItem> entry : childIds.entrySet()) {
       futures.add(service.push(entry.getKey(), entry.getValue()));
@@ -343,5 +387,23 @@ public class RepositoryDoc implements ApiOperation {
         + ", requestMode="
         + requestMode
         + "]";
+  }
+
+  private static Optional<RepositoryError> getRepositoryErrorForResponseException(
+      IOException exception) {
+    if (!(exception instanceof GoogleJsonResponseException)) {
+      return Optional.empty();
+    }
+    GoogleJsonResponseException responseException = (GoogleJsonResponseException) exception;
+
+    if (responseException.getStatusCode() == HTTP_NOT_FOUND
+        || responseException.getStatusCode() == HTTP_BAD_REQUEST) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        new RepositoryError()
+            .setErrorMessage(responseException.getMessage())
+            .setType("SERVER_ERROR")
+            .setHttpStatusCode(responseException.getStatusCode()));
   }
 }
