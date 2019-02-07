@@ -15,7 +15,6 @@
  */
 package com.google.enterprise.cloudsearch.csv;
 
-
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.SERVICE_KEY_PROPERTY_NAME;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.qualifyTestProperty;
 import static com.google.enterprise.cloudsearch.sdk.Util.getItemId;
@@ -26,7 +25,6 @@ import com.google.api.client.repackaged.com.google.common.base.Strings;
 import com.google.api.services.cloudsearch.v1.model.Date;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.enterprise.cloudsearch.csvconnector.CSVRepository;
-import com.google.enterprise.cloudsearch.sdk.StatsManager;
 import com.google.enterprise.cloudsearch.sdk.Util;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.CloudSearchService;
@@ -37,6 +35,7 @@ import com.google.enterprise.cloudsearch.sdk.indexing.StructuredData.ResetStruct
 import com.google.enterprise.cloudsearch.sdk.indexing.StructuredDataHelper;
 import com.google.enterprise.cloudsearch.sdk.indexing.TestUtils;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.FullTraversalConnector;
+import com.google.enterprise.cloudsearch.sdk.sdk.ConnectorStats;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
@@ -59,6 +58,7 @@ import org.awaitility.Duration;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -86,14 +86,25 @@ public class CsvIT {
   @Rule public TemporaryFolder csvFileFolder = new TemporaryFolder();
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public ResetStructuredDataRule resetStructuredData = new ResetStructuredDataRule();
+  @Rule public ExpectedException thrown = ExpectedException.none();
 
   private static final String TEST_CSV_SINGLE = "empID, empName, Org\n"
       + "1, GoogleCloudSearch1, GCS-Connectors\n";
   private static final String TEST_CSV_STRUCTURED_DATA =
       "intValue, textValue, booleanValue, dateValue, doubleValue, enumValue, timestampValue\n"
           + "2, GoogleCloudSearch1, true, 2017-06-19, 2000.00, 1, 2017-10-10T14:01:23.400Z \n";
-  private static final String TEST_CSV_APPEND = "empID, empName, Org\n"
+  private static final String TEST_CSV_APPEND_BEFORE = "empID, empName, Org\n"
       + "10, GoogleCloudSearch1, GCS-Connectors\n";
+  private static final String TEST_CSV_APPEND_AFTER = "empID, empName, Org\n"
+      + "10, GoogleCloudSearch1, GCS-Connectors\n"
+      + "20, GoogleCloudSearch2, GCS-Connectors\n";
+  private static final String TEST_CSV_DELETE_UPDATE_BEFORE = "empID, empName, Org\n"
+      + "40, GoogleCloudSearch1, GCS-Connectors\n"
+      + "50, GoogleCloudSearch2, GCS-Connectors\n"
+      + "60, GoogleCloudSearch3, GCS-Connectors\n";
+  private static final String TEST_CSV_DELETE_UPDATE_AFTER = "empID, empName, Org\n"
+      + "40, GoogleCloudSearch7, GCS-Connectors\n"
+      + "60, GoogleCloudSearch3, GCS-Connectors\n";
 
   private void createFile(File file, String content) throws IOException {
     try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
@@ -137,7 +148,7 @@ public class CsvIT {
       config.setProperty("csv.csvColumns", "emp, empName, Org");
       config.setProperty("csv.uniqueKeyColumns", "emp");
       config.setProperty("url.columns", "empName");
-      config.setProperty("url.format", "https://www.mycompany.com/viewURL={0}");
+      config.setProperty("url.format", "https://www.example.com/viewURL={0}");
       config.setProperty("contentTemplate.csv.title", "CSV-Connector-Testing");
       config.setProperty("itemMetadata.title.field", "empName");
       config.setProperty("connector.runOnce", "true");
@@ -148,7 +159,7 @@ public class CsvIT {
           .setTitle("GoogleCloudSearch1")
           .setContentLanguage("en")
           .setItemType(ItemType.CONTENT_ITEM.toString())
-          .setSourceRepositoryUrl("https://www.mycompany.com/viewURL=GoogleCloudSearch1")
+          .setSourceRepositoryUrl("https://www.example.com/viewURL=GoogleCloudSearch1")
           .build();
       logger.log(Level.INFO, "Verifying mock item 1 >> {0}...", expectedItem1);
       util.waitUntilEqual(mockItemId1, expectedItem1.getItem());
@@ -178,7 +189,7 @@ public class CsvIT {
       config.setProperty("csv.csvColumns", "integer, text, boolean, date, double, enum, timestamp");
       config.setProperty("csv.uniqueKeyColumns", "integer");
       config.setProperty("url.columns", "text");
-      config.setProperty("url.format", "https://www.mycompany.com/viewURL={0}");
+      config.setProperty("url.format", "https://www.example.com/viewURL={0}");
       config.setProperty("contentTemplate.csv.title", "CSV-Connector-Testing");
       config.setProperty("itemMetadata.title.field", "text");
       config.setProperty("itemMetadata.objectType", "myMockDataObject");
@@ -190,7 +201,7 @@ public class CsvIT {
           .setTitle("GoogleCloudSearch1")
           .setContentLanguage("en")
           .setItemType(ItemType.CONTENT_ITEM.toString())
-          .setSourceRepositoryUrl("https://www.mycompany.com/viewURL=GoogleCloudSearch1")
+          .setSourceRepositoryUrl("https://www.example.com/viewURL=GoogleCloudSearch1")
           .addValue("integer", 2)
           .addValue("text", "GoogleCloudSearch1")
           .addValue("boolean", true)
@@ -219,13 +230,13 @@ public class CsvIT {
     List<String> itemLists = new ArrayList<>();
     File csvFile = csvFileFolder.newFile("testAppend.csv");
     try {
-      createFile(csvFile, TEST_CSV_APPEND);
+      createFile(csvFile, TEST_CSV_APPEND_BEFORE);
       config.setProperty("csv.filePath", csvFile.getAbsolutePath());
       config.setProperty("csv.skipHeaderRecord", "true");
       config.setProperty("csv.csvColumns", "emp, empName, Org");
       config.setProperty("csv.uniqueKeyColumns", "emp");
       config.setProperty("url.columns", "empName");
-      config.setProperty("url.format", "https://www.mycompany.com/viewURL={0}");
+      config.setProperty("url.format", "https://www.example.com/viewURL={0}");
       config.setProperty("contentTemplate.csv.title", "CSV-Connector-Testing");
       config.setProperty("itemMetadata.title.field", "empName");
       IndexingApplication csvConnector =
@@ -233,8 +244,7 @@ public class CsvIT {
       Awaitility.await()
           .atMost(CONNECTOR_RUN_TIME)
           .pollInterval(CONNECTOR_RUN_POLL_INTERVAL)
-          .until(() -> StatsManager.getInstance().getComponent("FullTraverser")
-              .getSuccessCount("complete") > 0);
+          .until(() -> ConnectorStats.getSuccessfulFullTraversalsCount() > 0);
       String mockItemId1 = getItemId(indexingSourceId, "10");
       String mockItemId2 = getItemId(indexingSourceId, "20");
       itemLists.addAll(Arrays.asList(mockItemId1, mockItemId2));
@@ -242,29 +252,95 @@ public class CsvIT {
           .setTitle("GoogleCloudSearch1")
           .setContentLanguage("en")
           .setItemType(ItemType.CONTENT_ITEM.toString())
-          .setSourceRepositoryUrl("https://www.mycompany.com/viewURL=GoogleCloudSearch1")
+          .setSourceRepositoryUrl("https://www.example.com/viewURL=GoogleCloudSearch1")
           .build();
       util.waitUntilEqual(mockItemId1, expectedItem1.getItem());
-      try (FileWriter pw = new FileWriter(csvFile.getAbsolutePath(), true)) {
-        pw.append("20, GoogleCloudSearch2, GCS-Connectors");
-        pw.append("\n");
-      }
-      int traversalCount = StatsManager.getInstance().getComponent("FullTraverser")
-          .getSuccessCount("complete");
+      createFile(csvFile, TEST_CSV_APPEND_AFTER);
+      int traversalCount = ConnectorStats.getSuccessfulFullTraversalsCount();
       Awaitility.await()
           .atMost(CONNECTOR_RUN_TIME)
           .pollInterval(CONNECTOR_RUN_POLL_INTERVAL)
-          .until(() -> StatsManager.getInstance().getComponent("FullTraverser")
-              .getSuccessCount("complete") > traversalCount + 1);
+          .until(() -> ConnectorStats.getSuccessfulFullTraversalsCount() > traversalCount + 1);
       csvConnector.shutdown("ShutdownHook initiated");
       MockItem expectedItem2 = new MockItem.Builder(mockItemId2)
           .setTitle("GoogleCloudSearch2")
           .setContentLanguage("en")
           .setItemType(ItemType.CONTENT_ITEM.toString())
-          .setSourceRepositoryUrl("https://www.mycompany.com/viewURL=GoogleCloudSearch2")
+          .setSourceRepositoryUrl("https://www.example.com/viewURL=GoogleCloudSearch2")
           .build();
       util.waitUntilEqual(mockItemId1, expectedItem1.getItem());
       util.waitUntilEqual(mockItemId2, expectedItem2.getItem());
+    } finally {
+      try {
+        csvFile.delete();
+      } finally {
+        v1Client.deleteItemsIfExist(itemLists);
+      }
+    }
+  }
+
+  @Test
+  public void testCSVConnectorDeleteUpdate() throws IOException, InterruptedException{
+    Properties config = new Properties();
+    List<String> itemLists = new ArrayList<>();
+    File csvFile = csvFileFolder.newFile("testDeleteUpdate.csv");
+    try {
+      createFile(csvFile, TEST_CSV_DELETE_UPDATE_BEFORE);
+      config.setProperty("csv.filePath", csvFile.getAbsolutePath());
+      config.setProperty("csv.skipHeaderRecord", "true");
+      config.setProperty("csv.csvColumns", "emp, empName, Org");
+      config.setProperty("csv.uniqueKeyColumns", "emp");
+      config.setProperty("url.columns", "empName");
+      config.setProperty("url.format", "https://www.example.com/viewURL={0}");
+      config.setProperty("contentTemplate.csv.title", "CSV-Connector-Testing");
+      config.setProperty("itemMetadata.title.field", "empName");
+      IndexingApplication csvConnector =
+          runCsvConnector(setupPropertiesConfigAndRunConnector(config));
+      Awaitility.await()
+          .atMost(CONNECTOR_RUN_TIME)
+          .pollInterval(CONNECTOR_RUN_POLL_INTERVAL)
+          .until(() -> ConnectorStats.getSuccessfulFullTraversalsCount() > 0);
+      String mockItemId1 = getItemId(indexingSourceId, "40");
+      String mockItemId2 = getItemId(indexingSourceId, "50");
+      String mockItemId3 = getItemId(indexingSourceId, "60");
+      MockItem expectedItem1 = new MockItem.Builder(mockItemId1)
+          .setTitle("GoogleCloudSearch1")
+          .setContentLanguage("en")
+          .setItemType(ItemType.CONTENT_ITEM.toString())
+          .setSourceRepositoryUrl("https://www.example.com/viewURL=GoogleCloudSearch1")
+          .build();
+      MockItem expectedItem2 = new MockItem.Builder(mockItemId2)
+          .setTitle("GoogleCloudSearch2")
+          .setContentLanguage("en")
+          .setItemType(ItemType.CONTENT_ITEM.toString())
+          .setSourceRepositoryUrl("https://www.example.com/viewURL=GoogleCloudSearch2")
+          .build();
+      MockItem expectedItem3 = new MockItem.Builder(mockItemId3)
+          .setTitle("GoogleCloudSearch3")
+          .setContentLanguage("en")
+          .setItemType(ItemType.CONTENT_ITEM.toString())
+          .setSourceRepositoryUrl("https://www.example.com/viewURL=GoogleCloudSearch3")
+          .build();
+      util.waitUntilEqual(mockItemId1, expectedItem1.getItem());
+      util.waitUntilEqual(mockItemId2, expectedItem2.getItem());
+      util.waitUntilEqual(mockItemId3, expectedItem3.getItem());
+      createFile(csvFile, TEST_CSV_DELETE_UPDATE_AFTER);
+      int traversalCount = ConnectorStats.getSuccessfulFullTraversalsCount();
+      Awaitility.await()
+          .atMost(CONNECTOR_RUN_TIME)
+          .pollInterval(CONNECTOR_RUN_POLL_INTERVAL)
+          .until(() -> ConnectorStats.getSuccessfulFullTraversalsCount() > traversalCount + 1);
+      csvConnector.shutdown("ShutdownHook initiated");
+      MockItem updatedItem = new MockItem.Builder(mockItemId1)
+          .setTitle("GoogleCloudSearch7")
+          .setContentLanguage("en")
+          .setItemType(ItemType.CONTENT_ITEM.toString())
+          .setSourceRepositoryUrl("https://www.example.com/viewURL=GoogleCloudSearch7")
+          .build();
+      itemLists.addAll(Arrays.asList(mockItemId1, mockItemId3));
+      util.waitUntilEqual(mockItemId1, updatedItem.getItem());
+      util.waitUntilEqual(mockItemId3, expectedItem3.getItem());
+      util.waitUntilDeleted(mockItemId2);
     } finally {
       try {
         csvFile.delete();
