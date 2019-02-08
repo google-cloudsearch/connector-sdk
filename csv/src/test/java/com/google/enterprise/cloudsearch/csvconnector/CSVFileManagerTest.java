@@ -140,6 +140,24 @@ public class CSVFileManagerTest {
   }
 
   @Test
+  public void testGetCSVFileIterator() throws IOException {
+    File tmpfile = temporaryFolder.newFile("testCreateItemWithKey.csv");
+    createFile(tmpfile, UTF_8, testCSVSingle);
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    setupConfig.initConfig(config);
+
+    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+    CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
+    csvFile.iterator();
+    thrown.expect(IllegalStateException.class);
+    csvFile.iterator();
+  }
+
+  @Test
   public void testCsvFileManagerCreateItemWithKey() throws IOException {
     File tmpfile = temporaryFolder.newFile("testCreateItemWithKey.csv");
     createFile(tmpfile, UTF_8, testCSVSingle);
@@ -490,10 +508,10 @@ public class CSVFileManagerTest {
     CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
     CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
 
-    Item item = csvFileManager.createItem(csvFile.iterator().next());
+    Iterator<CSVRecord> iter = csvFile.iterator();
+    Item item = csvFileManager.createItem(iter.next());
     assertEquals("moma search", item.getName());
     int count = 0;
-    Iterator<CSVRecord> iter = csvFile.iterator();
     while (iter.hasNext()) {
       iter.next();
       count++;
