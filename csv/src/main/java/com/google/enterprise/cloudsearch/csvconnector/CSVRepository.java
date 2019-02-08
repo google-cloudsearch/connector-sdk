@@ -16,6 +16,7 @@
 package com.google.enterprise.cloudsearch.csvconnector;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.collect.Iterators.transform;
 
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.enterprise.cloudsearch.sdk.CheckpointCloseableIterable;
@@ -33,7 +34,6 @@ import com.google.enterprise.cloudsearch.sdk.indexing.template.RepositoryDoc;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
-import java.util.NoSuchElementException;
 import org.apache.commons.csv.CSVRecord;
 
 /**
@@ -85,10 +85,10 @@ public class CSVRepository implements Repository {
   public void close() {}
 
   /**
-   * Get a result set iterator that supply all the records in CSV files
+   * Fetches all the documents from the CSV file.
    *
-   * @param checkpoint save state from last iteration
-   * @return iterator of database records converted to docs
+   * @param checkpoint saved state from the previous traversal (ignored by this connector)
+   * @return an {@code Iterable} of CSV records converted to docs
    * @throws RepositoryException on access errors
    */
   @Override
@@ -100,17 +100,14 @@ public class CSVRepository implements Repository {
   class RepositoryDocIterable implements CloseableIterable<ApiOperation> {
 
     private final CloseableIterable<CSVRecord> csvFile;
-    private final ResultIterator resultIterator;
 
     public RepositoryDocIterable() throws RepositoryException {
       try {
-        csvFile = csvFileManager.getCSVFile();
+        csvFile = checkNotNull(csvFileManager.getCSVFile());
       } catch (IOException e) {
         throw new RepositoryException.Builder()
             .setErrorMessage("Error reading the CSV file").setCause(e).build();
       }
-      checkNotNull(csvFile);
-      resultIterator = new ResultIterator(csvFile.iterator());
     }
 
     @Override
@@ -120,39 +117,18 @@ public class CSVRepository implements Repository {
 
     @Override
     public Iterator<ApiOperation> iterator() {
-      return resultIterator;
+      return transform(csvFile.iterator(), this::createRepositoryDoc);
     }
 
-    class ResultIterator implements Iterator<ApiOperation> {
-      private Iterator<CSVRecord> csvRecordIterator;
-
-      public ResultIterator(Iterator<CSVRecord> csvRecordIterator) {
-        this.csvRecordIterator = csvRecordIterator;
-      }
-
-      @Override
-      public boolean hasNext() {
-        return csvRecordIterator.hasNext();
-      }
-
-      @Override
-      public ApiOperation next() {
-        if (hasNext()) {
-          try {
-            return createResultSetRecord(csvRecordIterator.next());
-          } catch (IOException e) {
-            throw new RuntimeException("Error creating record from result set.", e);
-          }
-        }
-        throw new NoSuchElementException();
-      }
-
-      RepositoryDoc createResultSetRecord(CSVRecord csvRecord) throws IOException {
+    RepositoryDoc createRepositoryDoc(CSVRecord csvRecord) {
+      try {
         return new RepositoryDoc.Builder()
             .setItem(csvFileManager.createItem(csvRecord))
             .setContent(csvFileManager.createContent(csvRecord), ContentFormat.HTML)
             .setRequestMode(requestMode)
             .build();
+      } catch (IOException e) {
+        throw new RuntimeException("Error creating document from CSV record.", e);
       }
     }
   }

@@ -33,6 +33,7 @@ import com.google.common.collect.Sets;
 import com.google.common.hash.Hasher;
 import com.google.common.hash.Hashing;
 import com.google.enterprise.cloudsearch.sdk.CloseableIterable;
+import com.google.enterprise.cloudsearch.sdk.CloseableIterableOnce;
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
 import com.google.enterprise.cloudsearch.sdk.indexing.ContentTemplate;
@@ -57,7 +58,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -526,16 +526,17 @@ class CSVFileManager {
         configKey, missing, golden);
   }
 
-  private static class CSVFile implements CloseableIterable<CSVRecord> {
+  /**
+   * Wraps CSVParser as a {@code CloseableIterable}, to ensure that it is closed,
+   * and specifically as a {@code CloseableIterableOnce},
+   * because {@code CSVParser.iterator()} always returns the same object.
+   */
+  private static class CSVFile extends CloseableIterableOnce<CSVRecord> {
     private final CSVParser csvParser;
 
     CSVFile(CSVParser csvParser) {
-      this.csvParser = checkNotNull(csvParser);
-    }
-
-    @Override
-    public Iterator<CSVRecord> iterator() {
-      return csvParser.iterator();
+      super(checkNotNull(csvParser).iterator());
+      this.csvParser = csvParser;
     }
 
     @Override
@@ -544,6 +545,8 @@ class CSVFileManager {
         csvParser.close();
       } catch (IOException e) {
         logger.log(Level.WARNING, "Error closing the CSV file: " + e);
+      } finally {
+        super.close();
       }
     }
   }
