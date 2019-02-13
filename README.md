@@ -14,6 +14,8 @@ accounts and groups used by Google Cloud Search. For more information on buildin
 connectors using Google Cloud Search connector SDK, refer to
 https://developers.google.com/cloud-search/docs/guides/identity-connector.
 
+Disclaimer: The master branch is under active development, only released version is officially supported.
+
 ## Build instructions
 
 Building the Google Cloud Search Connector SDK requires the following development tools:
