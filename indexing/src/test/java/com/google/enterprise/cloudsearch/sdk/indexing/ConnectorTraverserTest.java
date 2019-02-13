@@ -35,6 +35,7 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.JsonObjectParser;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources.Items;
+import com.google.api.services.cloudsearch.v1.model.DebugOptions;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.PollItemsRequest;
 import com.google.api.services.cloudsearch.v1.model.PollItemsResponse;
@@ -523,7 +524,8 @@ public class ConnectorTraverserTest {
                     .setQueue("custom")
                     .setType("REPOSITORY_ERROR")
                     .setRepositoryError(
-                        new RepositoryError().setErrorMessage("Repository Error with Id-3")));
+                        new RepositoryError().setErrorMessage("Repository Error with Id-3")))
+                    .setDebugOptions(new DebugOptions().setEnableDebugging(false));
     doAnswer(
             invocation -> {
               Items.Push pushRequest = invocation.getArgument(0);
