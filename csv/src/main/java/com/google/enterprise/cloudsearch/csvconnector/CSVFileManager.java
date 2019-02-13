@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.enterprise.cloudsearch.sdk.config.Configuration.checkConfiguration;
 import static java.nio.charset.Charset.defaultCharset;
+import static java.util.Comparator.comparing;
 
 import com.google.api.client.http.ByteArrayContent;
 import com.google.api.services.cloudsearch.v1.model.Item;
@@ -60,9 +61,10 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.apache.commons.csv.CSVFormat;
@@ -413,7 +415,7 @@ class CSVFileManager {
             "Invalid CSVFormat " + builder.csvFormat + ", must be one of " + csvFormats);
       }
     }
-    csvFormat = applyConfiguredMethods(csvFormat);
+    csvFormat = applyCsvFormatMethods(csvFormat);
     if (builder.csvColumns.isEmpty()) {
       checkState(
           !builder.skipHeader,
@@ -431,55 +433,58 @@ class CSVFileManager {
     return new TreeSet<>(Arrays.asList(CSVFormat.Predefined.values()));
   }
 
-  private Map<String, Class<?>> getCsvFormatMethodsInfo() {
-    HashMap<String, Class<?>> map = new HashMap<String, Class<?>>();
+  /**
+   * Gets a map of supported {@code CSVFormat.with}* methods to functions that map
+   * a configured string value to an appropriate argument for the method.
+   */
+  private Map<Method, Function<String, Object>> getCsvFormatMethods() {
+    // We need overloaded methods to be equal, which Method.equals does not do.
+    Map<Method, Function<String, Object>> map = new TreeMap<>(comparing(Method::getName));
     for (Method method : CSVFormat.class.getDeclaredMethods()) {
-      if (method.getName().startsWith("with") && method.getParameterCount() == 1) {
+      if (method.getName().startsWith("with")
+          && method.getParameterCount() == 1
+          && method.getReturnType() == CSVFormat.class) {
         Class<?> param = method.getParameterTypes()[0];
         if (param == char.class) {
-          //methods with String overloads take precedence.
-          map.putIfAbsent(method.getName(), param);
-        } else if (param == boolean.class || param == String.class) {
-          map.put(method.getName(), param);
+          // Use putIfAbsent so that String overloads take precedence.
+          map.putIfAbsent(method, value -> {
+                checkArgument(!value.isEmpty());
+                if (value.length() > 1) {
+                  throw new InvalidConfigurationException(
+                      String.format(
+                          "Unable to configure %s(%s). Value must be a single character.",
+                          method.getName(),
+                          value));
+                }
+                return value.charAt(0);
+              });
+        } else if (param == boolean.class) {
+          map.put(method, Configuration.BOOLEAN_PARSER::parse);
+        } else if (param == String.class) {
+          map.put(method, value -> value);
         }
       }
     }
     return map;
   }
 
-  private CSVFormat applyConfiguredMethods(CSVFormat csvFormat) {
-    Map<String, Class<?>> csvMethodsMap = getCsvFormatMethodsInfo();
-
-    for (String name : csvMethodsMap.keySet()) {
+  private CSVFormat applyCsvFormatMethods(CSVFormat csvFormat) {
+    for (Map.Entry<Method, Function<String, Object>> entry : getCsvFormatMethods().entrySet()) {
+      Method method = entry.getKey();
+      String name = method.getName();
       String value =
           Configuration.getString(String.format(CSV_FORMAT_METHOD_VALUE, name), "").get();
-      if (value.isEmpty()) {
-        continue;
-      }
-      try {
-        Class<?> type = csvMethodsMap.get(name);
-        if (type == boolean.class) {
-          Boolean booleanValue = Configuration.BOOLEAN_PARSER.parse(value);
-          Method method = CSVFormat.class.getMethod(name, boolean.class);
-          csvFormat = (CSVFormat) method.invoke(csvFormat, booleanValue);
-        } else if (type == char.class) {
-          if (value.length() > 1) {
-            throw new InvalidConfigurationException(
-                "Invalid configuration: '" + value + "'" + ", must be a single character.");
-          }
-          Method method = CSVFormat.class.getMethod(name, char.class);
-          csvFormat = (CSVFormat) method.invoke(csvFormat, value.charAt(0));
-        } else if (type == String.class) {
-          Method method = CSVFormat.class.getMethod(name, String.class);
-          csvFormat = (CSVFormat) method.invoke(csvFormat, value);
+      if (!value.isEmpty()) {
+        Function<String, Object> parser = entry.getValue();
+        try {
+          csvFormat = (CSVFormat) method.invoke(csvFormat, parser.apply(value));
+        } catch (IllegalAccessException | IllegalArgumentException e) {
+          throw new InvalidConfigurationException(
+              String.format("Unable to configure %s(%s)", name, value), e);
+        } catch (InvocationTargetException e) {
+          throw new InvalidConfigurationException(
+              String.format("Unable to configure %s(%s)", name, value), e.getCause());
         }
-      } catch (IllegalAccessException | IllegalArgumentException | NoSuchMethodException
-          | SecurityException e) {
-        throw new InvalidConfigurationException(
-            String.format("Unable to configure %s(%s)", name, value), e);
-      } catch (InvocationTargetException e) {
-        throw new InvalidConfigurationException(
-            String.format("Unable to configure %s(%s)", name, value), e.getCause());
       }
     }
     return csvFormat;
