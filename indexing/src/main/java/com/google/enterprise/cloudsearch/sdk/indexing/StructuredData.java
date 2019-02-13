@@ -116,6 +116,8 @@ public class StructuredData {
   public static final String DATETIME_PATTERNS = "structuredData.dateTimePatterns";
   public static final String LOCAL_SCHEMA = "structuredData.localSchema";
 
+  public static final String IGNORE_CONVERSION_ERRORS = "structuredData.ignoreConversionErrors";
+
   private static final String DATETIME_PATTERNS_DELIMITER = ";";
   private static final ImmutableList<DateTimeParser> DEFAULT_DATETIME_PARSERS =
       ImmutableList.of(
@@ -129,6 +131,7 @@ public class StructuredData {
 
   private static final AtomicBoolean initialized = new AtomicBoolean();
   private static final List<DateTimeParser> dateTimeParsers = new ArrayList<>();
+  private static boolean ignoreConversionErrors = false;
 
   /** A map from object definition names to instances of this class. */
   private static final Map<String, StructuredData> structuredDataMapping =
@@ -176,6 +179,8 @@ public class StructuredData {
     if (patternErrors != null) {
       throw patternErrors;
     }
+
+    ignoreConversionErrors = Configuration.getBoolean(IGNORE_CONVERSION_ERRORS, Boolean.FALSE).get();
 
     Schema schema;
     String localSchemaPath = Configuration.getString(LOCAL_SCHEMA, "").get();
@@ -354,16 +359,21 @@ public class StructuredData {
       if (nonNullValues.isEmpty()) {
         return null;
       }
-      if (!isRepeated) {
-        return propertyBuilder.getNamedProperty(
-            propertyName, Collections.singletonList(valueConverter.convert(nonNullValues.get(0))));
-      } else {
-        return propertyBuilder.getNamedProperty(
-            propertyName,
-            nonNullValues
-                .stream()
-                .map(v -> valueConverter.convert(v))
-                .collect(Collectors.toList()));
+      try {
+        if (!isRepeated) {
+          return propertyBuilder.getNamedProperty(
+              propertyName, Collections.singletonList(valueConverter.convert(nonNullValues.get(0))));
+        } else {
+          return propertyBuilder.getNamedProperty(
+              propertyName,
+              nonNullValues
+                  .stream()
+                  .map(v -> valueConverter.convert(v))
+                  .collect(Collectors.toList()));
+        }
+      } catch (IllegalArgumentException e) {
+        if(ignoreConversionErrors) return null;
+        throw e;
       }
     }
   }
