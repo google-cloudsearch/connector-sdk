@@ -50,7 +50,6 @@ import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 
 /** Tests for {@link CSVFileManager}. */
-
 @RunWith(MockitoJUnitRunner.class)
 public class CSVFileManagerTest {
 
@@ -61,6 +60,14 @@ public class CSVFileManagerTest {
 
   private static String testCSVSingle = "term, definition, author\n"
       + "moma search, Google internal search , ID1\n\n\n\n";
+
+  private static String testCSVSingleWithoutNewLinesAtTheEndOfFile = "term, definition, author\n"
+      + "moma search, Google internal search , ID1";
+
+  private static String testCSVSingleWithQuotesDiffFormat = "term, definition, author\n"
+      + "moma search, \"Super, \"\"luxurious\"\" truck\",ID2\n";
+
+  private static String testCSVSingleWithOnlyHeaderNoRecords = "term, definition, author\n";
 
   private static String testCSVEmptyField = "term, definition, author\n"
       + "moma search , , ID1\n";
@@ -104,6 +111,19 @@ public class CSVFileManagerTest {
 
     thrown.expect(InvalidConfigurationException.class);
     thrown.expectMessage(containsString("csv.filePath"));
+    CSVFileManager.fromConfiguration();
+  }
+
+  @Test
+  public void testCsvFileManagerWithIncorrectFilePath() {
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, "invalid/path/to/file.java");
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    setupConfig.initConfig(config);
+
+    thrown.expect(InvalidConfigurationException.class);
+    thrown.expectMessage(containsString("csv file"));
     CSVFileManager.fromConfiguration();
   }
 
@@ -155,6 +175,123 @@ public class CSVFileManagerTest {
     csvFile.iterator();
     thrown.expect(IllegalStateException.class);
     csvFile.iterator();
+  }
+
+  @Test
+  public void testCSVSingleWithoutNewLinesAtTheEndOfFile() throws IOException {
+    File tmpfile = temporaryFolder.newFile("SkipHeaderFalseCsvColumnsEmpty.csv");
+    createFile(tmpfile, UTF_8, testCSVSingleWithoutNewLinesAtTheEndOfFile);
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    config.put(CONTENT_HIGH, "term,definition");
+    config.put(CSVFileManager.CSVCOLUMNS, "");
+    setupConfig.initConfig(config);
+
+    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+    CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
+    CSVRecord csvRecord = getOnlyElement(csvFile);
+
+    Item item = csvFileManager.createItem(csvRecord);
+    assertEquals("moma search", item.getName());
+    assertEquals(null, item.getAcl());
+    assertEquals("moma search", item.getMetadata().getSourceRepositoryUrl());
+  }
+
+  @Test
+  public void testCsvFileManagerSkipHeaderTrueCsvColumnsEmpty() throws IOException {
+    File tmpfile = temporaryFolder.newFile("testCsvFileManagerSkipHeaderTrueCsvColumnsEmpty.csv");
+    createFile(tmpfile, UTF_8, testCSVSingle);
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    config.put(CONTENT_HIGH, "term,definition");
+    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
+    config.put(CSVFileManager.SKIP_HEADER, "true");
+    config.put(CSVFileManager.CSVCOLUMNS, "");
+
+    setupConfig.initConfig(config);
+
+    thrown.expect(IllegalStateException.class);
+    thrown.expectMessage(containsString(
+        "csv.csvColumns property must be specified if csv.skipHeaderRecord is true"));
+    CSVFileManager.fromConfiguration();
+  }
+
+  @Test
+  public void testCsvFileManagerSkipHeaderFalseCsvColumnsEmpty() throws IOException {
+    File tmpfile = temporaryFolder.newFile("SkipHeaderFalseCsvColumnsEmpty.csv");
+    createFile(tmpfile, UTF_8, testCSVSingle);
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    config.put(CONTENT_HIGH, "term,definition");
+    config.put(CSVFileManager.CSVCOLUMNS, "");
+    setupConfig.initConfig(config);
+
+    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+    CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
+    CSVRecord csvRecord = getOnlyElement(csvFile);
+
+    Item item = csvFileManager.createItem(csvRecord);
+    assertEquals("moma search", item.getName());
+    assertEquals(null, item.getAcl());
+    assertEquals("moma search", item.getMetadata().getSourceRepositoryUrl());
+  }
+
+  @Test
+  public void testCsvFileManagerSkipHeaderFalseCsvFileWithOnlyHeaderNoRecord() throws IOException {
+    File tmpfile = temporaryFolder.newFile("SkipHeaderFalseCsvFileWithOnlyHeaderNoRecord.csv");
+    createFile(tmpfile, UTF_8, testCSVSingleWithOnlyHeaderNoRecords);
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    config.put(CONTENT_HIGH, "term");
+    config.put(CSVFileManager.SKIP_HEADER, "false");
+    config.put(CSVFileManager.CSVCOLUMNS, "term,definition");
+    setupConfig.initConfig(config);
+
+    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+    CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
+    CSVRecord csvRecord = getOnlyElement(csvFile);
+
+    Item item = csvFileManager.createItem(csvRecord);
+    assertEquals("term", item.getName());
+    assertEquals(null, item.getAcl());
+    assertEquals("term", item.getMetadata().getSourceRepositoryUrl());
+  }
+
+  @Test
+  public void testCsvFileManagerWithQuotesDiffFormatData() throws IOException {
+    File tmpfile = temporaryFolder.newFile("invertedCommasTest2.csv");
+    createFile(tmpfile, UTF_8, testCSVSingleWithQuotesDiffFormat);
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    config.put(CONTENT_HIGH, "term,definition");
+    config.put(CSVFileManager.SKIP_HEADER, "true");
+    config.put(CSVFileManager.CSVCOLUMNS, "term,definition");
+
+    setupConfig.initConfig(config);
+
+    CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
+    CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
+    CSVRecord csvRecord = getOnlyElement(csvFile);
+
+    Item item = csvFileManager.createItem(csvRecord);
+    assertEquals("moma search", item.getName());
+    assertEquals(null, item.getAcl());
+    assertEquals("moma search", item.getMetadata().getSourceRepositoryUrl());
+    assertEquals("Super, \"luxurious\" truck", csvRecord.get("definition"));
   }
 
   @Test
