@@ -526,8 +526,7 @@ public class CSVFileManagerTest {
     setupConfig.initConfig(config);
 
     thrown.expect(InvalidConfigurationException.class);
-    thrown.expectMessage(containsString(
-        "Invalid configuration: '.:;', must be a single character."));
+    thrown.expectMessage("must be a single character");
     CSVFileManager.fromConfiguration();
   }
 
