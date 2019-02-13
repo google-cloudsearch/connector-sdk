@@ -39,6 +39,7 @@ import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources.I
 import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources.Items.Unreserve;
 import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources.Items.Upload;
 import com.google.api.services.cloudsearch.v1.CloudSearchRequest;
+import com.google.api.services.cloudsearch.v1.model.DebugOptions;
 import com.google.api.services.cloudsearch.v1.model.DeleteQueueItemsRequest;
 import com.google.api.services.cloudsearch.v1.model.IndexItemRequest;
 import com.google.api.services.cloudsearch.v1.model.Item;
@@ -130,6 +131,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   public static final String INDEXING_SERVICE_REQUEST_MODE = "api.defaultRequestMode";
   public static final String REQUEST_CONNECT_TIMEOUT = "indexingService.connectTimeoutSeconds";
   public static final String REQUEST_READ_TIMEOUT = "indexingService.readTimeoutSeconds";
+  public static final String ENABLE_API_DEBUGGING = "indexingService.enableDebugging";
 
   private static final OperationStats indexingServiceStats =
       StatsManager.getComponent("IndexingService");
@@ -160,6 +162,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   private final VersionProvider versionProvider;
   private final QuotaServer<Operations> quotaServer;
   private final RequestMode requestMode;
+  private final boolean enableApiDebugging;
 
   /** API Operations */
   public enum Operations {
@@ -238,6 +241,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     this.versionProvider = builder.versionProvider;
     this.quotaServer = builder.quotaServer;
     this.requestMode = builder.requestMode;
+    this.enableApiDebugging = builder.enableApiDebugging;
   }
 
   public static class Builder extends BaseApiService.AbstractBuilder<Builder, CloudSearch> {
@@ -255,6 +259,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     private RequestMode requestMode = DEFAULT_REQUEST_MODE;
     private int contentUploadConnectTimeoutSeconds = DEFAULT_CONNECT_TIMEOUT_SECONDS;
     private int contentUploadReadTimeoutSeconds = DEFAULT_READ_TIMEOUT_SECONDS;
+    private boolean enableApiDebugging;
 
     public Builder setSourceId(String sourceId) {
       this.sourceId = sourceId;
@@ -283,6 +288,11 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
 
     public Builder setConnectorId(String connectorId) {
       this.connectorId = connectorId;
+      return this;
+    }
+
+    public Builder setEnableDebugging(boolean enableDebugging) {
+      this.enableApiDebugging = enableDebugging;
       return this;
     }
 
@@ -401,6 +411,8 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
           "Invalid read timeout value [%s] for configuration key [%s]",
           readTimeoutSeconds,
           REQUEST_READ_TIMEOUT);
+      boolean enableApiDebugging = Configuration.getBoolean(ENABLE_API_DEBUGGING, false).get();
+
       return new IndexingServiceImpl.Builder()
           .setSourceId(Configuration.getString(SOURCE_ID, null).get())
           .setIdentitySourceId(Configuration.getString(IDENTITY_SOURCE_ID, "NOT_APPLICABLE").get())
@@ -422,7 +434,8 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
               Configuration.getInteger(
                       UPLOAD_THRESHOLD_BYTES,
                       IndexingServiceImpl.DEFAULT_CONTENT_UPLOAD_THRESHOLD_BYTES)
-                  .get());
+                  .get())
+          .setEnableDebugging(enableApiDebugging);
     }
 
     @Override
@@ -474,7 +487,8 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
             .items()
             .delete(getItemResourceName(id))
             .setMode(getRequestMode(requestMode))
-            .setConnectorName(connectorName);
+            .setConnectorName(connectorName)
+            .setDebugOptionsEnableDebugging(enableApiDebugging);
     deleteRequest.setVersion(
         Base64.getEncoder()
             .encodeToString((version != null) ? version : versionProvider.getVersion()));
@@ -506,7 +520,11 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
             .indexing()
             .datasources()
             .items()
-            .deleteQueueItems(resourcePrefix, new DeleteQueueItemsRequest().setQueue(queueName));
+            .deleteQueueItems(
+                resourcePrefix,
+                new DeleteQueueItemsRequest()
+                    .setQueue(queueName)
+                    .setDebugOptions(new DebugOptions().setEnableDebugging(enableApiDebugging)));
     acquireToken(Operations.DEFAULT);
     try {
       return Futures.immediateFuture(
@@ -533,7 +551,8 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
             .datasources()
             .items()
             .get(getItemResourceName(id))
-            .setConnectorName(connectorName);
+            .setConnectorName(connectorName)
+            .setDebugOptionsEnableDebugging(enableApiDebugging);
     acquireToken(Operations.DEFAULT);
     return executeRequestReturnNullOnNotFound(getRequest);
   }
@@ -567,13 +586,14 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
             .datasources()
             .items()
             .list(resourcePrefix)
-            .setConnectorName(connectorName);
+            .setConnectorName(connectorName)
+            .setDebugOptionsEnableDebugging(enableApiDebugging);
     listRequest.setBrief(brief);
     if (token != null) {
       listRequest.setPageToken(token);
     }
     acquireToken(Operations.DEFAULT);
-    return executeRequest(listRequest, indexingServiceStats, true /* intializeDefaults */);
+    return executeRequest(listRequest, indexingServiceStats, true /* initializeDefaults */);
   }
 
   /**
@@ -686,6 +706,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
             .index(
                 item.getName(),
                 new IndexItemRequest()
+                    .setDebugOptions(new DebugOptions().setEnableDebugging(enableApiDebugging))
                     .setItem(item)
                     .setMode(getRequestMode(requestMode))
                     .setConnectorName(connectorName));
@@ -737,8 +758,10 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     long length = content.getLength();
     boolean useInline = (length <= contentUploadThreshold) && (length >= 0);
     if (useInline) {
-      logger.log(Level.FINEST, "Inlining content for {0}, length {1} bytes.",
-          new Object[]{item.getName(), length});
+      logger.log(
+          Level.FINEST,
+          "Inlining content for {0}, length {1} bytes.",
+          new Object[] {item.getName(), length});
       item.setContent(
           new ItemContent()
               .encodeInlineContent(convertStreamToByteArray(content))
@@ -747,20 +770,24 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
       return indexItem(item, requestMode);
     } else {
       UploadItemRef uploadRef = startUpload(item.getName());
-      logger.log(Level.FINEST, "Uploading content for {0}, length {1} bytes, upload ref {2}",
-          new Object[]{item.getName(), length, uploadRef.getName()});
+      logger.log(
+          Level.FINEST,
+          "Uploading content for {0}, length {1} bytes, upload ref {2}",
+          new Object[] {item.getName(), length, uploadRef.getName()});
 
-      ListenableFuture<Item> itemUploaded = Futures
-          .transform(contentUploadService.uploadContent(uploadRef.getName(), content),
+      ListenableFuture<Item> itemUploaded =
+          Futures.transform(
+              contentUploadService.uploadContent(uploadRef.getName(), content),
               voidVal ->
                   item.setContent(
                       new ItemContent()
                           .setContentDataRef(uploadRef)
                           .setHash(contentHash)
-                          .setContentFormat(contentFormat.name())), MoreExecutors.directExecutor());
+                          .setContentFormat(contentFormat.name())),
+              MoreExecutors.directExecutor());
 
-      return Futures.transformAsync(itemUploaded, i -> indexItem(i, requestMode),
-          MoreExecutors.directExecutor());
+      return Futures.transformAsync(
+          itemUploaded, i -> indexItem(i, requestMode), MoreExecutors.directExecutor());
     }
   }
 
@@ -880,7 +907,10 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
             .items()
             .push(
                 resourceName,
-                new PushItemRequest().setItem(pushItem).setConnectorName(connectorName));
+                new PushItemRequest()
+                    .setItem(pushItem)
+                    .setConnectorName(connectorName)
+                    .setDebugOptions(new DebugOptions().setEnableDebugging(enableApiDebugging)));
     try {
       acquireToken(Operations.DEFAULT);
       return batchingService.pushItem(request);
@@ -903,7 +933,10 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   public ListenableFuture<Operation> unreserve(String queue) throws IOException {
     validateRunning();
     UnreserveItemsRequest unreserveQueueRequest =
-        new UnreserveItemsRequest().setQueue(queue).setConnectorName(connectorName);
+        new UnreserveItemsRequest()
+            .setQueue(queue)
+            .setConnectorName(connectorName)
+            .setDebugOptions(new DebugOptions().setEnableDebugging(enableApiDebugging));
     Unreserve unreserveRequest =
         this.service
             .indexing()
@@ -1074,14 +1107,21 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
             .items()
             .upload(
                 getItemResourceName(itemId),
-                new StartUploadItemRequest().setConnectorName(connectorName));
+                new StartUploadItemRequest()
+                    .setConnectorName(connectorName)
+                    .setDebugOptions(new DebugOptions().setEnableDebugging(enableApiDebugging)));
     acquireToken(Operations.DEFAULT);
     return executeRequest(uploadRequest, indexingServiceStats, true /* intializeDefaults */);
   }
 
   @Override
   public Schema getSchema() throws IOException {
-    GetSchema getSchemaRequest = service.indexing().datasources().getSchema(resourcePrefix);
+    GetSchema getSchemaRequest =
+        service
+            .indexing()
+            .datasources()
+            .getSchema(resourcePrefix)
+            .setDebugOptionsEnableDebugging(enableApiDebugging);
     try {
       acquireToken(Operations.DEFAULT);
       return executeRequest(getSchemaRequest, indexingServiceStats, true /* intializeDefaults */);
