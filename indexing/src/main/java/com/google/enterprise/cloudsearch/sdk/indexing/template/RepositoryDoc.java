@@ -67,7 +67,7 @@ import javax.annotation.Nullable;
  * RepositoryDoc.Builder builder = new RepositoryDoc.Builder()
  *     .setItem(item)
  *     .setContent(content, contentHash, ContentFormat.HTML)
- *     .setUpdateItemMode(RequestMode.SYNCHRONOUS);
+ *     .setRequestMode(RequestMode.SYNCHRONOUS);
  * // if hierarchical, add children of this document
  * List<String> childIds = ... // retrieve all child IDs
  * for (childId : childIds) {
@@ -106,7 +106,7 @@ public class RepositoryDoc implements ApiOperation {
     String contentHash;
     Map<String, PushItem> childIds = new HashMap<>();
     Map<String, Acl> fragments;
-    RequestMode requestMode = RequestMode.SYNCHRONOUS;
+    RequestMode requestMode = RequestMode.UNSPECIFIED;
 
     /** Creates an instance of {@link RepositoryDoc.Builder} */
     public Builder() {}

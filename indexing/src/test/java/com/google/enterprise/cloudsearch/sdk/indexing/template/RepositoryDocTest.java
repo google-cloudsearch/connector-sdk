@@ -89,15 +89,15 @@ public class RepositoryDocTest {
               return updateFuture;
             })
         .when(mockIndexingService)
-        .indexItem(item, RequestMode.SYNCHRONOUS);
+        .indexItem(item, RequestMode.UNSPECIFIED);
     doc.execute(mockIndexingService);
     InOrder inOrder = inOrder(mockIndexingService);
-    inOrder.verify(mockIndexingService).indexItem(item, RequestMode.SYNCHRONOUS);
+    inOrder.verify(mockIndexingService).indexItem(item, RequestMode.UNSPECIFIED);
     assertEquals("id1", doc.getItem().getName());
   }
 
   @Test(expected = IOException.class)
-  public void execute_indexItemNotFound_notPusedToQueue_throwsIOException() throws Exception {
+  public void execute_indexItemNotFound_notPushedToQueue_throwsIOException() throws Exception {
     Item item = new Item().setName("id1").setAcl(getCustomerAcl());
     RepositoryDoc doc = new RepositoryDoc.Builder().setItem(item).build();
     doAnswer(
@@ -111,12 +111,12 @@ public class RepositoryDocTest {
               return updateFuture;
             })
         .when(mockIndexingService)
-        .indexItem(item, RequestMode.SYNCHRONOUS);
+        .indexItem(item, RequestMode.UNSPECIFIED);
     try {
       doc.execute(mockIndexingService);
     } finally {
       InOrder inOrder = inOrder(mockIndexingService);
-      inOrder.verify(mockIndexingService).indexItem(item, RequestMode.SYNCHRONOUS);
+      inOrder.verify(mockIndexingService).indexItem(item, RequestMode.UNSPECIFIED);
       inOrder.verifyNoMoreInteractions();
       assertEquals("id1", doc.getItem().getName());
     }
@@ -138,7 +138,7 @@ public class RepositoryDocTest {
               return updateFuture;
             })
         .when(mockIndexingService)
-        .indexItem(item, RequestMode.SYNCHRONOUS);
+        .indexItem(item, RequestMode.UNSPECIFIED);
 
     when(mockIndexingService.push(anyString(), any()))
         .thenReturn(Futures.immediateFuture(new Item()));
@@ -147,7 +147,7 @@ public class RepositoryDocTest {
       doc.execute(mockIndexingService);
     } finally {
       InOrder inOrder = inOrder(mockIndexingService);
-      inOrder.verify(mockIndexingService).indexItem(item, RequestMode.SYNCHRONOUS);
+      inOrder.verify(mockIndexingService).indexItem(item, RequestMode.UNSPECIFIED);
       ArgumentCaptor<PushItem> pushItemArgumentCaptor = ArgumentCaptor.forClass(PushItem.class);
       inOrder
           .verify(mockIndexingService)
@@ -166,6 +166,36 @@ public class RepositoryDocTest {
     AbstractInputStreamContent content = ByteArrayContent.fromString("", "golden");
     RepositoryDoc doc =
         new RepositoryDoc.Builder().setItem(item).setContent(content, ContentFormat.TEXT).build();
+    SettableFuture<Item> updateFuture = SettableFuture.create();
+
+    doAnswer(
+            invocation -> {
+              updateFuture.set(new Item());
+              return updateFuture;
+            })
+        .when(mockIndexingService)
+        .indexItemAndContent(
+            any(), any(), any(), eq(ContentFormat.TEXT), eq(RequestMode.UNSPECIFIED));
+    doc.execute(mockIndexingService);
+
+    InOrder inOrder = inOrder(mockIndexingService);
+    inOrder
+        .verify(mockIndexingService)
+        .indexItemAndContent(item, content, null, ContentFormat.TEXT, RequestMode.UNSPECIFIED);
+    assertEquals("id1", doc.getItem().getName());
+    assertEquals(content, doc.getContent());
+  }
+
+  @Test
+  public void testItemAndContentSynchronous() throws IOException, InterruptedException {
+    Item item = new Item().setName("id1").setAcl(getCustomerAcl());
+    AbstractInputStreamContent content = ByteArrayContent.fromString("", "golden");
+    RepositoryDoc doc =
+        new RepositoryDoc.Builder()
+            .setItem(item)
+            .setContent(content, ContentFormat.TEXT)
+            .setRequestMode(RequestMode.SYNCHRONOUS)
+            .build();
     SettableFuture<Item> updateFuture = SettableFuture.create();
 
     doAnswer(
@@ -237,7 +267,7 @@ public class RepositoryDocTest {
             })
         .when(mockIndexingService)
         .indexItemAndContent(
-            any(), any(), any(), eq(ContentFormat.TEXT), eq(RequestMode.SYNCHRONOUS));
+            any(), any(), any(), eq(ContentFormat.TEXT), eq(RequestMode.UNSPECIFIED));
 
     SettableFuture<Item> pushFuture = SettableFuture.create();
     doAnswer(
@@ -249,7 +279,7 @@ public class RepositoryDocTest {
         .push(any(), any());
     doc.execute(mockIndexingService);
     verify(mockIndexingService)
-        .indexItemAndContent(item, content, null, ContentFormat.TEXT, RequestMode.SYNCHRONOUS);
+        .indexItemAndContent(item, content, null, ContentFormat.TEXT, RequestMode.UNSPECIFIED);
     verify(mockIndexingService).push("id1", pushItem1);
     verify(mockIndexingService).push("id2", pushItem2);
   }
@@ -277,11 +307,11 @@ public class RepositoryDocTest {
               return updateFuture;
             })
         .when(mockIndexingService)
-        .indexItem(any(), eq(RequestMode.SYNCHRONOUS));
+        .indexItem(any(), eq(RequestMode.UNSPECIFIED));
     doc.execute(mockIndexingService);
     InOrder inOrder = inOrder(mockIndexingService);
-    inOrder.verify(mockIndexingService).indexItem(item, RequestMode.SYNCHRONOUS);
-    inOrder.verify(mockIndexingService).indexItem(expectedFragment, RequestMode.SYNCHRONOUS);
+    inOrder.verify(mockIndexingService).indexItem(item, RequestMode.UNSPECIFIED);
+    inOrder.verify(mockIndexingService).indexItem(expectedFragment, RequestMode.UNSPECIFIED);
   }
 
   @Test

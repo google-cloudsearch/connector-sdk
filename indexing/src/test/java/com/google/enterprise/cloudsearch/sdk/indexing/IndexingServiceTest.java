@@ -300,7 +300,7 @@ public class IndexingServiceTest {
             })
         .when(batchingService)
         .deleteItem(any());
-    this.indexingService.deleteItem(GOOD_ID, "abc".getBytes(UTF_8), RequestMode.SYNCHRONOUS).get();
+    this.indexingService.deleteItem(GOOD_ID, "abc".getBytes(UTF_8), RequestMode.UNSPECIFIED).get();
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
 
@@ -561,7 +561,6 @@ public class IndexingServiceTest {
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
 
-  /* update */
   @Test
   public void testUpdateItemDebugOptionsEnabled() throws Exception {
     createService(/*debugging*/ true, /*allowUnknownGsuitePrincipals*/ false);
@@ -594,7 +593,7 @@ public class IndexingServiceTest {
         .when(batchingService)
         .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
-    this.indexingService.indexItem(item, RequestMode.ASYNCHRONOUS);
+    this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
 

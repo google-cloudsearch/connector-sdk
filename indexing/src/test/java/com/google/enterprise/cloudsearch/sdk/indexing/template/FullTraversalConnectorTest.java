@@ -24,6 +24,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
@@ -156,15 +157,6 @@ public class FullTraversalConnectorTest {
         })
         .when(checkpointHandlerMock)
         .saveCheckpoint(eq(FullTraversalConnector.CHECKPOINT_QUEUE), any());
-
-    doAnswer(
-            invocation -> {
-              SettableFuture<Operation> result = SettableFuture.create();
-              result.set(new Operation().setDone(true));
-              return result;
-            })
-        .when(indexingServiceMock)
-        .indexItem(any(), eq(RequestMode.SYNCHRONOUS));
   }
 
   private byte[] defaultCheckPoint = "checkpoint".getBytes();
@@ -443,6 +435,18 @@ public class FullTraversalConnectorTest {
               .build());
     }
 
+    // DefaultAcl
+    doAnswer(
+        invocation -> {
+          SettableFuture<Operation> result = SettableFuture.create();
+          result.set(new Operation().setDone(true));
+          return result;
+        })
+        .when(indexingServiceMock)
+        .indexItem(
+            argThat(item -> item.getName().equals(DefaultAcl.DEFAULT_ACL_NAME_DEFAULT)),
+            eq(RequestMode.SYNCHRONOUS));
+    // Documents
     SettableFuture<Item> updateFuture = SettableFuture.create();
     doAnswer(
         invocation -> {
@@ -454,6 +458,7 @@ public class FullTraversalConnectorTest {
             any(), any(), any(), eq(ContentFormat.HTML), eq(RequestMode.ASYNCHRONOUS));
     when(repositoryMock.getAllDocs(null))
         .thenReturn(new CheckpointCloseableIterableImpl.Builder<>(docs).build());
+    // Delete other queue
     SettableFuture<Operation> deleteQueueFuture = SettableFuture.create();
     deleteQueueFuture.set(new Operation().setDone(true));
     when(indexingServiceMock.deleteQueueItems(any())).thenReturn(deleteQueueFuture);
@@ -514,8 +519,7 @@ public class FullTraversalConnectorTest {
               return updateFuture;
             })
         .when(indexingServiceMock)
-        .indexItemAndContent(any(), any(), any(), eq(ContentFormat.HTML),
-            eq(RequestMode.SYNCHRONOUS));
+        .indexItemAndContent(any(), any(), any(), eq(ContentFormat.HTML), any());
 
     setConfig("0", DefaultAclChoices.PUBLIC);
 
@@ -575,7 +579,7 @@ public class FullTraversalConnectorTest {
               eq(contents.get(i)),
               eq(null),
               eq(ContentFormat.HTML),
-              eq(RequestMode.SYNCHRONOUS));
+              eq(RequestMode.UNSPECIFIED));
     }
 
     SettableFuture<Item> updateFuture = SettableFuture.create();
@@ -590,7 +594,7 @@ public class FullTraversalConnectorTest {
             eq(contents.get(4)),
             eq(null),
             eq(ContentFormat.HTML),
-            eq(RequestMode.SYNCHRONOUS));
+            eq(RequestMode.UNSPECIFIED));
     SettableFuture<Operation> deleteQueueFuture = SettableFuture.create();
     deleteQueueFuture.set(new Operation().setDone(true));
     when(indexingServiceMock.deleteQueueItems(any())).thenReturn(deleteQueueFuture);
@@ -641,7 +645,7 @@ public class FullTraversalConnectorTest {
               eq(contents.get(i)),
               eq(null),
               eq(ContentFormat.HTML),
-              eq(RequestMode.SYNCHRONOUS));
+              eq(RequestMode.UNSPECIFIED));
     }
 
     for (int i = 3; i < 10; i++) {
@@ -657,7 +661,7 @@ public class FullTraversalConnectorTest {
               eq(contents.get(i)),
               eq(null),
               eq(ContentFormat.HTML),
-              eq(RequestMode.SYNCHRONOUS));
+              eq(RequestMode.UNSPECIFIED));
     }
     SettableFuture<Operation> deleteQueueFuture = SettableFuture.create();
     deleteQueueFuture.set(new Operation().setDone(true));
@@ -666,8 +670,7 @@ public class FullTraversalConnectorTest {
     connector.traverse();
     verify(opIterableSpy, times(1)).close();
     verify(indexingServiceMock, times(10))
-        .indexItemAndContent(any(), any(), any(), eq(ContentFormat.HTML),
-            eq(RequestMode.SYNCHRONOUS));
+        .indexItemAndContent(any(), any(), any(), eq(ContentFormat.HTML), any());
   }
 
   @Test
@@ -707,7 +710,7 @@ public class FullTraversalConnectorTest {
               eq(contents.get(i)),
               eq(null),
               eq(ContentFormat.HTML),
-              eq(RequestMode.SYNCHRONOUS));
+              eq(RequestMode.UNSPECIFIED));
     }
     thrown.expect(IOException.class);
     thrown.expectMessage(containsString("Test exception"));
@@ -773,7 +776,7 @@ public class FullTraversalConnectorTest {
                 contents.get(i),
                 null,
                 ContentFormat.HTML,
-                RequestMode.SYNCHRONOUS);
+                RequestMode.UNSPECIFIED);
       }
     }
 
@@ -1045,7 +1048,7 @@ public class FullTraversalConnectorTest {
                 contents.get(i),
                 null,
                 ContentFormat.HTML,
-                RequestMode.SYNCHRONOUS);
+                RequestMode.UNSPECIFIED);
       }
     }
 

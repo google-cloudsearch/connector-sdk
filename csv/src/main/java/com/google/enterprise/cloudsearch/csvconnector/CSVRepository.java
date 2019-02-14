@@ -25,7 +25,6 @@ import com.google.enterprise.cloudsearch.sdk.CloseableIterable;
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import com.google.enterprise.cloudsearch.sdk.RepositoryException;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService.ContentFormat;
-import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService.RequestMode;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.ApiOperation;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.FullTraversalConnector;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.Repository;
@@ -42,9 +41,6 @@ import org.apache.commons.csv.CSVRecord;
  */
 public class CSVRepository implements Repository {
   private CSVFileManager csvFileManager;
-  // This can be UNSPECIFIED here and just rely on IndexingService to fill in default / configured
-  // value
-  private RequestMode requestMode = RequestMode.SYNCHRONOUS;
 
   public CSVRepository() {
   }
@@ -125,7 +121,6 @@ public class CSVRepository implements Repository {
         return new RepositoryDoc.Builder()
             .setItem(csvFileManager.createItem(csvRecord))
             .setContent(csvFileManager.createContent(csvRecord), ContentFormat.HTML)
-            .setRequestMode(requestMode)
             .build();
       } catch (IOException e) {
         throw new RuntimeException("Error creating document from CSV record.", e);
