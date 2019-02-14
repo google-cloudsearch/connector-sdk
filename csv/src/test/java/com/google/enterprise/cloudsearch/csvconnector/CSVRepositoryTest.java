@@ -227,7 +227,7 @@ public class CSVRepositoryTest {
         RepositoryDoc doc = (RepositoryDoc) operation;
 
         assertEquals(ContentFormat.HTML, doc.getContentFormat());
-        assertEquals(RequestMode.SYNCHRONOUS, doc.getRequestMode());
+        assertEquals(RequestMode.UNSPECIFIED, doc.getRequestMode());
         assertEquals(null, doc.getItem().getAcl());
         assertEquals("moma search", doc.getItem().getName());
 

@@ -603,7 +603,7 @@ public class ListingConnectorTest {
     connector.init(mockConnectorContext);
     connector.process(polledItem);
     verify(mockIndexingService, times(1))
-        .indexItem(itemListCaptor.capture(), eq(RequestMode.SYNCHRONOUS));
+        .indexItem(itemListCaptor.capture(), any());
     assertEquals(DOMAIN_PUBLIC_ACL, itemListCaptor.getAllValues().get(0).getAcl());
   }
 
@@ -639,7 +639,7 @@ public class ListingConnectorTest {
     connector.init(mockConnectorContext);
     connector.process(polledItem);
     verify(mockIndexingService, times(2))
-        .indexItem(itemListCaptor.capture(), eq(RequestMode.SYNCHRONOUS));
+        .indexItem(itemListCaptor.capture(), any());
     ItemAcl expectedInheritedAcl = new Acl.Builder()
         .setInheritFrom(DefaultAcl.DEFAULT_ACL_NAME_DEFAULT)
         .setInheritanceType(InheritanceType.PARENT_OVERRIDE)
@@ -696,13 +696,13 @@ public class ListingConnectorTest {
               return updateFuture;
             })
         .when(mockIndexingService)
-        .indexItem(polledItem, RequestMode.SYNCHRONOUS);
+        .indexItem(polledItem, RequestMode.UNSPECIFIED);
     when(mockRepository.getDoc(polledItem))
         .thenReturn(new RepositoryDoc.Builder().setItem(polledItem).build());
     ListingConnector connector = new ListingConnector(mockRepository);
     connector.init(mockConnectorContext);
     connector.process(polledItem);
-    verify(mockIndexingService).indexItem(polledItem, RequestMode.SYNCHRONOUS);
+    verify(mockIndexingService).indexItem(polledItem, RequestMode.UNSPECIFIED);
   }
 
   @Test
@@ -790,7 +790,7 @@ public class ListingConnectorTest {
               return deleteFuture;
             })
         .when(mockIndexingService)
-        .deleteItem(anyString(), any(), eq(RequestMode.UNSPECIFIED));
+        .deleteItem(anyString(), any(), any());
     TestCloseableIterable delegate =
         new TestCloseableIterable(Arrays.asList(change1, errorOperation, change2));
     CheckpointCloseableIterable<ApiOperation> testIterable =
@@ -866,7 +866,7 @@ public class ListingConnectorTest {
     connector.init(mockConnectorContext);
     connector.process(polledItem);
     verify(mockIndexingService, times(1))
-        .indexItem(itemListCaptor.capture(), eq(RequestMode.SYNCHRONOUS));
+        .indexItem(itemListCaptor.capture(), any());
     ItemMetadata metadata = itemListCaptor.getAllValues().get(0).getMetadata();
     assertEquals("Modified Title", metadata.getTitle());
   }
@@ -895,7 +895,7 @@ public class ListingConnectorTest {
     connector.handleAsyncOperation(asyncOperation);
     asyncOperation.getResult().get();
     verify(mockIndexingService, times(1))
-        .indexItem(itemListCaptor.capture(), eq(RequestMode.SYNCHRONOUS));
+        .indexItem(itemListCaptor.capture(), any());
     ItemMetadata metadata = itemListCaptor.getAllValues().get(0).getMetadata();
     assertEquals("Modified Title", metadata.getTitle());
   }
@@ -926,7 +926,7 @@ public class ListingConnectorTest {
     connector.init(mockConnectorContext);
     connector.handleIncrementalChanges();
     verify(mockIndexingService, times(1))
-        .indexItem(itemListCaptor.capture(), eq(RequestMode.SYNCHRONOUS));
+        .indexItem(itemListCaptor.capture(), any());
     ItemMetadata metadata = itemListCaptor.getAllValues().get(0).getMetadata();
     assertEquals("Modified Title", metadata.getTitle());
   }
