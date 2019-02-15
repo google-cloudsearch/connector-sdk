@@ -3,7 +3,7 @@
   <parent>
     <groupId>com.google.enterprise.cloudsearch</groupId>
     <artifactId>google-cloudsearch-connector-parent</artifactId>
-    <version>v1-0.0.4-SNAPSHOT</version>
+    <version>v1-0.0.4</version>
   </parent>
   <name>Google Cloud Search Identity Connector SDK</name>
   <artifactId>google-cloudsearch-identity-connector-sdk</artifactId>
@@ -152,7 +152,7 @@
     <dependency>
       <groupId>com.google.enterprise.cloudsearch</groupId>
       <artifactId>google-cloudsearch-connector-sdk</artifactId>
-      <version>v1-0.0.4-SNAPSHOT</version>
+      <version>v1-0.0.4</version>
     </dependency>
     <dependency>
       <groupId>org.mockito</groupId>
