@@ -1,11 +1,5 @@
 package com.google.enterprise.cloudsearch.sdk;
 
-import static com.google.enterprise.cloudsearch.sdk.GoogleProxy.TRANSPORT_PROXY_HOSTNAME_KEY;
-import static com.google.enterprise.cloudsearch.sdk.GoogleProxy.TRANSPORT_PROXY_PASSWORD_KEY;
-import static com.google.enterprise.cloudsearch.sdk.GoogleProxy.TRANSPORT_PROXY_PORT_KEY;
-import static com.google.enterprise.cloudsearch.sdk.GoogleProxy.TRANSPORT_PROXY_USERNAME_KEY;
-import static org.junit.Assert.assertEquals;
-
 import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpRequest;
 import com.google.api.client.http.HttpTransport;
@@ -19,6 +13,13 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
+
+import static com.google.enterprise.cloudsearch.sdk.GoogleProxy.TRANSPORT_PROXY_HOSTNAME_KEY;
+import static com.google.enterprise.cloudsearch.sdk.GoogleProxy.TRANSPORT_PROXY_PASSWORD_KEY;
+import static com.google.enterprise.cloudsearch.sdk.GoogleProxy.TRANSPORT_PROXY_PORT_KEY;
+import static com.google.enterprise.cloudsearch.sdk.GoogleProxy.TRANSPORT_PROXY_TYPE_KEY;
+import static com.google.enterprise.cloudsearch.sdk.GoogleProxy.TRANSPORT_PROXY_USERNAME_KEY;
+import static org.junit.Assert.assertEquals;
 
 @RunWith(MockitoJUnitRunner.class)
 public class GoogleProxyTest {
@@ -35,6 +36,7 @@ public class GoogleProxyTest {
   @Test
   public void createProxy_proxyCreated() throws Exception {
     Properties properties = new Properties();
+    properties.setProperty(TRANSPORT_PROXY_TYPE_KEY, "SOCKS");
     properties.setProperty(TRANSPORT_PROXY_HOSTNAME_KEY, "1.2.3.4");
     properties.setProperty(TRANSPORT_PROXY_PORT_KEY, "1234");
     properties.setProperty(TRANSPORT_PROXY_USERNAME_KEY, "user");
@@ -43,8 +45,8 @@ public class GoogleProxyTest {
 
     GoogleProxy proxy = GoogleProxy.fromConfiguration();
 
-    assertEquals(Proxy.Type.HTTP, proxy.getProxy().type());
-    assertEquals(new InetSocketAddress("1.2.3.4", 1234), proxy.getProxy().address());
+    assertEquals(
+        new Proxy(Proxy.Type.SOCKS, new InetSocketAddress("1.2.3.4", 1234)), proxy.getProxy());
 
     HttpTransport transport = new MockHttpTransport();
     HttpRequest request = transport.createRequestFactory().buildGetRequest(new GenericUrl());
