@@ -5,7 +5,7 @@
   <parent>
     <groupId>com.google.enterprise.cloudsearch</groupId>
     <artifactId>google-cloudsearch-connector-parent</artifactId>
-    <version>v1-0.0.4</version>
+    <version>v1-0.0.5-SNAPSHOT</version>
   </parent>
 
   <name>Google Cloud Search Connector Integration Tests Common</name>
@@ -16,7 +16,7 @@
     <java_version>1.8</java_version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.oauth.version>1.23.0</project.oauth.version>
-    <project.sdk.version>v1-0.0.4</project.sdk.version>
+    <project.sdk.version>v1-0.0.5-SNAPSHOT</project.sdk.version>
     <!-- Integration tests for connectors have special requirements, so
          skip them by default. -->
     <skipITs>true</skipITs>
