@@ -1,8 +1,5 @@
 package com.google.enterprise.cloudsearch.sdk;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
-
 import com.google.api.client.googleapis.GoogleUtils;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
@@ -16,15 +13,35 @@ import java.security.GeneralSecurityException;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Encapsulates an @{link Proxy} object and the token for proxy authentication. */
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+
+/**
+ * Encapsulates an @{link Proxy} object and the token for proxy authentication. Following keys are
+ * used by the proxy
+ *
+ * <ul>
+ * <li>transport.proxy.type: HTTP or SOCKS.
+ * <li>transport.proxy.hostname: host name of the proxy.
+ * <li>transport.proxy.port: port of the proxy.
+ * <li>transport.proxy.username: optional, username used to authenticate the proxy.
+ * <li>transport.proxy.password: optional, password used to authenticate the proxy.
+ * </ul>
+ */
 public final class GoogleProxy {
 
   private final Proxy proxy;
   private final Optional<String> authToken;
 
+  /** configuration key for proxy type */
+  public static final String TRANSPORT_PROXY_TYPE_KEY = "transport.proxy.type";
+  /** configuration key for proxy hostname */
   public static final String TRANSPORT_PROXY_HOSTNAME_KEY = "transport.proxy.hostname";
+  /** configuration key for proxy port */
   public static final String TRANSPORT_PROXY_PORT_KEY = "transport.proxy.port";
+  /** configuration key for proxy username */
   public static final String TRANSPORT_PROXY_USERNAME_KEY = "transport.proxy.username";
+  /** configuration key for proxy password */
   public static final String TRANSPORT_PROXY_PASSWORD_KEY = "transport.proxy.password";
 
   /** Creates an {@link GoogleProxy} instance based on proxy configuration. */
@@ -38,6 +55,18 @@ public final class GoogleProxy {
       builder.setUserNamePassword(userName, password);
     }
 
+    Proxy.Type proxyType =
+        Configuration.getValue(
+            TRANSPORT_PROXY_TYPE_KEY,
+            Proxy.Type.HTTP,
+            value -> {
+              try {
+                return Proxy.Type.valueOf(value);
+              } catch (IllegalArgumentException e) {
+                throw new InvalidConfigurationException(e);
+              }
+            })
+            .get();
     String hostname = Configuration.getString(TRANSPORT_PROXY_HOSTNAME_KEY, "").get();
     int port = Configuration.getInteger(TRANSPORT_PROXY_PORT_KEY, -1).get();
 
@@ -48,7 +77,7 @@ public final class GoogleProxy {
     Proxy proxy =
         hostname.isEmpty()
             ? Proxy.NO_PROXY
-            : new Proxy(Proxy.Type.HTTP, new InetSocketAddress(hostname, port));
+            : new Proxy(proxyType, new InetSocketAddress(hostname, port));
 
     return builder.setProxy(proxy).build();
   }
