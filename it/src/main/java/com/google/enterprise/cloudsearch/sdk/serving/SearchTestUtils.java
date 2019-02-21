@@ -18,7 +18,6 @@ package com.google.enterprise.cloudsearch.sdk.serving;
 import com.google.api.services.cloudsearch.v1.model.SearchResponse;
 import com.google.api.services.cloudsearch.v1.model.SearchResult;
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -31,7 +30,7 @@ import org.awaitility.Duration;
 public class SearchTestUtils {
 
   private static final Logger logger = Logger.getLogger(SearchTestUtils.class.getName());
-  private static final Duration ITEM_EQUAL_TIMEOUT = new Duration(20, TimeUnit.SECONDS);
+  private static final Duration ITEM_EQUAL_TIMEOUT = Duration.TEN_SECONDS;
   private static final Duration ITEM_EQUAL_POLL_INTERVAL = Duration.TWO_SECONDS;
   private final SearchHelper searchHelper;
 
@@ -39,18 +38,14 @@ public class SearchTestUtils {
     this.searchHelper = searchHelper;
   }
 
-  private String getUrl(String itemId) {
-    return String.format("www.google.com/%s", itemId);
-  }
-
-  public void waitUntilResultExists(String itemId, String query) throws IOException {
+  public void waitUntilItemServed(String itemId, String query) throws IOException {
     Awaitility.await()
         .atMost(ITEM_EQUAL_TIMEOUT)
         .pollInterval(ITEM_EQUAL_POLL_INTERVAL)
         .untilTrue(new AtomicBoolean(resultExists(itemId, query)));
   }
 
-  public void waitUntilResultNotExists(String itemId, String query) throws IOException {
+  public void waitUntilItemNotServed(String itemId, String query) throws IOException {
     Awaitility.await()
         .atMost(ITEM_EQUAL_TIMEOUT)
         .pollInterval(ITEM_EQUAL_POLL_INTERVAL)
@@ -58,21 +53,24 @@ public class SearchTestUtils {
   }
 
   private boolean resultExists(String itemId, String query) throws IOException {
-    String expectedUrl = getUrl(itemId);
+    boolean served = false;
+    boolean serving;
     SearchResponse searchResponse = searchHelper.search(query);
     long resultCountExact = searchResponse.getResultCountExact();
-    logger.log(Level.FINE,"Search response: %s ", searchResponse.toPrettyString());
-    // Incase  deleted items are still serving then check for new indexed item id present or not.
+    logger.log(Level.FINE,"Search response: {0} ", searchResponse.toPrettyString());
     if (resultCountExact > 0) {
       for (SearchResult result : searchResponse.getResults()) {
-        boolean urlPresent = expectedUrl.equals(result.getUrl());
+        boolean titlePresent = result.getTitle().equals(itemId);
         boolean isSnippetRight = result.getSnippet().getSnippet().contains(query);
-        if (urlPresent & isSnippetRight) {
-          logger.log(Level.FINE,"Expected Item in Search Result : %s ", result);
-          return true;
+        serving = titlePresent && isSnippetRight;
+        if (serving) {
+          logger.log(Level.FINE,"Expected Item in Search Result : {0} ", result);
+          served = true;
+        } else {
+          served = false;
         }
       }
     }
-    return false;
+    return served;
   }
 }

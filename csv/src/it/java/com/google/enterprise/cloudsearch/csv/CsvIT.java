@@ -36,6 +36,9 @@ import com.google.enterprise.cloudsearch.sdk.indexing.StructuredDataHelper;
 import com.google.enterprise.cloudsearch.sdk.indexing.TestUtils;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.FullTraversalConnector;
 import com.google.enterprise.cloudsearch.sdk.sdk.ConnectorStats;
+import com.google.enterprise.cloudsearch.sdk.serving.SearchAuthInfo;
+import com.google.enterprise.cloudsearch.sdk.serving.SearchHelper;
+import com.google.enterprise.cloudsearch.sdk.serving.SearchTestUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.FileWriter;
@@ -70,17 +73,23 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class CsvIT {
   private static final Logger logger = Logger.getLogger(CsvIT.class.getName());
-  private static final String DATA_SOURCE_ID_PROPERTY_NAME = qualifyTestProperty("sourceId");
+  private static final String DATA_SOURCE_ID_PROPERTY_NAME =
+      qualifyTestProperty("sourceId");
   private static final String ROOT_URL_PROPERTY_NAME = qualifyTestProperty("rootUrl");
-  private static final Duration ITEM_EQUAL_TIMEOUT = new Duration(45, TimeUnit.SECONDS);
-  private static final Duration ITEM_EQUAL_POLL_INTERVAL = Duration.TEN_SECONDS;
+  private static final String APPLICATION_ID_PROPERTY_NAME =
+      qualifyTestProperty("searchApplicationId");
+  private static final String AUTH_INFO_PROPERTY_NAME =
+      qualifyTestProperty("authInfo");
   private static final Duration CONNECTOR_RUN_TIME = new Duration(45, TimeUnit.SECONDS);
   private static final Duration CONNECTOR_RUN_POLL_INTERVAL = Duration.FIVE_SECONDS;
   private static String keyFilePath;
   private static String indexingSourceId;
+  private static SearchHelper searchHelper;
+  private static String searchApplicationId;
   private static CloudSearchService v1Client;
   private static Optional<String> rootUrl;
   private static TestUtils util;
+  private static SearchTestUtils searchUtil;
 
   @Rule public TemporaryFolder configFolder = new TemporaryFolder();
   @Rule public TemporaryFolder csvFileFolder = new TemporaryFolder();
@@ -106,12 +115,6 @@ public class CsvIT {
       + "40, GoogleCloudSearch7, GCS-Connectors\n"
       + "60, GoogleCloudSearch3, GCS-Connectors\n";
 
-  private void createFile(File file, String content) throws IOException {
-    try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
-      pw.write(content);
-    }
-  }
-
   @BeforeClass
   public static void initialize() throws IOException, GeneralSecurityException {
     String dataSourceId;
@@ -133,6 +136,8 @@ public class CsvIT {
     keyFilePath = serviceKeyPath.toAbsolutePath().toString();
     v1Client = new CloudSearchService(keyFilePath, indexingSourceId, rootUrl);
     util = new TestUtils(v1Client);
+    String[] authInfo = System.getProperty(AUTH_INFO_PROPERTY_NAME).split(",");
+    searchHelper = returnSearchHelper(authInfo[0], authInfo[1], authInfo[2]);
     StructuredDataHelper.verifyMockContentDatasourceSchema(v1Client.getSchema());
   }
 
@@ -152,6 +157,7 @@ public class CsvIT {
       config.setProperty("contentTemplate.csv.title", "CSV-Connector-Testing");
       config.setProperty("itemMetadata.title.field", "empName");
       config.setProperty("connector.runOnce", "true");
+      config.setProperty("defaultAcl.public", "true");
       IndexingApplication csvConnector =
           runCsvConnector(setupPropertiesConfigAndRunConnector(config));
       csvConnector.awaitTerminated();
@@ -194,6 +200,7 @@ public class CsvIT {
       config.setProperty("itemMetadata.title.field", "text");
       config.setProperty("itemMetadata.objectType", "myMockDataObject");
       config.setProperty("connector.runOnce", "true");
+      config.setProperty("defaultAcl.public", "true");
       IndexingApplication csvConnector =
           runCsvConnector(setupPropertiesConfigAndRunConnector(config));
       csvConnector.awaitTerminated();
@@ -239,6 +246,7 @@ public class CsvIT {
       config.setProperty("url.format", "https://www.example.com/viewURL={0}");
       config.setProperty("contentTemplate.csv.title", "CSV-Connector-Testing");
       config.setProperty("itemMetadata.title.field", "empName");
+      config.setProperty("defaultAcl.public", "true");
       IndexingApplication csvConnector =
           runCsvConnector(setupPropertiesConfigAndRunConnector(config));
       Awaitility.await()
@@ -294,6 +302,7 @@ public class CsvIT {
       config.setProperty("url.format", "https://www.example.com/viewURL={0}");
       config.setProperty("contentTemplate.csv.title", "CSV-Connector-Testing");
       config.setProperty("itemMetadata.title.field", "empName");
+      config.setProperty("defaultAcl.public", "true");
       IndexingApplication csvConnector =
           runCsvConnector(setupPropertiesConfigAndRunConnector(config));
       Awaitility.await()
@@ -350,6 +359,49 @@ public class CsvIT {
     }
   }
 
+  @Test
+  public void testCsvConnectorAclBasedServing()
+      throws IOException, InterruptedException, GeneralSecurityException {
+    Properties config = new Properties();
+    String mockItemId1 = getItemId(indexingSourceId, "1");
+    File csvFile = csvFileFolder.newFile("testAcl.csv");
+    String query = "GoogleCloudSearch1";
+    try {
+      createFile(csvFile, TEST_CSV_SINGLE);
+      config.setProperty("csv.filePath", csvFile.getAbsolutePath());
+      config.setProperty("csv.skipHeaderRecord", "true");
+      config.setProperty("csv.csvColumns", "emp, empName, Org");
+      config.setProperty("csv.uniqueKeyColumns", "emp");
+      config.setProperty("url.columns", "empName");
+      config.setProperty("url.format", "https://www.example.com/viewURL={0}");
+      config.setProperty("contentTemplate.csv.title", "CSV-Connector-Testing");
+      config.setProperty("itemMetadata.title.field", "empName");
+      config.setProperty("connector.runOnce", "true");
+      config.setProperty(
+          "defaultAcl.readers.users", "google:connectors1@connectstaging.10bot20.info");
+      config.setProperty("defaultAcl.public", "false");
+      IndexingApplication csvConnector =
+          runCsvConnector(setupPropertiesConfigAndRunConnector(config));
+      csvConnector.awaitTerminated();
+      MockItem expectedItem1 = new MockItem.Builder(mockItemId1)
+          .setTitle("GoogleCloudSearch1")
+          .setContentLanguage("en")
+          .setItemType(ItemType.CONTENT_ITEM.toString())
+          .setSourceRepositoryUrl("https://www.example.com/viewURL=GoogleCloudSearch1")
+          .build();
+      logger.log(Level.INFO, "Verifying mock item 1 >> {0}...", expectedItem1);
+      util.waitUntilEqual(mockItemId1, expectedItem1.getItem());
+      searchUtil = new SearchTestUtils(searchHelper);
+      searchUtil.waitUntilItemServed("GoogleCloudSearch1", query);
+    } finally {
+      try {
+        csvFile.delete();
+      } finally {
+        v1Client.deleteItemsIfExist(Collections.singletonList(mockItemId1));
+      }
+    }
+  }
+
   private String[] setupPropertiesConfigAndRunConnector(Properties testSpecificConfig)
       throws IOException {
     logger.log(Level.FINE, "Setting up properties file.");
@@ -359,7 +411,6 @@ public class CsvIT {
     config.setProperty("api.serviceAccountPrivateKeyFile", keyFilePath);
     config.setProperty("connector.checkpointDirectory", configFolder.newFolder().getAbsolutePath());
     config.setProperty("defaultAcl.mode", "fallback");
-    config.setProperty("defaultAcl.public", "true");
     config.setProperty("schedule.traversalIntervalSecs", "10");
     config.put("traverse.queueTag", "mockCsvConnectorQueue-" + Util.getRandomId());
     config.putAll(testSpecificConfig);
@@ -378,5 +429,32 @@ public class CsvIT {
             .build();
     csvConnector.start();
     return csvConnector;
+  }
+
+  private static SearchHelper returnSearchHelper(
+      String authorisedUserEmail,
+      String credentialsDirPath,
+      String clientCredPath) throws GeneralSecurityException, IOException {
+    String validUserEmail = authorisedUserEmail;
+    Path clientCredentialPath = Paths.get(clientCredPath);
+    Path credentialsDirectoryPath = Paths.get(credentialsDirPath);
+    assertTrue(clientCredentialPath.toFile().exists());
+    assertTrue(credentialsDirectoryPath.toFile().exists());
+    String searchAppId = System.getProperty(APPLICATION_ID_PROPERTY_NAME);
+    authorisedUserEmail = validUserEmail;
+    searchApplicationId = searchAppId;
+    File clientCredentialsFile = clientCredentialPath.toFile();
+    File credentialsDirectory = credentialsDirectoryPath.toFile();
+    SearchAuthInfo searchAuthInfo =
+        new SearchAuthInfo(clientCredentialsFile, credentialsDirectory, authorisedUserEmail);
+    SearchHelper searchHelper = SearchHelper.createSearchHelper(
+        searchAuthInfo, searchApplicationId, rootUrl);
+    return searchHelper;
+  }
+
+  private void createFile(File file, String content) throws IOException {
+    try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
+      pw.write(content);
+    }
   }
 }
