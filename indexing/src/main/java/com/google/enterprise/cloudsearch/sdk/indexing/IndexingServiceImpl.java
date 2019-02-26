@@ -41,6 +41,7 @@ import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources.I
 import com.google.api.services.cloudsearch.v1.CloudSearchRequest;
 import com.google.api.services.cloudsearch.v1.model.DebugOptions;
 import com.google.api.services.cloudsearch.v1.model.DeleteQueueItemsRequest;
+import com.google.api.services.cloudsearch.v1.model.IndexItemOptions;
 import com.google.api.services.cloudsearch.v1.model.IndexItemRequest;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.ItemContent;
@@ -132,6 +133,8 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   public static final String REQUEST_CONNECT_TIMEOUT = "indexingService.connectTimeoutSeconds";
   public static final String REQUEST_READ_TIMEOUT = "indexingService.readTimeoutSeconds";
   public static final String ENABLE_API_DEBUGGING = "indexingService.enableDebugging";
+  public static final String ALLOW_UNKNOWN_GSUITE_PRINCIPALS =
+      "indexingService.allowUnknownGsuitePrincipals";
 
   private static final OperationStats indexingServiceStats =
       StatsManager.getComponent("IndexingService");
@@ -163,6 +166,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   private final QuotaServer<Operations> quotaServer;
   private final RequestMode requestMode;
   private final boolean enableApiDebugging;
+  private final boolean allowUnknownGsuitePrincipals;
 
   /** API Operations */
   public enum Operations {
@@ -242,6 +246,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     this.quotaServer = builder.quotaServer;
     this.requestMode = builder.requestMode;
     this.enableApiDebugging = builder.enableApiDebugging;
+    this.allowUnknownGsuitePrincipals = builder.allowUnknownGsuitePrincipals;
   }
 
   public static class Builder extends BaseApiService.AbstractBuilder<Builder, CloudSearch> {
@@ -260,6 +265,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     private int contentUploadConnectTimeoutSeconds = DEFAULT_CONNECT_TIMEOUT_SECONDS;
     private int contentUploadReadTimeoutSeconds = DEFAULT_READ_TIMEOUT_SECONDS;
     private boolean enableApiDebugging;
+    private boolean allowUnknownGsuitePrincipals;
 
     public Builder setSourceId(String sourceId) {
       this.sourceId = sourceId;
@@ -293,6 +299,11 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
 
     public Builder setEnableDebugging(boolean enableDebugging) {
       this.enableApiDebugging = enableDebugging;
+      return this;
+    }
+
+    public Builder setAllowUnknownGsuitePrincipals(boolean allowUnknownGsuitePrincipals) {
+      this.allowUnknownGsuitePrincipals = allowUnknownGsuitePrincipals;
       return this;
     }
 
@@ -412,6 +423,8 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
           readTimeoutSeconds,
           REQUEST_READ_TIMEOUT);
       boolean enableApiDebugging = Configuration.getBoolean(ENABLE_API_DEBUGGING, false).get();
+      boolean allowUnknownGsuitePrincipals =
+          Configuration.getBoolean(ALLOW_UNKNOWN_GSUITE_PRINCIPALS, false).get();
 
       return new IndexingServiceImpl.Builder()
           .setSourceId(Configuration.getString(SOURCE_ID, null).get())
@@ -435,7 +448,8 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
                       UPLOAD_THRESHOLD_BYTES,
                       IndexingServiceImpl.DEFAULT_CONTENT_UPLOAD_THRESHOLD_BYTES)
                   .get())
-          .setEnableDebugging(enableApiDebugging);
+          .setEnableDebugging(enableApiDebugging)
+          .setAllowUnknownGsuitePrincipals(allowUnknownGsuitePrincipals);
     }
 
     @Override
@@ -707,6 +721,8 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
                 item.getName(),
                 new IndexItemRequest()
                     .setDebugOptions(new DebugOptions().setEnableDebugging(enableApiDebugging))
+                    .setIndexItemOptions(new IndexItemOptions()
+                        .setAllowUnknownGsuitePrincipals(allowUnknownGsuitePrincipals))
                     .setItem(item)
                     .setMode(getRequestMode(requestMode))
                     .setConnectorName(connectorName));

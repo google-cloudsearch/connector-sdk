@@ -323,8 +323,7 @@ class TestingHttpTransport extends MockHttpTransport {
             .setSourceId(sourceId)
             .setId(id)
             .setType(TYPE_ITEM)
-            .setOperation("update")
-            .setOptions(ENABLE_DEBUGGING + enableDebugging)
+            .setOperation("index")
             .build();
     this.setRequestResponse(METHOD_POST, url, response);
   }
