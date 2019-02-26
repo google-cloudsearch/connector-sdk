@@ -152,7 +152,8 @@ public class IndexingServiceTest {
     createService(false, false);
   }
 
-  private void createService(boolean enableDebugging) throws IOException, GeneralSecurityException {
+  private void createService(boolean enableDebugging, boolean allowUnknownGsuitePrincipals)
+      throws IOException, GeneralSecurityException {
     this.transport = new TestingHttpTransport("datasources/source/connectors/unitTest");
     JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
     CredentialFactory credentialFactory =

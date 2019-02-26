@@ -450,7 +450,6 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
                   .get())
           .setEnableDebugging(enableApiDebugging)
           .setAllowUnknownGsuitePrincipals(allowUnknownGsuitePrincipals);
-          .setEnableDebugging(enableApiDebugging);
     }
 
     @Override
