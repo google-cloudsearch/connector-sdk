@@ -144,7 +144,7 @@
     <dependency>
       <groupId>com.google.enterprise.cloudsearch</groupId>
       <artifactId>google-cloudsearch-connector-sdk</artifactId>
-      <version>v1-0.0.3</version>
+      <version>v1-0.0.4-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.mockito</groupId>
