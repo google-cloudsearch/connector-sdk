@@ -21,12 +21,19 @@ import static com.google.common.base.Preconditions.checkState;
 import static java.nio.file.Files.newInputStream;
 import static java.util.Locale.ENGLISH;
 
+import com.google.api.client.auth.oauth2.TokenRequest;
+import com.google.api.client.auth.oauth2.TokenResponse;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
+import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
+import com.google.api.client.json.webtoken.JsonWebSignature;
+import com.google.api.client.json.webtoken.JsonWebToken;
+import com.google.api.client.util.Beta;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Joiner;
 import com.google.enterprise.cloudsearch.sdk.config.ConfigValue;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
 import java.io.IOException;
@@ -138,14 +145,15 @@ public class LocalFileCredentialFactory implements CredentialFactory {
       try (InputStream is = newInputStream(keyPath)) {
         GoogleCredential credential =
             GoogleCredential.fromStream(is, transport, jsonFactory).createScoped(scopes);
-        return new GoogleCredential.Builder()
-            .setServiceAccountId(credential.getServiceAccountId())
-            .setServiceAccountScopes(scopes)
-            .setServiceAccountPrivateKey(credential.getServiceAccountPrivateKey())
-            .setTransport(transport)
-            .setJsonFactory(jsonFactory)
-            .setRequestInitializer(httpRequestInitializer)
-            .build();
+        GoogleCredential.Builder builder =
+            new GoogleCredential.Builder()
+                .setServiceAccountId(credential.getServiceAccountId())
+                .setServiceAccountScopes(scopes)
+                .setServiceAccountPrivateKey(credential.getServiceAccountPrivateKey())
+                .setTransport(transport)
+                .setJsonFactory(jsonFactory)
+                .setRequestInitializer(httpRequestInitializer);
+        return new ProxyGoogleCredential(builder);
       }
     }
 
@@ -157,14 +165,15 @@ public class LocalFileCredentialFactory implements CredentialFactory {
         HttpRequestInitializer requestInitializer,
         Collection<String> scopes)
         throws GeneralSecurityException, IOException {
-      return new GoogleCredential.Builder()
-          .setServiceAccountId(serviceAccountId)
-          .setServiceAccountScopes(scopes)
-          .setServiceAccountPrivateKeyFromP12File(keyPath.toFile())
-          .setTransport(transport)
-          .setJsonFactory(jsonFactory)
-          .setRequestInitializer(requestInitializer)
-          .build();
+      GoogleCredential.Builder builder =
+          new GoogleCredential.Builder()
+              .setServiceAccountId(serviceAccountId)
+              .setServiceAccountScopes(scopes)
+              .setServiceAccountPrivateKeyFromP12File(keyPath.toFile())
+              .setTransport(transport)
+              .setJsonFactory(jsonFactory)
+              .setRequestInitializer(requestInitializer);
+      return new ProxyGoogleCredential(builder);
     }
   }
 
@@ -233,6 +242,57 @@ public class LocalFileCredentialFactory implements CredentialFactory {
       }
 
       return new LocalFileCredentialFactory(this);
+    }
+  }
+
+  private static class ProxyGoogleCredential extends GoogleCredential {
+    public ProxyGoogleCredential(GoogleCredential.Builder builder) {
+      super(builder);
+    }
+
+    /**
+     * Note : This is local modification to GoogleCredential object implementation in order to
+     * support setting proxy authorization header for token requests.
+     */
+    @Override
+    @Beta
+    protected TokenResponse executeRefreshToken() throws IOException {
+      if (getServiceAccountPrivateKey() == null) {
+        return super.executeRefreshToken();
+      }
+      // service accounts: no refresh token; instead use private key to request new access token
+      JsonWebSignature.Header header = new JsonWebSignature.Header();
+      header.setAlgorithm("RS256");
+      header.setType("JWT");
+      header.setKeyId(getServiceAccountPrivateKeyId());
+      JsonWebToken.Payload payload = new JsonWebToken.Payload();
+      long currentTime = getClock().currentTimeMillis();
+      payload.setIssuer(getServiceAccountId());
+      payload.setAudience(getTokenServerEncodedUrl());
+      payload.setIssuedAtTimeSeconds(currentTime / 1000);
+      payload.setExpirationTimeSeconds(currentTime / 1000 + 3600);
+      payload.setSubject(getServiceAccountUser());
+      payload.put("scope", Joiner.on(' ').join(getServiceAccountScopes()));
+      try {
+        String assertion =
+            JsonWebSignature.signUsingRsaSha256(
+                getServiceAccountPrivateKey(), getJsonFactory(), header, payload);
+        TokenRequest request =
+            new TokenRequest(
+                getTransport(),
+                getJsonFactory(),
+                new GenericUrl(getTokenServerEncodedUrl()),
+                "urn:ietf:params:oauth:grant-type:jwt-bearer");
+        request.put("assertion", assertion);
+        // Current implementation of GoogleCredential is not setting request initializer for token
+        // requests.
+        request.setRequestInitializer(getRequestInitializer());
+        return request.execute();
+      } catch (GeneralSecurityException exception) {
+        IOException e = new IOException();
+        e.initCause(exception);
+        throw e;
+      }
     }
   }
 }
