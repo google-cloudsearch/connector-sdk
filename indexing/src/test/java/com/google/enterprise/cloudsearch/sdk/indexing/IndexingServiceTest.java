@@ -48,6 +48,7 @@ import com.google.api.client.testing.http.MockHttpTransport;
 import com.google.api.services.cloudsearch.v1.CloudSearch;
 import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources.Items;
 import com.google.api.services.cloudsearch.v1.model.DebugOptions;
+import com.google.api.services.cloudsearch.v1.model.IndexItemRequest;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.ItemContent;
 import com.google.api.services.cloudsearch.v1.model.ItemStatus;
@@ -148,10 +149,11 @@ public class IndexingServiceTest {
 
   @Before
   public void createService() throws IOException, GeneralSecurityException {
-    createService(false);
+    createService(false, false);
   }
 
-  private void createService(boolean enableDebugging) throws IOException, GeneralSecurityException {
+  private void createService(boolean enableDebugging, boolean allowUnknownGsuitePrincipals)
+      throws IOException, GeneralSecurityException {
     this.transport = new TestingHttpTransport("datasources/source/connectors/unitTest");
     JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
     CredentialFactory credentialFactory =
@@ -188,6 +190,7 @@ public class IndexingServiceTest {
             .setQuotaServer(quotaServer)
             .setConnectorId("unitTest")
             .setEnableDebugging(enableDebugging)
+            .setAllowUnknownGsuitePrincipals(allowUnknownGsuitePrincipals)
             .build();
     this.indexingService.startAsync().awaitRunning();
   }
@@ -541,27 +544,80 @@ public class IndexingServiceTest {
 
   /* update */
   @Test
-  public void testUpdateItem() throws IOException {
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, new Operation());
+  public void testUpdateItem() throws IOException, InterruptedException {
+    doAnswer(
+            invocation -> {
+              Items.Index updateRequest = invocation.getArgument(0);
+              assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
+              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+              assertEquals(RequestMode.SYNCHRONOUS.name(), indexItemRequest.getMode());
+              SettableFuture<Operation> result = SettableFuture.create();
+              result.set(new Operation());
+              return result;
+            })
+        .when(batchingService)
+        .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
-    this.indexingService.indexItem(item, RequestMode.ASYNCHRONOUS);
+    this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
 
   /* update */
   @Test
-  public void testDebugOptionsEnabled() throws Exception {
-    createService(true /*enable debugging*/);
-    this.transport.addUpdateItemReqResp(
-        SOURCE_ID, GOOD_ID, true /*enable debugging*/, new Operation());
+  public void testUpdateItemDebugOptionsEnabled() throws Exception {
+    createService(/*debugging*/ true, /*allowUnknownGsuitePrincipals*/ false);
+    doAnswer(
+            invocation -> {
+              Items.Index updateRequest = invocation.getArgument(0);
+              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+              assertTrue(indexItemRequest.getDebugOptions().getEnableDebugging());
+              assertFalse(indexItemRequest.getIndexItemOptions().getAllowUnknownGsuitePrincipals());
+              return Futures.immediateFuture(new Operation());
+            })
+        .when(batchingService)
+        .indexItem(any());
+    Item item = new Item().setName(GOOD_ID);
+    this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
+    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+  }
+
+  @Test
+  public void testUpdateItemAllowUnknownGsuitePrincipals() throws Exception {
+    createService(/*debugging*/ false, /*allowUnknownGsuitePrincipals*/ true);
+    doAnswer(
+            invocation -> {
+              Items.Index updateRequest = invocation.getArgument(0);
+              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+              assertFalse(indexItemRequest.getDebugOptions().getEnableDebugging());
+              assertTrue(indexItemRequest.getIndexItemOptions().getAllowUnknownGsuitePrincipals());
+              return Futures.immediateFuture(new Operation());
+            })
+        .when(batchingService)
+        .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
     this.indexingService.indexItem(item, RequestMode.ASYNCHRONOUS);
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
 
   @Test
-  public void testUpdateItemWithContent() throws IOException {
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, new Operation());
+  public void testUpdateItemWithContent() throws IOException, InterruptedException {
+    doAnswer(
+            invocation -> {
+              Items.Index updateRequest = invocation.getArgument(0);
+              assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
+              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+              assertEquals(RequestMode.ASYNCHRONOUS.name(), indexItemRequest.getMode());
+              assertEquals(
+                  new ItemContent()
+                      .encodeInlineContent("Hello World.".getBytes(UTF_8))
+                      .setContentFormat("TEXT"),
+                  indexItemRequest.getItem().getContent());
+              SettableFuture<Operation> result = SettableFuture.create();
+              result.set(new Operation());
+              return result;
+            })
+        .when(batchingService)
+        .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
     ByteArrayContent content = ByteArrayContent.fromString("text/plain", "Hello World.");
     this.indexingService.indexItemAndContent(
