@@ -33,6 +33,7 @@ import com.google.api.services.cloudsearch.v1.CloudSearch;
 import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources;
 import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources.Items;
 import com.google.api.services.cloudsearch.v1.CloudSearchRequest;
+import com.google.api.services.cloudsearch.v1.model.DebugOptions;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.ItemContent;
 import com.google.api.services.cloudsearch.v1.model.ListItemsResponse;
@@ -75,7 +76,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 /**
- * This class reads in a json file to upload all the requests to the cloudSearch indexing API
+ * This class reads in a json file to upload all the requests to the Cloud Search Indexing API.
  *
  * <pre>
  *    java
@@ -88,7 +89,15 @@ import java.util.concurrent.ExecutionException;
  * payload is the json file which contains the source Id and all the requests related to it.
  * api.serviceAccountPrivateKeyFile is the file contains private key information. If it is not a
  * json file then api.serviceAccountId is compulsory.
- *
+ * <p>
+ * Optional command-line properties:
+ * <pre>
+ *   -DcontentUpload.requestTimeout=&lt;seconds&gt;
+ *   -DcontentUpload.connectorName=customConnectorName
+ *   -DcontentUpload.enableDebugging=false
+ * </pre>
+ * <b>Only set enableDebugging to true if asked by Google to help with debugging.</b>
+ * <p>
  * Detailed schema of request json file can be found at {@link UploadRequest}.
  */
 public class Uploader {
@@ -104,11 +113,15 @@ public class Uploader {
   @VisibleForTesting CloudSearch cloudSearchService;
   private ContentUploadServiceImpl contentUploadService;
   private URI baseUri;
+  private boolean enableDebugging;
+  private String connectorName;
 
   Uploader(Builder builder) {
     this.cloudSearchService = builder.cloudSearch;
     this.contentUploadService = builder.contentUploadService;
     this.baseUri = builder.baseUri;
+    this.enableDebugging = builder.enableDebugging;
+    this.connectorName = builder.connectorName;
   }
 
   static class Builder {
@@ -124,6 +137,8 @@ public class Uploader {
     private Path serviceAccountKeyFilePath;
     private int connectTimeoutSeconds = DEFAULT_REQUEST_TIMEOUT_SECONDS;
     private int readTimeoutSeconds = DEFAULT_REQUEST_TIMEOUT_SECONDS;
+    private boolean enableDebugging;
+    private String connectorName = Uploader.class.getName();
 
     Builder setRequestInitializer(HttpRequestInitializer requestInitializer) {
       this.requestInitializer = requestInitializer;
@@ -158,6 +173,16 @@ public class Uploader {
     Builder setRequestTimeout(int connectTimeoutSeconds, int readTimeoutSeconds) {
       this.connectTimeoutSeconds = connectTimeoutSeconds;
       this.readTimeoutSeconds = readTimeoutSeconds;
+      return this;
+    }
+
+    Builder setEnableDebugging(boolean enableDebugging) {
+      this.enableDebugging = enableDebugging;
+      return this;
+    }
+
+    Builder setConnectorName(String connectorName) {
+      this.connectorName = connectorName;
       return this;
     }
 
@@ -197,10 +222,14 @@ public class Uploader {
     String sourceId = uploadRequest.sourceId;
     contentUploadService.startAsync().awaitRunning();
     for (UploadRequest.AbstractRequest request : uploadRequest.requests) {
-      GenericJson response = request.accept(new Visitor(sourceId));
+      GenericJson response = request.accept(getVisitor(sourceId));
       System.out.println(response.toPrettyString());
     }
     contentUploadService.stopAsync().awaitTerminated();
+  }
+
+  Visitor getVisitor(String sourceId) {
+    return new Visitor(sourceId);
   }
 
   /**
@@ -263,7 +292,25 @@ public class Uploader {
               .delete(getItemResourceName(sourceId, deleteRequest.name));
       delete.setVersion(Base64.getEncoder().encodeToString(getVersion()));
       delete.setMode(RequestMode.SYNCHRONOUS.name());
+      delete.setDebugOptionsEnableDebugging(enableDebugging);
+      delete.setConnectorName(connectorName);
       return execute(delete);
+    }
+
+    Operation upload(UploadRequest.DeleteQueueItemsRequest deleteQueueItemsRequest)
+        throws IOException {
+      Items.DeleteQueueItems deleteQueueItems =
+          cloudSearchService
+              .indexing()
+              .datasources()
+              .items()
+              .deleteQueueItems(
+                  resourcePrefix,
+                  new com.google.api.services.cloudsearch.v1.model.DeleteQueueItemsRequest()
+                      .setQueue(deleteQueueItemsRequest.queue)
+                      .setDebugOptions(new DebugOptions().setEnableDebugging(enableDebugging))
+                      .setConnectorName(connectorName));
+      return execute(deleteQueueItems);
     }
 
     Item upload(UploadRequest.GetRequest getRequest) throws IOException {
@@ -273,13 +320,15 @@ public class Uploader {
               .datasources()
               .items()
               .get(getItemResourceName(sourceId, getRequest.name));
+      get.setDebugOptionsEnableDebugging(enableDebugging);
+      get.setConnectorName(connectorName);
       return execute(get);
     }
 
-    Operation upload(IndexItemRequest updateItemRequest) throws IOException {
+    Operation upload(IndexItemRequest indexItemRequest) throws IOException {
       String fullVerifiedName =
-          getItemResourceName(sourceId, updateItemRequest.getName());
-      Items.Index update =
+          getItemResourceName(sourceId, indexItemRequest.getName());
+      Items.Index index =
           cloudSearchService
               .indexing()
               .datasources()
@@ -287,14 +336,17 @@ public class Uploader {
               .index(
                   fullVerifiedName,
                   new com.google.api.services.cloudsearch.v1.model.IndexItemRequest()
-                      .setItem(updateItemRequest.item.setName(fullVerifiedName))
-                      .setMode(updateItemRequest.isIncremental ? "SYNCHRONOUS" : "ASYNCHRONOUS"));
+                      .setDebugOptions(new DebugOptions().setEnableDebugging(enableDebugging))
+                      .setConnectorName(connectorName)
+                      .setIndexItemOptions(indexItemRequest.indexItemOptions)
+                      .setItem(indexItemRequest.item.setName(fullVerifiedName))
+                      .setMode(indexItemRequest.isIncremental ? "SYNCHRONOUS" : "ASYNCHRONOUS"));
 
-      if (updateItemRequest.item.decodeVersion() == null) {
-        updateItemRequest.item.encodeVersion(getVersion());
+      if (indexItemRequest.item.decodeVersion() == null) {
+        indexItemRequest.item.encodeVersion(getVersion());
       }
 
-      return execute(update);
+      return execute(index);
     }
 
     Operation upload(IndexItemAndContentRequest indexItemAndContentRequest)
@@ -324,6 +376,8 @@ public class Uploader {
               .index(
                   fullVerifiedName,
                   new com.google.api.services.cloudsearch.v1.model.IndexItemRequest()
+                      .setDebugOptions(new DebugOptions().setEnableDebugging(enableDebugging))
+                      .setConnectorName(connectorName)
                       .setItem(indexItemAndContentRequest.item.setName(fullVerifiedName))
                       .setMode(
                           indexItemAndContentRequest.isIncremental
@@ -347,6 +401,8 @@ public class Uploader {
               .poll(
                   resourcePrefix,
                   new PollItemsRequest()
+                      .setDebugOptions(new DebugOptions().setEnableDebugging(enableDebugging))
+                      .setConnectorName(connectorName)
                       .setLimit(pollItemRequest.limit)
                       .setQueue(pollItemRequest.queue)
                       .setStatusCodes(pollItemRequest.statusCodes));
@@ -366,18 +422,17 @@ public class Uploader {
               .push(
                   fullVerifiedName,
                   new PushItemRequest()
+                      .setDebugOptions(new DebugOptions().setEnableDebugging(enableDebugging))
+                      .setConnectorName(connectorName)
                       .setItem(pushItemRequest.pushItem));
-
-      printHttpRequest(pushRequest);
-      execute(pushRequest);
-      Items.Get get =
-          cloudSearchService.indexing().datasources().items().get(fullVerifiedName);
-      return execute(get);
+      return execute(pushRequest);
     }
 
     Operation upload(UploadRequest.UnreserveRequest unreserveRequest) throws IOException {
-      UnreserveItemsRequest unreserveQueueRequest =
-          new UnreserveItemsRequest().setQueue(unreserveRequest.queue);
+      UnreserveItemsRequest unreserveQueueRequest = new UnreserveItemsRequest()
+          .setDebugOptions(new DebugOptions().setEnableDebugging(enableDebugging))
+          .setConnectorName(connectorName)
+          .setQueue(unreserveRequest.queue);
       Items.Unreserve unreserve =
           cloudSearchService
               .indexing()
@@ -397,13 +452,21 @@ public class Uploader {
       if (listRequest.pageSize > 0) {
         request.setPageSize(listRequest.pageSize);
       }
+      request.setDebugOptionsEnableDebugging(enableDebugging);
+      request.setConnectorName(connectorName);
       return execute(request);
     }
 
-    GenericJson upload(
-        @SuppressWarnings("unused") UploadRequest.DatasourcesListRequest datasourcesListRequest)
+    GenericJson upload(UploadRequest.DatasourcesListRequest datasourcesListRequest)
         throws IOException {
-      return cloudSearchService.settings().datasources().list().execute();
+      CloudSearch.Settings.Datasources.List list =
+          cloudSearchService.settings().datasources().list()
+          .setDebugOptionsEnableDebugging(enableDebugging)
+          .setPageToken(datasourcesListRequest.pageToken);
+      if (datasourcesListRequest.pageSize != null) {
+        list.setPageSize(datasourcesListRequest.pageSize);
+      }
+      return execute(list);
     }
 
     Operation upload(UploadRequest.UpdateSchemaRequest updateSchemaRequest) throws IOException {
@@ -433,6 +496,7 @@ public class Uploader {
               .updateSchema(
                   resourcePrefix,
                   new UpdateSchemaRequest()
+                      .setDebugOptions(new DebugOptions().setEnableDebugging(enableDebugging))
                       .setSchema(schema)
                       .setValidateOnly(updateSchemaRequest.validateOnly));
       return execute(updateSchema);
@@ -443,7 +507,8 @@ public class Uploader {
           cloudSearchService
               .indexing()
               .datasources()
-              .getSchema(resourcePrefix);
+              .getSchema(resourcePrefix)
+              .setDebugOptionsEnableDebugging(enableDebugging);
       return execute(getSchema);
     }
 
@@ -452,7 +517,8 @@ public class Uploader {
           cloudSearchService
               .indexing()
               .datasources()
-              .deleteSchema(resourcePrefix);
+              .deleteSchema(resourcePrefix)
+              .setDebugOptionsEnableDebugging(enableDebugging);
       return execute(deleteSchema);
     }
 
@@ -484,7 +550,10 @@ public class Uploader {
                 .indexing()
                 .datasources()
                 .items()
-                .upload(itemResourceName, new StartUploadItemRequest());
+                .upload(itemResourceName,
+                    new StartUploadItemRequest()
+                    .setDebugOptions(new DebugOptions().setEnableDebugging(enableDebugging))
+                    .setConnectorName(connectorName));
 
         UploadItemRef uploadItemRef = execute(uploadRequest);
         try {
@@ -578,6 +647,12 @@ public class Uploader {
       requestTimeout = Integer.parseInt(System.getProperty("contentUpload.requestTimeout"));
     }
 
+    boolean enableDebugging = Boolean.getBoolean("contentUpload.enableDebugging");
+    String connectorName = Uploader.class.getName();
+    if (!Strings.isNullOrEmpty(System.getProperty("contentUpload.connectorName"))) {
+      connectorName = System.getProperty("contentUpload.connectorName");
+    }
+
     if (!Files.exists(jsonFilePath)) {
       throw new IOException("payload file " + jsonFilePath.toAbsolutePath() + " does not exists");
     } else if (Files.isDirectory(jsonFilePath)) {
@@ -600,6 +675,8 @@ public class Uploader {
             .setBaseUri(userDir.toUri())
             .setServiceAccountKeyFilePath(serviceAccountKeyFilePath)
             .setRequestTimeout(requestTimeout, requestTimeout)
+            .setEnableDebugging(enableDebugging)
+            .setConnectorName(connectorName)
             .build();
     //for each request, use cloudSearch service to upload it
     uploader.execute(uploadRequest);
