@@ -19,6 +19,7 @@ import com.google.api.client.json.GenericJson;
 import com.google.api.client.json.JsonPolymorphicTypeMap;
 import com.google.api.client.json.JsonPolymorphicTypeMap.TypeDef;
 import com.google.api.client.util.Key;
+import com.google.api.services.cloudsearch.v1.model.IndexItemOptions;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.PollItemsResponse;
 import com.google.api.services.cloudsearch.v1.model.PushItem;
@@ -57,7 +58,6 @@ public class UploadRequest extends GenericJson {
   @Key
   public List<? extends AbstractRequest> requests;
 
-
   /**
    * Abstract class of the request sent to the indexing API.
    *
@@ -65,6 +65,7 @@ public class UploadRequest extends GenericJson {
    *   <li>The valid types of requests are:
    *        <ul>
    *          <li>items.delete: {@link DeleteRequest}
+   *          <li>items.deleteQueueItems: {@link DeleteQueueItemsRequest}
    *          <li>items.get: {@link GetRequest}
    *          <li>items.indexItem: {@link IndexItemRequest}
    *          <li>items.indexItemAndContent: {@link IndexItemAndContentRequest}
@@ -85,6 +86,7 @@ public class UploadRequest extends GenericJson {
     @JsonPolymorphicTypeMap(
         typeDefinitions = {
             @TypeDef(key = "items.delete", ref = DeleteRequest.class),
+            @TypeDef(key = "items.deleteQueueItems", ref = DeleteQueueItemsRequest.class),
             @TypeDef(key = "items.get", ref = GetRequest.class),
             @TypeDef(key = "items.indexItem", ref = IndexItemRequest.class),
             @TypeDef(key = "items.indexItemAndContent", ref = IndexItemAndContentRequest.class),
@@ -147,6 +149,33 @@ public class UploadRequest extends GenericJson {
   }
 
   /**
+   * Request to delete items from a given queue.
+   *
+   * <p>An example of DeleteQueueItemsRequest is:
+   * <pre>
+   *  {
+   *    "queue": "queueName",
+   *    "type": "items.deleteQueueItems"
+   *  }
+   * </pre>
+   */
+  public static class DeleteQueueItemsRequest extends AbstractRequest {
+
+    @Key
+    String queue;
+
+    @Override
+    String getName() {
+      return queue;
+    }
+
+    @Override
+    GenericJson accept(Uploader.Visitor visitor) throws IOException, InterruptedException {
+      return visitor.upload(this);
+    }
+  }
+
+  /**
    * Request to get an Item from the indexing API.
    *
    * <p>An example of GetRequest is:
@@ -195,6 +224,9 @@ public class UploadRequest extends GenericJson {
    *              ]
    *          }
    *    },
+   *    "indexItemOptions": {
+   *        "allowUnknownGsuitePrincipals":true
+   *    },
    *    "type": "items.indexItem",
    *    "isIncremental": "true"
    *  }
@@ -207,6 +239,9 @@ public class UploadRequest extends GenericJson {
 
     @Key
     Item item;
+
+    @Key
+    IndexItemOptions indexItemOptions;
 
     @Override
     String getName() {
@@ -251,6 +286,9 @@ public class UploadRequest extends GenericJson {
    *              ]
    *          }
    *    },
+   *    "indexItemOptions": {
+   *        "allowUnknownGsuitePrincipals":true
+   *    },
    *    "isIncremental": "true",
    *    "type": "items.indexItemAndContent"
    *  }
@@ -286,7 +324,7 @@ public class UploadRequest extends GenericJson {
    *        "MODIFIED",
    *        "ACCEPTED"
    *    ],
-   *    "pageSize": 10,
+   *    "limit": 10,
    *    "queue": "glossary",
    *    "type": "items.pollItems"
    *  }
@@ -341,7 +379,6 @@ public class UploadRequest extends GenericJson {
     @Override
     String getName() {
       return name;
-
     }
 
     @Override
@@ -434,6 +471,12 @@ public class UploadRequest extends GenericJson {
    * </pre>
    */
   public static class DatasourcesListRequest extends AbstractRequest {
+
+    @Key
+    public String pageToken;
+
+    @Key
+    public Integer pageSize;
 
     // This method is not used for cloudSearch indexing call
     @Override
