@@ -372,7 +372,10 @@ public class StructuredData {
                   .collect(Collectors.toList()));
         }
       } catch (IllegalArgumentException e) {
-        if(ignoreConversionErrors) return null;
+        if(ignoreConversionErrors) {
+          logger.log(Level.FINEST, "Ignoring conversion error: {0}", e.getMessage());
+          return null;
+        }
         throw e;
       }
     }
