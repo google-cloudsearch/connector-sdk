@@ -131,7 +131,7 @@ public class StructuredData {
 
   private static final AtomicBoolean initialized = new AtomicBoolean();
   private static final List<DateTimeParser> dateTimeParsers = new ArrayList<>();
-  private static boolean ignoreConversionErrors = false;
+  private static final AtomicBoolean ignoreConversionErrors = new AtomicBoolean();
 
   /** A map from object definition names to instances of this class. */
   private static final Map<String, StructuredData> structuredDataMapping =
@@ -180,7 +180,7 @@ public class StructuredData {
       throw patternErrors;
     }
 
-    ignoreConversionErrors = Configuration.getBoolean(IGNORE_CONVERSION_ERRORS, Boolean.FALSE).get();
+    ignoreConversionErrors.set(Configuration.getBoolean(IGNORE_CONVERSION_ERRORS, Boolean.FALSE).get());
 
     Schema schema;
     String localSchemaPath = Configuration.getString(LOCAL_SCHEMA, "").get();
@@ -355,24 +355,44 @@ public class StructuredData {
 
     private NamedProperty getProperty(String propertyName, Collection<Object> values) {
       List<Object> nonNullValues =
-          values.stream().filter(Objects::nonNull).collect(Collectors.toList());
+              values.stream().filter(Objects::nonNull).collect(Collectors.toList());
       if (nonNullValues.isEmpty()) {
         return null;
       }
-      try {
-        if (!isRepeated) {
+      if (!isRepeated) {
+        try {
           return propertyBuilder.getNamedProperty(
-              propertyName, Collections.singletonList(valueConverter.convert(nonNullValues.get(0))));
-        } else {
-          return propertyBuilder.getNamedProperty(
-              propertyName,
-              nonNullValues
-                  .stream()
-                  .map(v -> valueConverter.convert(v))
-                  .collect(Collectors.toList()));
+                  propertyName, Collections.singletonList(valueConverter.convert(nonNullValues.get(0))));
+        } catch (IllegalArgumentException e) {
+          if (ignoreConversionErrors.get()) {
+            logger.log(Level.FINEST, "Ignoring conversion error: {0}", e.getMessage());
+            return null;
+          }
+          throw e;
         }
+      } else {
+        List<T> nonNullConvertedValues = nonNullValues
+                .stream()
+                .map(v -> convert(valueConverter, v))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        if(nonNullConvertedValues.isEmpty()) {
+          return null;
+        }
+        return propertyBuilder.getNamedProperty(
+                propertyName,
+                nonNullConvertedValues);
+      }
+    }
+
+    private T convert(Converter<Object, T> converter, Object v) {
+      try {
+        return converter.convert(v);
       } catch (IllegalArgumentException e) {
-        if(ignoreConversionErrors) return null;
+        if(ignoreConversionErrors.get()) {
+          logger.log(Level.FINEST, "Ignoring conversion error: {0}", e.getMessage());
+          return null;
+        }
         throw e;
       }
     }
