@@ -16,4 +16,13 @@ public class ConnectorStats {
         .getSuccessCount("complete");
   }
 
+  /**
+   * Returns the number of incremental traversals successfully completed.
+   */
+  public static int getSuccessfulIncrementalTraversalsCount() {
+    return StatsManager
+        .getComponent("IncrementalTraverser")
+        .getSuccessCount("complete");
+  }
+  //TODO(lchandramouli): Get failure count for Full Traversal and Incremental traversal
 }
