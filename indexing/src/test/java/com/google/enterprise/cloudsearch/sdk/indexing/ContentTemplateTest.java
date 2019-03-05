@@ -282,6 +282,86 @@ public class ContentTemplateTest {
   }
 
   @Test
+  public void getTemplate_fromConfiguration_includeFieldNameTrue() {
+    Properties config = new Properties();
+    config.setProperty("contentTemplate.myTemplate.title", "TField");
+    config.setProperty("contentTemplate.myTemplate.includeFieldName", "true");
+    config.setProperty("contentTemplate.myTemplate.quality.high", "HField1");
+    setupConfig.initConfig(config);
+    ContentTemplate template = ContentTemplate.fromConfiguration("myTemplate");
+    StringBuilder target = new StringBuilder();
+    target
+        .append("<!DOCTYPE html>\n<html lang='en'>\n<head>\n")
+        .append("<meta http-equiv='Content-Type' content='text/html; charset=utf-8'/>\n")
+        .append("<title>%s</title>\n</head>\n<body>\n")
+        .append("<div id='TField'>\n  <p>TField:</p>\n  <h1>%s</h1>\n</div>\n")
+        .append("<div id='HField1'>\n  <p>HField1:</p>\n  <h1>%s</h1>\n</div>\n")
+        .append("%s</body>\n</html>\n");
+    assertEquals(target.toString(), template.getTemplate());
+  }
+
+  @Test
+  public void getTemplate_fromConfiguration_includeFieldNameFalse() {
+    Properties config = new Properties();
+    config.setProperty("contentTemplate.myTemplate.title", "TField");
+    config.setProperty("contentTemplate.myTemplate.includeFieldName", "false");
+    config.setProperty("contentTemplate.myTemplate.quality.high", "HField1");
+    setupConfig.initConfig(config);
+    ContentTemplate template = ContentTemplate.fromConfiguration("myTemplate");
+    StringBuilder target = new StringBuilder();
+    target
+        .append("<!DOCTYPE html>\n<html lang='en'>\n<head>\n")
+        .append("<meta http-equiv='Content-Type' content='text/html; charset=utf-8'/>\n")
+        .append("<title>%s</title>\n</head>\n<body>\n")
+        .append("<div id='TField'>\n  <h1>%s</h1>\n</div>\n")
+        .append("<div id='HField1'>\n  <h1>%s</h1>\n</div>\n")
+        .append("%s</body>\n</html>\n");
+    assertEquals(target.toString(), template.getTemplate());
+  }
+
+  @Test
+  public void apply_fromConfiguration_unmappedColumnsAppend() {
+    Properties config = new Properties();
+    config.setProperty("contentTemplate.myTemplate.title", "TField");
+    config.setProperty("contentTemplate.myTemplate.unmappedColumnsMode", "APPEND");
+    setupConfig.initConfig(config);
+    ContentTemplate template = ContentTemplate.fromConfiguration("myTemplate");
+    Multimap<String, Object> keyVals = LinkedListMultimap.create();
+    keyVals.put("TField", "My Title");
+    keyVals.put("AField1", "A1Value");
+    StringBuilder target = new StringBuilder();
+    target.append("<!DOCTYPE html>\n<html lang='en'>\n<head>\n")
+        .append("<meta http-equiv='Content-Type' content='text/html; charset=utf-8'/>\n")
+        .append("<title>My Title</title>\n</head>\n<body>\n")
+        .append("<div id='TField'>\n  <p>TField:</p>\n  <h1>My Title</h1>\n</div>\n")
+        .append("<div id='AField1'>\n  <p>AField1:</p>\n  <p><small>A1Value</small></p>\n</div>\n")
+        .append("</body>\n</html>\n");
+    assertEquals(target.toString(), template.apply(keyVals));
+  }
+
+  @Test
+  public void apply_fromConfiguration_unmappedColumnsIgnore() {
+    Properties config = new Properties();
+    config.setProperty("contentTemplate.myTemplate.title", "TField");
+    config.setProperty("contentTemplate.myTemplate.quality.high", "HField1");
+    config.setProperty("contentTemplate.myTemplate.unmappedColumnsMode", "IGNORE");
+    setupConfig.initConfig(config);
+    ContentTemplate template = ContentTemplate.fromConfiguration("myTemplate");
+    Multimap<String, Object> keyVals = LinkedListMultimap.create();
+    keyVals.put("TField", "My Title");
+    keyVals.put("HField1", "H1Value");
+    keyVals.put("AField1", "A1Value");
+    StringBuilder target = new StringBuilder();
+    target.append("<!DOCTYPE html>\n<html lang='en'>\n<head>\n")
+        .append("<meta http-equiv='Content-Type' content='text/html; charset=utf-8'/>\n")
+        .append("<title>My Title</title>\n</head>\n<body>\n")
+        .append("<div id='TField'>\n  <p>TField:</p>\n  <h1>My Title</h1>\n</div>\n")
+        .append("<div id='HField1'>\n  <p>HField1:</p>\n  <h1>H1Value</h1>\n</div>\n")
+        .append("</body>\n</html>\n");
+    assertEquals(target.toString(), template.apply(keyVals));
+  }
+
+  @Test
   public void testBuildTemplateUsingConfigWithEmpty() {
     Properties config = new Properties();
     config.put("contentTemplate.myTemplate.title", "TField");
