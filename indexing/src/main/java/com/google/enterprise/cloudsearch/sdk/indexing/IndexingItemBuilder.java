@@ -81,20 +81,21 @@ public class IndexingItemBuilder {
   private static final String UPDATE_TIME = "itemMetadata.updateTime";
   private static final String CREATE_TIME = "itemMetadata.createTime";
   private static final String CONTENT_LANGUAGE = "itemMetadata.contentLanguage";
+  public static final String OBJECT_TYPE = "itemMetadata.objectType";
 
   public static final String TITLE_FIELD = TITLE + ".field";
   public static final String SOURCE_REPOSITORY_URL_FIELD = SOURCE_REPOSITORY_URL + ".field";
   public static final String UPDATE_TIME_FIELD = UPDATE_TIME + ".field";
   public static final String CREATE_TIME_FIELD = CREATE_TIME + ".field";
   public static final String CONTENT_LANGUAGE_FIELD = CONTENT_LANGUAGE + ".field";
+  public static final String OBJECT_TYPE_FIELD = OBJECT_TYPE + ".field";
 
   public static final String TITLE_VALUE = TITLE + ".defaultValue";
   public static final String SOURCE_REPOSITORY_URL_VALUE = SOURCE_REPOSITORY_URL + ".defaultValue";
   public static final String UPDATE_TIME_VALUE = UPDATE_TIME + ".defaultValue";
   public static final String CREATE_TIME_VALUE = CREATE_TIME + ".defaultValue";
   public static final String CONTENT_LANGUAGE_VALUE = CONTENT_LANGUAGE + ".defaultValue";
-
-  public static final String OBJECT_TYPE = "itemMetadata.objectType";
+  public static final String OBJECT_TYPE_VALUE = OBJECT_TYPE + ".defaultValue";
 
   // These methods are not used above so that the constants will be detected as such by javadoc.
   private static String dotField(String configKey) {
@@ -107,7 +108,6 @@ public class IndexingItemBuilder {
 
   private final String name;
   private Acl acl;
-  private String objectType;
   private String mimeType;
   private Multimap<String, Object> values;
 
@@ -116,13 +116,14 @@ public class IndexingItemBuilder {
   private FieldOrValue<DateTime> updateTime;
   private FieldOrValue<DateTime> createTime;
   private FieldOrValue<String> language;
+  private FieldOrValue<String> objectType;
 
   private final Optional<FieldOrValue<String>> configTitle;
   private final Optional<FieldOrValue<String>> configUrl;
   private final Optional<FieldOrValue<DateTime>> configUpdateTime;
   private final Optional<FieldOrValue<DateTime>> configCreateTime;
   private final Optional<FieldOrValue<String>> configLanguage;
-  private final Optional<String> configObjectType;
+  private final Optional<FieldOrValue<String>> configObjectType;
 
   private SearchQualityMetadata searchQuality;
   private String hash;
@@ -154,6 +155,15 @@ public class IndexingItemBuilder {
    *   <li>{@code itemMetadata.createTime.defaultValue} - The value for the create time in
    *       RFC 3339 format.
    *   <li>{@code itemMetadata.contentLanguage.defaultValue} - The value for the content language.
+   * </ul>
+   *
+   * <p>Optional configuration parameters for {@code ItemMetadata} and {@code StructuredData}:
+   *
+   * <ul>
+   *   <li>{@code itemMetadata.objectType.field} - The key for the object type field in the
+   *       values map.
+   *   <li>{@code itemMetadata.objectType.defaultValue} - The value for the object type.
+   * </ul>
    *
    * Note: For each {@code ItemMetadata} field, check the following in order for a non-empty value:
    * <ol>
@@ -163,15 +173,14 @@ public class IndexingItemBuilder {
    *       a key into the the {@link #setValues values map}.
    *   <li> A config property with a suffix of {@code .defaultValue}.
    * </ol>
-   *
-   * <p>Optional configuration parameters for {@code StructuredData}:
-   *
-   * <ul>
-   *   <li>{@code itemMetadata.objectType} - Specifies the object type from the schema to use
-   *       for structured data.
-   * </ul>
    */
   public static IndexingItemBuilder fromConfiguration(String name) {
+    String objectType = Configuration.getString(OBJECT_TYPE, "").get();
+    if (!objectType.isEmpty()) {
+      logger.log(Level.WARNING, "{0} is deprecated, use {1}={2}.",
+          new Object[] { OBJECT_TYPE, OBJECT_TYPE_VALUE, objectType });
+    }
+
     ConfigDefaults config = new ConfigDefaults()
         .setTitle(fieldOrValue(TITLE, Configuration.STRING_PARSER))
         .setUrl(fieldOrValue(SOURCE_REPOSITORY_URL, Configuration.STRING_PARSER))
@@ -179,9 +188,13 @@ public class IndexingItemBuilder {
         .setCreateTime(fieldOrValue(CREATE_TIME, DATE_PARSER))
         .setLanguage(fieldOrValue(CONTENT_LANGUAGE, Configuration.STRING_PARSER))
         .setObjectType(
-            Optional.ofNullable(
-                Strings.emptyToNull(
-                    Configuration.getString(OBJECT_TYPE, "").get())));
+            fieldOrValue(
+                OBJECT_TYPE,
+                Configuration.getString(OBJECT_TYPE_FIELD, "").get(),
+                Configuration.getOverriden(
+                    OBJECT_TYPE_VALUE, Configuration.getString(OBJECT_TYPE, ""))
+                    .get(),
+                Configuration.STRING_PARSER));
     return new IndexingItemBuilder(name, config);
   }
 
@@ -217,14 +230,28 @@ public class IndexingItemBuilder {
 
   /**
    * Sets the name of the object definition from the schema to use when
-   * constructing the {@code ItemStructuredData}.
+   * constructing the {@code ItemStructuredData}, either from
+   * the given field (or key) in the {@code values} multimap, or a literal value.
+   *
+   * @param objectType the source of the object definition name
+   * @return this instance
+   */
+  public IndexingItemBuilder setObjectType(FieldOrValue<String> objectType) {
+    this.objectType = objectType;
+    return this;
+  }
+
+  /**
+   * Sets the {@code title} field value for the {@code ItemMetadata}, either from
+   * the given field (or key) in the {@code values} multimap, or a literal value.
    *
    * @param objectType the object definition name
    * @return this instance
+   * @deprecated Use {@link #setObjectType(FieldOrValue)} with {@link FieldOrValue#withValue}
    */
+  @Deprecated
   public IndexingItemBuilder setObjectType(String objectType) {
-    this.objectType = objectType;
-    return this;
+    return setObjectType(FieldOrValue.withValue(objectType));
   }
 
   /**
@@ -413,14 +440,13 @@ public class IndexingItemBuilder {
       acl.applyTo(item);
     }
     ItemMetadata metadata = new ItemMetadata();
-    if (Strings.isNullOrEmpty(objectType)) {
-      configObjectType.ifPresent(this::setObjectType);
-    }
-    if (!Strings.isNullOrEmpty(objectType)) {
-      metadata.setObjectType(objectType);
-      ItemStructuredData structuredData =
-          new ItemStructuredData().setObject(StructuredData.getStructuredData(objectType, values));
-      item.setStructuredData(structuredData);
+    String itemObjectType = getSingleValue(objectType, configObjectType,
+        values, StructuredData.STRING_CONVERTER, Strings::isNullOrEmpty);
+    if (!Strings.isNullOrEmpty(itemObjectType)) {
+      metadata.setObjectType(itemObjectType);
+      item.setStructuredData(
+          new ItemStructuredData().setObject(
+              StructuredData.getStructuredData(itemObjectType, values)));
     }
     if (!Strings.isNullOrEmpty(mimeType)) {
       metadata.setMimeType(mimeType);
@@ -584,6 +610,22 @@ public class IndexingItemBuilder {
       Configuration.Parser<T> parser) {
     String field = Configuration.getString(dotField(configKey), "").get();
     String value = Configuration.getString(dotValue(configKey), "").get();
+    return fieldOrValue(configKey, field, value, parser);
+  }
+
+  /**
+   * Constructs a {@link FieldOrValue} instance for the given {@code configKey},
+   * trying first the given field and if that is not does not exist,
+   * or has an empty value, the given default value.
+   *
+   * @param configKey a configuration key prefix, for example, {@code "itemMetadata.title"}
+   * @param field the key to lookup from {@link IndexingItemBuilder#setValues}
+   * @param value the default value
+   * @param parser a configuration {@link Parser} of the appropriate type, for example,
+   *     {@code String} or {@code DateTime}
+   */
+  private static <T> Optional<FieldOrValue<T>> fieldOrValue(String configKey, String field,
+      String value, Configuration.Parser<T> parser) {
     if (field.isEmpty()) {
       if (value.isEmpty()) {
         return Optional.empty();
@@ -620,7 +662,7 @@ public class IndexingItemBuilder {
     private Optional<FieldOrValue<DateTime>> updateTime = Optional.empty();
     private Optional<FieldOrValue<DateTime>> createTime = Optional.empty();
     private Optional<FieldOrValue<String>> language = Optional.empty();
-    private Optional<String> objectType = Optional.empty();
+    private Optional<FieldOrValue<String>> objectType = Optional.empty();
 
     public ConfigDefaults setTitle(Optional<FieldOrValue<String>> title) {
       this.title = title;
@@ -647,7 +689,7 @@ public class IndexingItemBuilder {
       return this;
     }
 
-    public ConfigDefaults setObjectType(Optional<String> objectType) {
+    public ConfigDefaults setObjectType(Optional<FieldOrValue<String>> objectType) {
       this.objectType = objectType;
       return this;
     }
