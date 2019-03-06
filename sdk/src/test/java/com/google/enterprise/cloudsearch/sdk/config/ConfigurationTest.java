@@ -15,8 +15,11 @@
  */
 package com.google.enterprise.cloudsearch.sdk.config;
 
+import static java.nio.charset.StandardCharsets.ISO_8859_1;
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.times;
@@ -28,11 +31,12 @@ import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRul
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRule;
 import com.google.enterprise.cloudsearch.sdk.config.SensitiveDataCodec.SecurityLevel;
 import java.io.File;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.OutputStreamWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -287,9 +291,7 @@ public class ConfigurationTest {
   @Test
   public void testInitConfigWithStringNoPrefix() throws IOException {
     File tmpfile = temporaryFolder.newFile("testplain.properties");
-    try (PrintWriter pw = new PrintWriter(new FileWriter(tmpfile))) {
-      pw.write("test.name=testencoding/4245!");
-    }
+    createFile(tmpfile, ISO_8859_1, "test.name=testencoding/4245!");
     String tmpfilePath = "-Dconfig=" + tmpfile.getAbsolutePath();
     String[] args = {"-Dconfig=test.properties", tmpfilePath};
     Configuration.initConfig(args);
@@ -300,9 +302,7 @@ public class ConfigurationTest {
   @Test
   public void testInitConfigWithStringPlainText() throws IOException {
     File tmpfile = temporaryFolder.newFile("testplain.properties");
-    try (PrintWriter pw = new PrintWriter(new FileWriter(tmpfile))) {
-      pw.write("test.name=pl:testencoding/4245!");
-    }
+    createFile(tmpfile, ISO_8859_1, "test.name=pl:testencoding/4245!");
     String tmpfilePath = "-Dconfig=" + tmpfile.getAbsolutePath();
     String[] args = {"-Dconfig=test.properties", tmpfilePath};
     Configuration.initConfig(args);
@@ -311,11 +311,21 @@ public class ConfigurationTest {
   }
 
   @Test
+  public void initConfig_utf8File_readsUtf8BytesAsLatin1() throws IOException {
+    File tmpfile = temporaryFolder.newFile("testplain.properties");
+    createFile(tmpfile, UTF_8, "test.name=\u20AC3.00");
+    String tmpfilePath = "-Dconfig=" + tmpfile.getAbsolutePath();
+    String[] args = {"-Dconfig=test.properties", tmpfilePath};
+    Configuration.initConfig(args);
+    String value = Configuration.getString("test.name", null).get();
+    assertNotEquals("\u20AC3.00", value);
+    assertEquals(new String("\u20AC3.00".getBytes(UTF_8), ISO_8859_1), value);
+  }
+
+  @Test
   public void testTrimPropertiesFile() throws IOException {
     File tmpfile = temporaryFolder.newFile("testplain.properties");
-    try (PrintWriter pw = new PrintWriter(new FileWriter(tmpfile))) {
-      pw.write("test.name=\\ other string \\");
-    }
+    createFile(tmpfile, ISO_8859_1, "test.name=\\ other string \\");
     String tmpfilePath = "-Dconfig=" + tmpfile.getAbsolutePath();
     String[] args = {"-Dconfig=test.properties", tmpfilePath};
     Configuration.initConfig(args);
@@ -343,12 +353,7 @@ public class ConfigurationTest {
     String readable = "testencoding/4245!";
     String encoded = sensitiveDataCodec.encodeData(readable, SecurityLevel.OBFUSCATED);
     File tmpfile = temporaryFolder.newFile("testObf.properties");
-    try (PrintWriter pw = new PrintWriter(new FileWriter(tmpfile))) {
-      StringBuilder sb = new StringBuilder();
-      sb.append("test.name=");
-      sb.append(encoded);
-      pw.write(sb.toString());
-    }
+    createFile(tmpfile, ISO_8859_1, "test.name=" + encoded);
     String tmpfilePath = "-Dconfig=" + tmpfile.getAbsolutePath();
     String[] args = {"-Dconfig=test.properties", tmpfilePath};
     Configuration.initConfig(args);
@@ -362,12 +367,7 @@ public class ConfigurationTest {
     String readable = "testencoding/4245!";
     String encoded = sensitiveDataCodec.encodeData(readable, SecurityLevel.OBFUSCATED);
     File tmpfile = temporaryFolder.newFile("testObf.properties");
-    try (PrintWriter pw = new PrintWriter(new FileWriter(tmpfile))) {
-      StringBuilder sb = new StringBuilder();
-      sb.append("test.name=");
-      sb.append(encoded + " ");
-      pw.write(sb.toString());
-    }
+    createFile(tmpfile, ISO_8859_1, "test.name=" + encoded + " ");
     String tmpfilePath = "-Dconfig=" + tmpfile.getAbsolutePath();
     String[] args = {"-Dconfig=test.properties", tmpfilePath};
     Configuration.initConfig(args);
@@ -394,9 +394,7 @@ public class ConfigurationTest {
 
   public void testInitConfigWithStringOverride() throws IOException {
     File tmpfile = temporaryFolder.newFile("testconfig.properties");
-    try (PrintWriter pw = new PrintWriter(new FileWriter(tmpfile))) {
-      pw.write("test.param = fileValue");
-    }
+    createFile(tmpfile, ISO_8859_1, "test.param = fileValue");
     String tmpfilePath = "-Dconfig=" + tmpfile.getAbsolutePath();
     String[] args = {tmpfilePath, "-Dtest.param=commandLineValue"};
     Configuration.initConfig(args);
@@ -421,5 +419,11 @@ public class ConfigurationTest {
     Configuration.initConfig(args);
     thrown.expect(InvalidConfigurationException.class);
     Configuration.getString("test.param", null).get();
+  }
+
+  private void createFile(File file, Charset charset, String content) throws IOException {
+    try (OutputStreamWriter out = new OutputStreamWriter(new FileOutputStream(file), charset)) {
+      out.write(content);
+    }
   }
 }

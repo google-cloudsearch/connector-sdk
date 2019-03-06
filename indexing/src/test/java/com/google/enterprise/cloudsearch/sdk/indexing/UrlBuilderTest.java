@@ -15,6 +15,7 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
+import static org.hamcrest.CoreMatchers.isA;
 import static org.junit.Assert.assertEquals;
 
 import com.google.common.collect.ImmutableSet;
@@ -48,6 +49,49 @@ public class UrlBuilderTest {
     allColumnValues.put("name", "product 1");
     UrlBuilder urlBuilder = UrlBuilder.fromConfiguration();
     String golden = "http://anysite/1#2#3/category/product 1";
+    assertEquals(golden, urlBuilder.buildUrl(allColumnValues));
+  }
+
+  @Test
+  public void fromConfiguration_invalidPattern_throwsException() {
+    Properties config = new Properties();
+    String url = "http://anysite/{}";
+    config.setProperty(UrlBuilder.CONFIG_COLUMNS, "id");
+    config.setProperty(UrlBuilder.CONFIG_FORMAT, url);
+    setupConfig.initConfig(config);
+    Map<String, Object> allColumnValues = new HashMap<String, Object>();
+    allColumnValues.put("id", "42");
+    UrlBuilder urlBuilder = UrlBuilder.fromConfiguration();
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectCause(isA(NumberFormatException.class));
+    urlBuilder.buildUrl(allColumnValues);
+  }
+
+  @Test
+  public void fromConfiguration_extraPatternParameter_remainsUnsubstituted() {
+    Properties config = new Properties();
+    String url = "http://anysite/{0}/category/{1}";
+    config.setProperty(UrlBuilder.CONFIG_COLUMNS, "id");
+    config.setProperty(UrlBuilder.CONFIG_FORMAT, url);
+    setupConfig.initConfig(config);
+    Map<String, Object> allColumnValues = new HashMap<String, Object>();
+    allColumnValues.put("id", "42");
+    UrlBuilder urlBuilder = UrlBuilder.fromConfiguration();
+    String golden = "http://anysite/42/category/{1}";
+    assertEquals(golden, urlBuilder.buildUrl(allColumnValues));
+  }
+
+  @Test
+  public void fromConfiguration_nonEnglishHostname_preservesCharacters() {
+    Properties config = new Properties();
+    String url = "http://她今天看起来.com/terms?q={0}";
+    config.setProperty(UrlBuilder.CONFIG_COLUMNS, "id");
+    config.setProperty(UrlBuilder.CONFIG_FORMAT, url);
+    setupConfig.initConfig(config);
+    Map<String, Object> allColumnValues = new HashMap<String, Object>();
+    allColumnValues.put("id", "42");
+    UrlBuilder urlBuilder = UrlBuilder.fromConfiguration();
+    String golden = "http://她今天看起来.com/terms?q=42";
     assertEquals(golden, urlBuilder.buildUrl(allColumnValues));
   }
 
