@@ -85,7 +85,7 @@ public class IndexingItemBuilderTest {
 
     Multimap<String, Object> values = ArrayListMultimap.create();
     Item subject = new IndexingItemBuilder("foo")
-        .setObjectType("myObject")
+        .setObjectType(FieldOrValue.withValue("myObject"))
         .setValues(values)
         .build();
     assertThat(subject,
@@ -99,7 +99,94 @@ public class IndexingItemBuilderTest {
   }
 
   @Test
-  public void testStructuredData_fromConfiguration() {
+  public void testStructuredData_setObjectTypeDeprecated() {
+    Schema schema = new Schema();
+    schema.setObjectDefinitions(
+        Collections.singletonList(
+            new ObjectDefinition()
+                .setName("myObject")
+                .setPropertyDefinitions(Collections.emptyList())));
+    StructuredData.init(schema);
+
+    Multimap<String, Object> values = ArrayListMultimap.create();
+    @SuppressWarnings("deprecation")
+        Item subject = new IndexingItemBuilder("foo")
+            .setObjectType("myObject")
+            .setValues(values)
+            .build();
+    assertThat(subject,
+        equalTo(
+            new Item()
+            .setName("foo")
+            .setMetadata(new ItemMetadata().setObjectType("myObject"))
+            .setStructuredData(
+                new ItemStructuredData()
+                    .setObject(StructuredData.getStructuredData("myObject", values)))));
+  }
+
+  @Test
+  public void testStructuredData_fromConfiguration_objectTypeField() {
+    Schema schema = new Schema();
+    schema.setObjectDefinitions(
+        Collections.singletonList(
+            new ObjectDefinition()
+                .setName("myObject")
+                .setPropertyDefinitions(Collections.emptyList())));
+    StructuredData.init(schema);
+
+    Properties config = new Properties();
+    config.put(IndexingItemBuilder.OBJECT_TYPE, "ignoredObject");
+    config.put(IndexingItemBuilder.OBJECT_TYPE_VALUE, "defaultObject");
+    config.put(IndexingItemBuilder.OBJECT_TYPE_FIELD, "object_type");
+    setupConfig.initConfig(config);
+
+    Multimap<String, Object> values = ArrayListMultimap.create();
+    values.put("object_type", "myObject");
+    Item subject = IndexingItemBuilder.fromConfiguration("foo")
+        .setValues(values)
+        .build();
+    assertThat(subject,
+        equalTo(
+            new Item()
+            .setName("foo")
+            .setMetadata(new ItemMetadata().setObjectType("myObject"))
+            .setStructuredData(
+                new ItemStructuredData()
+                    .setObject(StructuredData.getStructuredData("myObject", values)))));
+  }
+
+  @Test
+  public void testStructuredData_fromConfiguration_objectTypeValue() {
+    Schema schema = new Schema();
+    schema.setObjectDefinitions(
+        Collections.singletonList(
+            new ObjectDefinition()
+                .setName("myObject")
+                .setPropertyDefinitions(Collections.emptyList())));
+    StructuredData.init(schema);
+
+    Properties config = new Properties();
+    config.put(IndexingItemBuilder.OBJECT_TYPE, "ignoredObject");
+    config.put(IndexingItemBuilder.OBJECT_TYPE_VALUE, "myObject");
+    config.put(IndexingItemBuilder.OBJECT_TYPE_FIELD, "object_type");
+    setupConfig.initConfig(config);
+
+    Multimap<String, Object> values = ArrayListMultimap.create();
+    Item subject = IndexingItemBuilder.fromConfiguration("foo")
+        .setValues(values)
+        .build();
+    assertThat(subject,
+        equalTo(
+            new Item()
+            .setName("foo")
+            .setMetadata(new ItemMetadata().setObjectType("myObject"))
+            .setStructuredData(
+                new ItemStructuredData()
+                    .setObject(StructuredData.getStructuredData("myObject", values)))));
+  }
+
+  @Test
+  public void testStructuredData_fromConfiguration_objectTypeDeprecated() {
     Schema schema = new Schema();
     schema.setObjectDefinitions(
         Collections.singletonList(
@@ -110,6 +197,8 @@ public class IndexingItemBuilderTest {
 
     Properties config = new Properties();
     config.put(IndexingItemBuilder.OBJECT_TYPE, "myObject");
+    config.put(IndexingItemBuilder.OBJECT_TYPE_VALUE, "");
+    config.put(IndexingItemBuilder.OBJECT_TYPE_FIELD, "");
     setupConfig.initConfig(config);
 
     Multimap<String, Object> values = ArrayListMultimap.create();

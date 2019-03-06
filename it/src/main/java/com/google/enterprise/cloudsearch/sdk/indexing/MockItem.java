@@ -69,7 +69,7 @@ public class MockItem {
         .setTitle(FieldOrValue.withField(TITLE))
         .setSourceRepositoryUrl(FieldOrValue.withField(URL))
         .setItemType(getItemType(values))
-        .setObjectType(getSingleStringValue(values, OBJECT_TYPE))
+        .setObjectType(FieldOrValue.withValue(getSingleStringValue(values, OBJECT_TYPE)))
         .setMimeType(getSingleStringValue(values, MIME_TYPE))
         .setContainerName(getSingleStringValue(values, CONTAINER))
         .setContentLanguage(FieldOrValue.withField(LANGUAGE))
