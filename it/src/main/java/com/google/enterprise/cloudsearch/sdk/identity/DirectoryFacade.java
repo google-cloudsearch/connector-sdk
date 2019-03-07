@@ -30,6 +30,7 @@ import com.google.api.services.admin.directory.DirectoryScopes;
 import com.google.api.services.admin.directory.model.User;
 import com.google.api.services.admin.directory.model.UserName;
 import com.google.api.services.admin.directory.model.Users;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.enterprise.cloudsearch.sdk.BaseApiService.RetryRequestInitializer;
@@ -39,7 +40,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -58,6 +58,9 @@ public class DirectoryFacade {
   // The max documented in
   // https://developers.google.com/admin-sdk/directory/v1/reference/users/list.
   private static final Integer NUM_USERS_PER_PAGE = 500;
+  private static final List<String> ADMIN_SCOPES = ImmutableList.of(
+      DirectoryScopes.ADMIN_DIRECTORY_USER,
+      DirectoryScopes.ADMIN_DIRECTORY_GROUP);
 
   private final Directory directory;
   private final String domain;
@@ -192,60 +195,67 @@ public class DirectoryFacade {
     return ImmutableSet.copyOf(allUserIds);
   }
 
-  private static Credential authorize(
-      InputStream serviceKeyStream) throws IOException {
-
-    return GoogleCredential
-        .fromStream(serviceKeyStream)
-        .createScoped(Arrays.asList(
-            DirectoryScopes.ADMIN_DIRECTORY_USER, DirectoryScopes.ADMIN_DIRECTORY_GROUP));
-  }
-
   /**
    * Builder for DirectoryFacade objects.
    *
    * @param serviceKeyStream {@link InputStream} for the JSON file containing the service account
-   * key to authenticate with the Cloud Identity service.
-   * @param appName an arbitrary name for client.
+   *   key to authenticate with the Cloud Identity service.
+   * @param adminEmail the email of the domain's admin account
+   * @param domain the organization's domain
    */
 
-  static DirectoryFacade create(String appName, InputStream serviceKeyStream, String domain)
+  static DirectoryFacade create(
+      InputStream serviceKeyStream, String adminEmail, String domain)
       throws IOException, GeneralSecurityException {
-    Credential credential = authorize(serviceKeyStream);
     JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
     HttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+    GoogleCredential credential = GoogleCredential
+        .fromStream(serviceKeyStream)
+        .createScoped(ADMIN_SCOPES);
+    Credential adminCredential = new GoogleCredential.Builder()
+        .setTransport(httpTransport)
+        .setJsonFactory(jsonFactory)
+        .setServiceAccountId(credential.getServiceAccountId())
+        .setServiceAccountPrivateKey(credential.getServiceAccountPrivateKey())
+        .setServiceAccountScopes(ADMIN_SCOPES)
+        .setServiceAccountUser(adminEmail)
+        .build();
     // Google services are rate-limited. The RetryPolicy allows to rety when a
     // 429 HTTP status response (Too Many Requests) is received.
     RetryPolicy retryPolicy = new RetryPolicy.Builder().build();
     RetryRequestInitializer requestInitializer = new RetryRequestInitializer(retryPolicy);
     Directory.Builder directoryBuilder = new Directory.Builder(
         httpTransport, jsonFactory, request -> {
-      credential.initialize(request);
+      adminCredential.initialize(request);
       requestInitializer.initialize(request);
     });
-    Directory directory = directoryBuilder.setApplicationName(appName).build();
+    Directory directory = directoryBuilder.build();
     return new DirectoryFacade(directory, domain);
   }
 
   public static void main(String[] args) throws IOException, GeneralSecurityException {
+    final String NL = System.lineSeparator();
+    final String commonParams = "<admin_email> <path/to/key.json> <domain>";
+
     if (args.length < 3) {
       System.err.println(
-          "Wrong number of arguments." + System.lineSeparator()
-              + "Usage: " + System.lineSeparator()
-              + "  List: DirectoryFacade <path/to/key.json> <domain> l" + System.lineSeparator()
-              + "  Delete: DirectoryFacade <path/to/key> <domain> d "
-              + "<comma-separated-emails-list>" + System.lineSeparator()
-              + "  Create: DirectoryFacade <path/to/key> <id-source> c "
-              + "<comma-separated-emails-list>" + System.lineSeparator());
+          "Wrong number of arguments." + NL
+              + "Usage: " + NL
+              + "  List: DirectoryFacade " + commonParams + " l" + NL
+              + "  Delete: DirectoryFacade " + commonParams + " d "
+              + "<comma-separated-emails-list>" + NL
+              + "  Create: DirectoryFacade " + commonParams + " c "
+              + "<comma-separated-emails-list>" + NL);
     }
 
-    String keyPath = args[0];
-    String domain = args[1];
-    String command = args[2].toLowerCase();
-    ImmutableSet<String> emails = args.length > 3 ? ImmutableSet.copyOf(args[3].split(",")) : null;
+    String adminEmail = args[0];
+    String keyPath = args[1];
+    String domain = args[2];
+    String command = args[3].toLowerCase();
+    ImmutableSet<String> emails = args.length > 4 ? ImmutableSet.copyOf(args[4].split(",")) : null;
 
     DirectoryFacade directoryFacade = DirectoryFacade.create(
-        DirectoryFacade.class.getName(), new FileInputStream(new File(keyPath)), domain);
+        new FileInputStream(new File(keyPath)), adminEmail, domain);
 
     if (command.startsWith("l")) {
       System.out.println("Listing all users in the domain...");
@@ -261,12 +271,5 @@ public class DirectoryFacade {
       System.err.println(format("Invalid command \"%s\".", command));
       System.exit(1);
     }
-  }
-
-  public void updateUser(User user) throws IOException {
-    directory
-        .users()
-        .update(user.getPrimaryEmail(), user)
-        .execute();
   }
 }
