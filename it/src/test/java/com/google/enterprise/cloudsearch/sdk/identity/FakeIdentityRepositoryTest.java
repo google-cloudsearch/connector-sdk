@@ -15,19 +15,21 @@
  */
 package com.google.enterprise.cloudsearch.sdk.identity;
 
-import static com.google.common.truth.Truth.assertThat;
-import static java.lang.String.format;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.google.api.services.cloudidentity.v1.model.EntityKey;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-import com.google.common.truth.Correspondence;
 import java.io.IOException;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.annotation.Nullable;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -58,8 +60,6 @@ public class FakeIdentityRepositoryTest {
         { {"g1", "g2"}, {"g3"} },
         { {"g4", "g5"}, {"g6"} }
     };
-    final IdentityUserCorrespondence userCorrespondence = new IdentityUserCorrespondence(domain);
-    final IdentityGroupCorrespondence groupCorrespondence = new IdentityGroupCorrespondence(domain);
 
     FakeIdentityRepository repo =
         new FakeIdentityRepository.Builder(domain)
@@ -72,33 +72,41 @@ public class FakeIdentityRepositoryTest {
       String[][] userPages = userSnapshots[i];
       String[][] groupPages = groupSnapshots[i];
 
-      assertThat(repo.hasMoreSnapshots()).isTrue();
-      assertThat(repo.nextSnapshot()).isNotNull();
+      assertTrue(repo.hasMoreSnapshots());
+      assertNotNull(repo.nextSnapshot());
       repo.init(mockRepoContext);
       for (int j = 0; j < userPages.length; j++) {
         String checkpoint = (j == 0) ? "" : String.valueOf(j);
-        assertThat(repo.listUsers(checkpoint.getBytes()))
-            .comparingElementsUsing(userCorrespondence)
-            .containsExactlyElementsIn(userPages[j]);
+        Set<String> usersListed = mapSet(
+            Sets.newHashSet(repo.listUsers(checkpoint.getBytes())),
+            user -> user.getGoogleIdentity());
+        assertEquals(
+            mapSet(Sets.newHashSet(userPages[j]), u -> u + "@" + domain),
+            usersListed);
       }
       for (int j = 0; j < groupPages.length; j++) {
         String checkpoint = (j == 0) ? "" : String.valueOf(j);
-        assertThat(repo.listGroups(checkpoint.getBytes()))
-            .comparingElementsUsing(groupCorrespondence)
-            .containsExactlyElementsIn(groupPages[j]);
+        Set<String> groupsListed = mapSet(
+            Sets.newHashSet(repo.listGroups(checkpoint.getBytes())),
+            group -> group.getIdentity());
+        assertEquals(
+            mapSet(Sets.newHashSet(groupPages[j]), g -> domain + "/" + g),
+            groupsListed);
       }
       if (i > 0) {
-        assertThat(repo.getRemovedUserNames())
-            .containsExactlyElementsIn(
-                Sets.difference(flatten(userSnapshots[i - 1]), flatten(userSnapshots[i])));
+        assertEquals(
+            repo.getRemovedUserNames(),
+            Sets.difference(flatten(userSnapshots[i - 1]), flatten(userSnapshots[i]))
+        );
         Set<String> removedGroupNames =
             Sets.difference(flatten(groupSnapshots[i - 1]), flatten(groupSnapshots[i]));
-        assertThat(repo.getRemovedGroupIds())
-            .containsExactlyElementsIn(
-                removedGroupNames.stream().map(n -> domain + "/" + n).collect(Collectors.toSet()));
+        assertEquals(
+            repo.getRemovedGroupIds(),
+            removedGroupNames.stream().map(n -> domain + "/" + n).collect(Collectors.toSet())
+        );
       }
     }
-    assertThat(repo.hasMoreSnapshots()).isFalse();
+    assertFalse(repo.hasMoreSnapshots());
   }
 
   @Test
@@ -107,8 +115,7 @@ public class FakeIdentityRepositoryTest {
         .addSnapshot(
             new String[][] { {"  u1", "  u2", "  u3  "} }, new String[][] {})
         .build();
-    assertThat(repo.getAllUserEmails())
-        .containsAllOf("u1@X", "u2@X", "u3@X");
+    assertTrue(repo.getAllUserEmails().containsAll(ImmutableSet.of("u1@X", "u2@X", "u3@X")));
   }
 
   @Test
@@ -117,8 +124,9 @@ public class FakeIdentityRepositoryTest {
         .addSnapshot(
             new String[][] {}, new String[][] { {"  g1", "  g2", "  g3  "} })
         .build();
-    assertThat(repo.getAllGroupIds())
-        .containsAllOf("X/g1", "X/g2", "X/g3");
+    assertTrue(
+        repo.getAllGroupIds()
+            .containsAll(ImmutableSet.of("X/g1", "X/g2", "X/g3")));
   }
 
   @Test
@@ -128,8 +136,10 @@ public class FakeIdentityRepositoryTest {
             new String[][] { {"u1", "u2"}, {"u3"}, {"u4", "u5"} }, new String[][]{})
         .build();
     FakeIdentityRepository.Snapshot snapshot = repo.nextSnapshot();
-    assertThat(snapshot.getAllUserNames())
-        .containsExactly("u1", "u2", "u3", "u4", "u5");
+    assertEquals(
+        snapshot.getAllUserNames(),
+        ImmutableSet.of("u1", "u2", "u3", "u4", "u5")
+    );
   }
 
   @Test
@@ -139,8 +149,10 @@ public class FakeIdentityRepositoryTest {
             new String[][]{}, new String[][] { {"g1", "g2"}, {"g3"}, {"g4", "g5"} })
         .build();
     FakeIdentityRepository.Snapshot snapshot = repo.nextSnapshot();
-    assertThat(snapshot.getAllGroupIds())
-        .containsExactly("X/g1", "X/g2", "X/g3", "X/g4", "X/g5");
+    assertEquals(
+        snapshot.getAllGroupIds(),
+        ImmutableSet.of("X/g1", "X/g2", "X/g3", "X/g4", "X/g5")
+    );
   }
 
   @Test
@@ -150,8 +162,10 @@ public class FakeIdentityRepositoryTest {
         .addSnapshot(new String[][] { {"u3"} }, new String[][]{})
         .addSnapshot(new String[][] { {"u4", "u5"} }, new String[][]{})
         .build();
-    assertThat(repo.getAllUserEmails())
-        .containsExactly("u1@X", "u2@X", "u3@X", "u4@X", "u5@X");
+    assertEquals(
+        repo.getAllUserEmails(),
+        ImmutableSet.of("u1@X", "u2@X", "u3@X", "u4@X", "u5@X")
+    );
   }
 
   @Test
@@ -161,8 +175,10 @@ public class FakeIdentityRepositoryTest {
         .addSnapshot(new String[][]{}, new String[][] { {"g3"} })
         .addSnapshot(new String[][]{}, new String[][] { {"g4", "g5"} })
         .build();
-    assertThat(repo.getAllGroupIds())
-        .containsExactly("X/g1", "X/g2", "X/g3", "X/g4", "X/g5");
+    assertEquals(
+        repo.getAllGroupIds(),
+        ImmutableSet.of("X/g1", "X/g2", "X/g3", "X/g4", "X/g5")
+    );
   }
 
   @Test
@@ -183,52 +199,6 @@ public class FakeIdentityRepositoryTest {
     thrown.expect(IllegalArgumentException.class);
     thrown.expectMessage("empty");
     new FakeIdentityRepository.Builder("").build();
-  }
-
-  /**
-   * Helper class to allow to compare IdentityUser objects with a user's email.
-   */
-  private static class IdentityUserCorrespondence extends Correspondence<IdentityUser, String> {
-    final String domain;
-
-    IdentityUserCorrespondence(String domain) {
-      this.domain = domain;
-    }
-
-    @Override
-    public boolean compare(@Nullable IdentityUser actual, @Nullable String expected) {
-      String expectedEmail = format("%s@%s", expected, domain);
-      return actual != null && expected != null && expectedEmail.equals(actual.getGoogleIdentity());
-    }
-
-    @Override
-    public String toString() {
-      // This must be implemented, but there's nothing really useful to say here.
-      return "has a Google identity of";
-    }
-  }
-
-  /**
-   * Helper class to allow to compare IdentityGroup objects with a groups ID.
-   */
-  private static class IdentityGroupCorrespondence extends Correspondence<IdentityGroup, String> {
-    final String domain;
-
-    IdentityGroupCorrespondence(String domain) {
-      this.domain = domain;
-    }
-
-    @Override
-    public boolean compare(@Nullable IdentityGroup actual, @Nullable String expected) {
-      String expectedGroupId = format("%s/%s", domain, expected);
-      return actual != null && expected != null && expectedGroupId.equals(actual.getIdentity());
-    }
-
-    @Override
-    public String toString() {
-      // This must be implemented, but there's nothing really useful to say here.
-      return "has an identity of";
-    }
   }
 
   private void configureMockRepositoryContext() {
@@ -255,5 +225,15 @@ public class FakeIdentityRepositoryTest {
    */
   private <T> Set<T> flatten(T[][] matrix) {
     return Stream.of(matrix).flatMap(Stream::of).collect(Collectors.toSet());
+  }
+
+  /**
+   * Maps a set to another one using a provided transformation function.
+   */
+  private static <T, S> Set<S> mapSet(Set<T> set, Function<T, S> transformer) {
+    return set
+        .stream()
+        .map(transformer)
+        .collect(ImmutableSet.toImmutableSet());
   }
 }

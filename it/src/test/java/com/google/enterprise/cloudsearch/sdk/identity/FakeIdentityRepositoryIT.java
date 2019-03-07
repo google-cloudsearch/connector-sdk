@@ -16,13 +16,18 @@
 package com.google.enterprise.cloudsearch.sdk.identity;
 
 import static com.google.common.base.Verify.verify;
-import static com.google.common.truth.Truth.assertThat;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.SERVICE_KEY_PROPERTY_NAME;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.qualifyTestProperty;
 import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
+import static org.hamcrest.CoreMatchers.anything;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.not;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThat;
 
 import com.google.api.services.admin.directory.model.User;
 import com.google.common.base.Strings;
@@ -33,7 +38,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.security.GeneralSecurityException;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.IntFunction;
 import java.util.logging.Handler;
@@ -72,6 +79,8 @@ public class FakeIdentityRepositoryIT {
   private static final String CUSTOMER_ID_PROPERTY_NAME = qualifyTestProperty("customerId");
   /// Domain associated with the customer ID above.
   private static final String DOMAIN_PROPERTY_NAME = qualifyTestProperty("domain");
+  private static final String ADMIN_USER_ID_PROPERTY_NAME =
+      qualifyTestProperty("adminUserId");
   // A random user prefix to avoid clashes if multiple instances of the test are
   // run concurrently.
   private static final String USERNAME_PREFIX_FORMAT =
@@ -82,6 +91,7 @@ public class FakeIdentityRepositoryIT {
   private static final long REPOSITORY_CLOSED_POLL_INTERVAL_SECS = 5;
 
   private static File serviceKeyFile;
+  private static String adminUserId;
   private static String customerId;
   private static String identitySourceId;
 
@@ -118,6 +128,8 @@ public class FakeIdentityRepositoryIT {
   @BeforeClass
   public static void readTestProperties() {
     logger.info("Reading test properties...");
+    adminUserId = System.getProperty(ADMIN_USER_ID_PROPERTY_NAME);
+    verify(!Strings.isNullOrEmpty(adminUserId));
     String serviceKeyPath = System.getProperty(SERVICE_KEY_PROPERTY_NAME);
     verify(!Strings.isNullOrEmpty(serviceKeyPath));
     serviceKeyFile = new File(serviceKeyPath);
@@ -172,25 +184,25 @@ public class FakeIdentityRepositoryIT {
         String externalId = FakeIdentityRepository
             .buildExternalIdentity(fakeIdRepo.getDomain(), userKey);
         Object entry = getSchemaValueForUser(userEmail);
-        assertThat(entry)
-            .isEqualTo(externalId);
+        assertEquals(externalId, entry);
         logger.log(Level.FINE, "User {0} is good.", userEmail);
       }
       logger.info("Checking removed users...");
       for (String userKey : fakeIdRepo.getRemovedUserNames()) {
         String userEmail = FakeIdentityRepository.buildUserEmail(fakeIdRepo.getDomain(), userKey);
         Object entry = getSchemaValueForUser(userEmail);
-        assertThat(entry)
-            .isEqualTo("");
+        assertEquals("", entry);
         logger.log(Level.FINE, "Removed user {0} was synced correctly.", userEmail);
       }
       logger.info("Checking existing groups...");
       ImmutableSet<String> existingGroupIds = cloudIdentityFacade.listAllGroupIds();
-      assertThat(existingGroupIds)
-          .containsAllIn(allSnapshotGroupIds);
+      Set<String> difference = new HashSet<String>(allSnapshotGroupIds);
+      difference.removeAll(existingGroupIds);
+      assertThat(difference, not(hasItem(anything())));
       logger.info("Checking removed groups...");
-      assertThat(existingGroupIds)
-          .containsNoneIn(fakeIdRepo.getRemovedGroupIds());
+      Set<String> intersection = new HashSet<String>(existingGroupIds);
+      intersection.retainAll(fakeIdRepo.getRemovedGroupIds());
+      assertThat(intersection, not(hasItem(anything())));
     }
   }
 
@@ -237,8 +249,8 @@ public class FakeIdentityRepositoryIT {
   private void setUpUsers() throws IOException, GeneralSecurityException {
     logger.info("Setting up users...");
     dirFacade = DirectoryFacade.create(
-        FakeIdentityRepositoryIT.class.getName(),
         new FileInputStream(serviceKeyFile),
+        adminUserId,
         fakeIdRepo.getDomain());
     dirFacade.createUsers(fakeIdRepo.getAllUserEmails());
   }
@@ -249,8 +261,9 @@ public class FakeIdentityRepositoryIT {
     cloudIdentityFacade = CloudIdentityFacade.create(
         identitySourceId, new FileInputStream(serviceKeyFile),
         FakeIdentityRepositoryIT.class.getName());
-    assertThat(cloudIdentityFacade.listAllGroupIds())
-        .containsNoneIn(fakeIdRepo.getAllGroupIds());
+    Set<String> intersection = new HashSet<String>(cloudIdentityFacade.listAllGroupIds());
+    intersection.retainAll(fakeIdRepo.getAllGroupIds());
+    assertThat(intersection, not(hasItem(anything())));
   }
 
   private void setUpPropertiesFile() throws IOException {
@@ -285,13 +298,10 @@ public class FakeIdentityRepositoryIT {
     User user = dirFacade.fetchUser(userEmail);
     Map<String, Map<String, Object>> schemas = user.getCustomSchemas();
 
-    assertThat(schemas)
-        .isNotNull();
-    assertThat(schemas)
-        .containsKey(identitySourceId);
+    assertNotNull(schemas);
+    assertThat(schemas.keySet(), hasItem(identitySourceId));
     Map<String, Object> sourceIdMap = schemas.get(identitySourceId);
-    assertThat(sourceIdMap)
-        .containsKey(idKey);
+    assertThat(sourceIdMap.keySet(), hasItem(idKey));
     return sourceIdMap.get(idKey);
   }
 }
