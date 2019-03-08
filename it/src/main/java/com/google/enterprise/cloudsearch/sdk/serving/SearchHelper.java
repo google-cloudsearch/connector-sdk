@@ -32,7 +32,8 @@ import java.util.Set;
  * Sample usage:
  *
  * <pre>
- *   SearchAuthInfo userAuthInfo = new SearchAuthInfo(clientSecrets, credentialsDirectory, userEmail);
+ *   SearchAuthInfo userAuthInfo =
+ *       new SearchAuthInfo(clientSecrets, credentialsDirectory, userEmail);
  *   SearchHelper searchHelper = SearchHelper.createSearchHelper(
  *       userAuthInfo,
  *       searchApplicationId,
@@ -55,10 +56,10 @@ public class SearchHelper {
   /**
    * Factory method for {@code SearchHelper} objects.
    *
-   * @param searchAuthInfo - object containing the info to authenticate the impersonated user.
-   * @param searchApplicationId - ID of the serving application linked to the data sourced containing
-   *  the items to serving (this is can be obtained from the Admin console).
-   * @param rootUrl - URL of the Indexing API.
+   * @param searchAuthInfo object containing the info to authenticate the impersonated user
+   * @param searchApplicationId ID of the serving application linked to the data sourced containing
+   *  the items to serving (this is can be obtained from the Admin console)
+   * @param rootUrl URL of the Indexing API
    */
   public static SearchHelper createSearchHelper(
       SearchAuthInfo searchAuthInfo, String searchApplicationId, Optional<String> rootUrl)
@@ -99,17 +100,17 @@ public class SearchHelper {
   }
 
   public static void main(String args[]) throws GeneralSecurityException, IOException {
-    final String NL = System.lineSeparator();
+    String nl = System.lineSeparator();
     if (args.length < 6) {
       System.err.println(
-          "Usage: SearchHelper <secrets_path> <store_dir> <user_email> <root_url> <app_id>" + NL +
-          "where" + NL +
-          "  <secrets_path>: path to the clients secret JSON of the user doing the serving." + NL +
-          "  <store_dir>: path to the directory with the stored credentials for the user." + NL +
-          "  <user_email>: e-mail of the user performing the serving" + NL +
-          "  <root_url>: URL of the Indexing API endpoint." + NL +
-          "  <app_id>: ID of the serving application." + NL +
-          "  <query>: Query for the items to serving." + NL
+          "Usage: SearchHelper <secrets_path> <store_dir> <user_email> <root_url> <app_id>" + nl
+          + "where" + nl
+          + "  <secrets_path>: path to the clients secret JSON of the user doing the serving." + nl
+          + "  <store_dir>: path to the directory with the stored credentials for the user." + nl
+          + "  <user_email>: e-mail of the user performing the serving" + nl
+          + "  <root_url>: URL of the Indexing API endpoint." + nl
+          + "  <app_id>: ID of the serving application." + nl
+          + "  <query>: Query for the items to serving." + nl
       );
       System.exit(1);
     }

@@ -57,14 +57,14 @@ public class SearchTestUtils {
     boolean serving;
     SearchResponse searchResponse = searchHelper.search(query);
     long resultCountExact = searchResponse.getResultCountExact();
-    logger.log(Level.FINE,"Search response: {0} ", searchResponse.toPrettyString());
+    logger.log(Level.FINE, "Search response: {0}", searchResponse.toPrettyString());
     if (resultCountExact > 0) {
       for (SearchResult result : searchResponse.getResults()) {
         boolean titlePresent = result.getTitle().equals(itemId);
         boolean isSnippetRight = result.getSnippet().getSnippet().contains(query);
         serving = titlePresent && isSnippetRight;
         if (serving) {
-          logger.log(Level.FINE,"Expected Item in Search Result : {0} ", result);
+          logger.log(Level.FINE, "Expected Item in Search Result: {0}", result);
           served = true;
         } else {
           served = false;
