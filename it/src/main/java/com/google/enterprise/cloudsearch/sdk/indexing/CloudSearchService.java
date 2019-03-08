@@ -181,17 +181,18 @@ public class CloudSearchService {
    * Can be used as periodic cleanup of items in the datasource.
    */
   public static void main(String[] args) throws IOException, GeneralSecurityException {
-    final String NL = System.lineSeparator();
+    String nl = System.lineSeparator();
     String command = args[0];
     if (args.length != 4) {
       System.err.println(
-          "Wrong number of arguments" + NL
+          "Wrong number of arguments" + nl
               + " Usage: java CloudSearchService <delete> <serviceKeyPath> <datasourceId> <rootUrl>"
-              + "where" + NL
+              + "where" + nl
               + "  delete: command/operation to delete all items from the given datasource.... "
-              + "  serviceKeyPath: path to the service account key" + NL
-              + "  dataSourceId: indexing source ID" + NL
-              + "  rootUrl: URL of the Indexing API endpoint." + NL);
+              + nl
+              + "  serviceKeyPath: path to the service account key" + nl
+              + "  dataSourceId: indexing source ID" + nl
+              + "  rootUrl: URL of the Indexing API endpoint." + nl);
       System.exit(1);
     } else {
       System.out.println("Right number of arguments supplied");
