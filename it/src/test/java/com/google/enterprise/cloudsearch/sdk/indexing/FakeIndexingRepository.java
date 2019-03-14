@@ -17,11 +17,14 @@ package com.google.enterprise.cloudsearch.sdk.indexing;
 
 import static java.lang.String.format;
 
+import com.google.api.client.http.AbstractInputStreamContent;
+import com.google.api.client.http.ByteArrayContent;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.common.collect.ImmutableList;
 import com.google.enterprise.cloudsearch.sdk.CheckpointCloseableIterable;
 import com.google.enterprise.cloudsearch.sdk.CheckpointCloseableIterableImpl;
 import com.google.enterprise.cloudsearch.sdk.RepositoryException;
+import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService.ContentFormat;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.ApiOperation;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.Repository;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.RepositoryContext;
@@ -163,8 +166,11 @@ public class FakeIndexingRepository implements Repository {
   }
 
   private RepositoryDoc getItem(MockItem createItem) {
+    AbstractInputStreamContent content =
+        ByteArrayContent.fromString("", createItem.getItem().getName());
     return new RepositoryDoc.Builder()
         .setItem(createItem.getItem())
+        .setContent(content, ContentFormat.RAW)
         .build();
   }
 }

@@ -36,7 +36,6 @@ import com.google.enterprise.cloudsearch.sdk.indexing.StructuredDataHelper;
 import com.google.enterprise.cloudsearch.sdk.indexing.TestUtils;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.FullTraversalConnector;
 import com.google.enterprise.cloudsearch.sdk.sdk.ConnectorStats;
-import com.google.enterprise.cloudsearch.sdk.serving.SearchAuthInfo;
 import com.google.enterprise.cloudsearch.sdk.serving.SearchHelper;
 import com.google.enterprise.cloudsearch.sdk.serving.SearchTestUtils;
 import java.io.File;
@@ -136,8 +135,9 @@ public class CsvIT {
     keyFilePath = serviceKeyPath.toAbsolutePath().toString();
     v1Client = new CloudSearchService(keyFilePath, indexingSourceId, rootUrl);
     util = new TestUtils(v1Client);
+    String searchApplicationId = System.getProperty(APPLICATION_ID_PROPERTY_NAME);
     String[] authInfo = System.getProperty(AUTH_INFO_PROPERTY_NAME).split(",");
-    searchHelper = returnSearchHelper(authInfo[0], authInfo[1], authInfo[2]);
+    searchHelper = SearchTestUtils.getSearchHelper(authInfo, searchApplicationId, rootUrl);
     StructuredDataHelper.verifyMockContentDatasourceSchema(v1Client.getSchema());
   }
 
@@ -429,27 +429,6 @@ public class CsvIT {
             .build();
     csvConnector.start();
     return csvConnector;
-  }
-
-  private static SearchHelper returnSearchHelper(
-      String authorisedUserEmail,
-      String credentialsDirPath,
-      String clientCredPath) throws GeneralSecurityException, IOException {
-    String validUserEmail = authorisedUserEmail;
-    Path clientCredentialPath = Paths.get(clientCredPath);
-    Path credentialsDirectoryPath = Paths.get(credentialsDirPath);
-    assertTrue(clientCredentialPath.toFile().exists());
-    assertTrue(credentialsDirectoryPath.toFile().exists());
-    String searchAppId = System.getProperty(APPLICATION_ID_PROPERTY_NAME);
-    authorisedUserEmail = validUserEmail;
-    searchApplicationId = searchAppId;
-    File clientCredentialsFile = clientCredentialPath.toFile();
-    File credentialsDirectory = credentialsDirectoryPath.toFile();
-    SearchAuthInfo searchAuthInfo =
-        new SearchAuthInfo(clientCredentialsFile, credentialsDirectory, authorisedUserEmail);
-    SearchHelper searchHelper = SearchHelper.createSearchHelper(
-        searchAuthInfo, searchApplicationId, rootUrl);
-    return searchHelper;
   }
 
   private void createFile(File file, String content) throws IOException {

@@ -15,9 +15,14 @@
  */
 package com.google.enterprise.cloudsearch.sdk.serving;
 
+import static org.junit.Assert.assertTrue;
+
 import com.google.api.services.cloudsearch.v1.model.SearchResponse;
 import com.google.api.services.cloudsearch.v1.model.SearchResult;
+import java.io.File;
 import java.io.IOException;
+import java.security.GeneralSecurityException;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -72,5 +77,39 @@ public class SearchTestUtils {
       }
     }
     return served;
+  }
+
+  /**
+   * Utility method to return SearchHelper object.
+   * 
+   * @param authInfo string array containing
+   * userEmail of the user to client secrets file,
+   * credentialsDirectory path containing the StoredCredential file and
+   * clientSecrets path to the client secrets JSON file
+   * @param searchApplicationId Id of the serving application
+   * @param rootUrl URL of the Indexing API
+   */
+  public static SearchHelper getSearchHelper(
+      String[] authInfo,
+      String applicationId,
+      Optional<String> rootUrl) throws IOException, GeneralSecurityException {
+    if (authInfo.length < 3) {
+      throw new IllegalArgumentException("Missing authInfo parameters. Paramaters include "
+          + "-Dapi.test.authInfo=user1@domain.com,${credentials_dir},${client_secrets}");
+    }
+    String authorizedUserEmail = authInfo[0];
+    String credDirectory = authInfo[1];
+    String clientCredential = authInfo[2];
+    File clientCredentials = new File(clientCredential);
+    assertTrue(
+        String.format("Client credentials file %s does not exist", clientCredentials),
+        clientCredentials.exists());
+    File credentialsDirectory = new File(credDirectory);
+    assertTrue(
+        String.format("Credentials directory %s does not exist", credentialsDirectory),
+        credentialsDirectory.exists());
+    SearchAuthInfo searchAuthInfo =
+        new SearchAuthInfo(clientCredentials, credentialsDirectory, authorizedUserEmail);
+    return SearchHelper.createSearchHelper(searchAuthInfo, applicationId, rootUrl);
   }
 }

@@ -27,10 +27,13 @@ import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.common.base.Strings;
 import com.google.enterprise.cloudsearch.sdk.Util;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
+import com.google.enterprise.cloudsearch.sdk.indexing.DefaultAcl.DefaultAclMode;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
 import com.google.enterprise.cloudsearch.sdk.indexing.StructuredData.ResetStructuredDataRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.FullTraversalConnector;
 import com.google.enterprise.cloudsearch.sdk.sdk.ConnectorStats;
+import com.google.enterprise.cloudsearch.sdk.serving.SearchHelper;
+import com.google.enterprise.cloudsearch.sdk.serving.SearchTestUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -44,7 +47,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.awaitility.Awaitility;
 import org.awaitility.Duration;
-import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
@@ -62,13 +64,18 @@ public class FakeIndexingRepositoryIT {
   // The ID of the CloudSearch indexing source where content is stored.
   private static final String DATA_SOURCE_ID_PROPERTY_NAME = qualifyTestProperty("sourceId");
   private static final String ROOT_URL_PROPERTY_NAME = qualifyTestProperty("rootUrl");
+  private static final String APPLICATION_ID_PROPERTY_NAME =
+      qualifyTestProperty("searchApplicationId");
+  private static final String AUTH_INFO_PROPERTY_NAME =
+      qualifyTestProperty("authInfo");
   private static final int WAIT_FOR_CONNECTOR_RUN_SECS = 60;
   private static String keyFilePath;
   private static String indexingSourceId;
   private static Optional<String> rootUrl;
   private static CloudSearchService v1Client;
   private static TestUtils testUtils;
-  private String[] args;
+  private static SearchHelper searchHelper;
+  private static SearchTestUtils searchUtil;
 
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public TemporaryFolder configFolder = new TemporaryFolder();
@@ -80,6 +87,9 @@ public class FakeIndexingRepositoryIT {
     v1Client = new CloudSearchService(keyFilePath, indexingSourceId, rootUrl);
     testUtils = new TestUtils(v1Client);
     StructuredDataHelper.verifyMockContentDatasourceSchema(v1Client.getSchema());
+    String searchApplicationId = System.getProperty(APPLICATION_ID_PROPERTY_NAME);
+    String[] authInfo = System.getProperty(AUTH_INFO_PROPERTY_NAME).split(",");
+    searchHelper = SearchTestUtils.getSearchHelper(authInfo, searchApplicationId, rootUrl);
   }
 
   private static void validateInputParams() throws Exception {
@@ -103,11 +113,7 @@ public class FakeIndexingRepositoryIT {
     keyFilePath = serviceKeyPath.toAbsolutePath().toString();
   }
 
-  @Before
-  public void setUpPropertiesFile() throws IOException {
-    logger.log(Level.FINE, "Setting up properties file.");
-    File file = configFolder.newFile();
-    args = new String[] {"-Dconfig=" + file.getAbsolutePath()};
+  private Properties createRequiredProperties() throws IOException {
     Properties config = new Properties();
     rootUrl.ifPresent(r -> config.setProperty("api.rootUrl", r));
     config.setProperty("api.sourceId", indexingSourceId);
@@ -116,11 +122,19 @@ public class FakeIndexingRepositoryIT {
     config.setProperty("connector.checkpointDirectory",
         configFolder.newFolder().getAbsolutePath());
     config.setProperty("traverse.queueTag", "mockConnectorQueue_" + getRandomId());
+    return config;
+  }
+
+  private String[] setupConfiguration(Properties additionalConfig) throws IOException {
+    Properties config = createRequiredProperties();
+    config.putAll(additionalConfig);
     logger.log(Level.INFO, "Config file properties: {0}", config);
+    File file = configFolder.newFile();
     try (FileOutputStream output = new FileOutputStream(file)) {
       config.store(output, "properties file");
       output.flush();
     }
+    return new String[] {"-Dconfig=" + file.getAbsolutePath()};
   }
 
   @Test
@@ -132,11 +146,10 @@ public class FakeIndexingRepositoryIT {
         .setContentLanguage("en-us")
         .setItemType(ItemType.CONTENT_ITEM.toString())
         .build();
-
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(item))
         .build();
-    runFullTraversalConnector(mockRepo);
+    runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
     testUtils.waitUntilEqual(itemId, item.getItem());
   }
 
@@ -156,12 +169,11 @@ public class FakeIndexingRepositoryIT {
         .setContentLanguage("en-us")
         .setItemType(ItemType.CONTAINER_ITEM.toString())
         .build();
-
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(itemPdf))
         .addPage(asList(itemHtm))
         .build();
-    runFullTraversalConnector(mockRepo);
+    runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
     testUtils.waitUntilEqual(pdfItemId, itemPdf.getItem());
     testUtils.waitUntilEqual(htmItemId, itemHtm.getItem());
   }
@@ -185,7 +197,7 @@ public class FakeIndexingRepositoryIT {
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(itemXslt, itemXml))
         .build();
-    runFullTraversalConnector(mockRepo);
+    runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
     try {
       testUtils.waitUntilEqual(servicesItemId, itemXslt.getItem());
       testUtils.waitUntilEqual(accessResourceItemId, itemXml.getItem());
@@ -206,7 +218,7 @@ public class FakeIndexingRepositoryIT {
           .atMost(Duration.FIVE_MINUTES)
           .pollInSameThread()
           .until(() -> {
-            runFullTraversalConnector(mockRepoIterate);
+            runAwaitFullTraversalConnector(mockRepoIterate, setupConfiguration(new Properties()));
             return ConnectorStats.getSuccessfulFullTraversalsCount() > completedTraversals;
           });
       testUtils.waitUntilEqual(accessResourceItemId, updateItemXml.getItem());
@@ -215,6 +227,34 @@ public class FakeIndexingRepositoryIT {
       testUtils.waitUntilDeleted(servicesItemId);
     } finally {
       v1Client.deleteItemsIfExist(asList(servicesItemId, accessResourceItemId));
+    }
+  }
+
+  @Test
+  public void defaultAcl_verifyServing() throws IOException, InterruptedException {
+    String itemName = "DefaultAcl_" + getRandomId();
+    String itemId = Util.getItemId(indexingSourceId, itemName);
+    Properties config = new Properties();
+    config.setProperty(
+        "defaultAcl.readers.users", "google:connectors1@connectstaging.10bot20.info");
+    config.setProperty("defaultAcl.public", "false");
+    config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
+    MockItem item = new MockItem.Builder(itemId)
+        .setTitle(itemName)
+        .setMimeType("HTML")
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .build();
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(Collections.singletonList(item))
+        .build();
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
+      testUtils.waitUntilEqual(itemId, item.getItem());
+      searchUtil = new SearchTestUtils(searchHelper);
+      searchUtil.waitUntilItemServed(itemName, itemName);
+    } finally {
+      v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
     }
   }
 
@@ -234,11 +274,10 @@ public class FakeIndexingRepositoryIT {
         .addValue("html", "h3")
         .setObjectType(schemaObjectType)
         .build();
-
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(item))
         .build();
-    runFullTraversalConnector(mockRepo);
+    runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
     verifyStructuredData(itemId, schemaObjectType, item.getItem());
   }
 
@@ -262,11 +301,10 @@ public class FakeIndexingRepositoryIT {
         .addValue("date", dateValue2)
         .setObjectType(schemaObjectType)
         .build();
-
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(item))
         .build();
-    runFullTraversalConnector(mockRepo);
+    runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
     verifyStructuredData(itemId, schemaObjectType, item.getItem());
   }
 
@@ -286,7 +324,7 @@ public class FakeIndexingRepositoryIT {
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(item))
         .build();
-    runFullTraversalConnector(mockRepo);
+    runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
     verifyStructuredData(itemId, schemaObjectType, item.getItem());
   }
 
@@ -300,7 +338,7 @@ public class FakeIndexingRepositoryIT {
     }
   }
 
-  private void runFullTraversalConnector(FakeIndexingRepository mockRepo)
+  private void runAwaitFullTraversalConnector(FakeIndexingRepository mockRepo, String[] args)
       throws InterruptedException {
     IndexingApplication application =
         new IndexingApplication.Builder(new FullTraversalConnector(mockRepo), args)
