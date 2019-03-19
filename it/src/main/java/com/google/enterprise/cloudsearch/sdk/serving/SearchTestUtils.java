@@ -86,7 +86,7 @@ public class SearchTestUtils {
    * userEmail of the user to client secrets file,
    * credentialsDirectory path containing the StoredCredential file and
    * clientSecrets path to the client secrets JSON file
-   * @param searchApplicationId Id of the serving application
+   * @param applicationId Id of the serving application
    * @param rootUrl URL of the Indexing API
    */
   public static SearchHelper getSearchHelper(
