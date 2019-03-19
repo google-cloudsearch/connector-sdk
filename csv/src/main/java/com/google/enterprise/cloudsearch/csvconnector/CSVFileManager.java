@@ -58,6 +58,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -67,6 +68,7 @@ import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVParser;
 import org.apache.commons.csv.CSVRecord;
@@ -151,27 +153,81 @@ class CSVFileManager {
   public static CSVFileManager fromConfiguration() {
     checkState(Configuration.isInitialized(), "configuration not initialized");
 
+    // csv file
     String filePath = Configuration.getString(FILEPATH, null).get();
+    checkConfiguration(!filePath.isEmpty(), FILEPATH + " is required");
+    Path csvFilePath = Paths.get(filePath);
+    checkConfiguration(Files.exists(csvFilePath),
+        "File does not exist: " + FILEPATH + "=" + filePath);
+
+    // Charset for file
     Charset fileCharset = Configuration.getValue(FILE_ENCODING, defaultCharset(),
         value -> {
           try {
             return Charset.forName(value);
           } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
-            throw new InvalidConfigurationException("Invalid charset: " + value, e);
+            throw new InvalidConfigurationException(
+                "Invalid charset: " + FILE_ENCODING + "=" + value);
           }
         }
       ).get();
+
     Boolean skipHeader = Configuration.getBoolean(SKIP_HEADER, false).get();
-    List<String> uniqueKeyColumns =
-        Configuration.getMultiValue(
-            UNIQUE_KEY_COLUMNS, Collections.emptyList(), Configuration.STRING_PARSER).get();
+
+    // Column names. If not set, the first row of the file is expected to contain column names.
     List<String> csvColumns =
         Configuration.getMultiValue(
             CSVCOLUMNS, Collections.emptyList(), Configuration.STRING_PARSER).get();
+
+    // csv file format (Excel, etc.)
+    String csvFormatName = Configuration.getString(CSV_FORMAT, "").get();
+    CSVFormat csvFormat = createCsvFormat(csvFormatName, csvColumns, skipHeader);
+
+    // The CSVFormat will contain the csvColumns, if set, otherwise read the header line
+    // from the file.
+    Set<String> headers;
+    try (CSVParser parser = CSVParser.parse(csvFilePath.toFile(), fileCharset, csvFormat)) {
+      headers = parser.getHeaderMap().keySet();
+    } catch (IOException e) {
+      throw new InvalidConfigurationException("Error reading " + csvFilePath, e);
+    }
+
+    // Columns to use to create the unique key, optional.
+    // Verify that configured names are known column names.
+    List<String> uniqueKeyColumns =
+        Configuration.getMultiValue(
+            UNIQUE_KEY_COLUMNS, Collections.emptyList(), Configuration.STRING_PARSER).get();
+    verifyColumns(UNIQUE_KEY_COLUMNS, new HashSet<>(uniqueKeyColumns), "column headers", headers);
+
+    // Verify that the columns expected for constructing the record URL are known.
+    UrlBuilder urlBuilder = UrlBuilder.fromConfiguration();
+    Set<String> missing = urlBuilder.getMissingColumns(headers);
+    checkConfiguration(missing.isEmpty(),
+        getMissingMessage(UrlBuilder.CONFIG_COLUMNS, missing, "column headers", headers));
+
+    // Verify that any configured multi-value columns are known.
     List<String> multiValueColumns =
         Configuration.getMultiValue(
             MULTIVALUE_COLUMNS, Collections.emptyList(), Configuration.STRING_PARSER).get();
+    verifyColumns(MULTIVALUE_COLUMNS, new HashSet<>(multiValueColumns), "column headers", headers);
 
+    // Check any config properties of the form csv.multiValue.<columnName> and verify
+    // the column name(s).
+    Set<String> multiValueColumnsWithConfiguredSeparators = Configuration.getConfig()
+        .keySet()
+        .stream()
+        .map(key -> key.toString())
+        .filter(key -> key.startsWith("csv.multiValue."))
+        .map(key -> key.substring("csv.multiValue.".length()))
+        .collect(Collectors.toSet());
+    checkConfiguration(
+        multiValueColumns.size() > 0 || multiValueColumnsWithConfiguredSeparators.size() == 0,
+        "Multi-value separators are configured but no multi-value columns are configured");
+    verifyColumns("csv.multiValue.*",
+        multiValueColumnsWithConfiguredSeparators, MULTIVALUE_COLUMNS,
+        new HashSet<>(multiValueColumns));
+
+    // Build a map from multi-value column name to delimiter.
     Map<String, String> columnsToDelimiter = new HashMap<>();
     for (String column : multiValueColumns) {
       String delimiter = Configuration
@@ -179,22 +235,10 @@ class CSVFileManager {
       columnsToDelimiter.put(column, delimiter);
     }
 
-    String csvFormat = Configuration.getString(CSV_FORMAT, "").get();
-
-    UrlBuilder urlBuilder = UrlBuilder.fromConfiguration();
-    if (!csvColumns.isEmpty()) {
-      Set<String> missing = urlBuilder.getMissingColumns(new LinkedHashSet<String>(csvColumns));
-      if (!missing.isEmpty()) {
-        throw new InvalidConfigurationException("Invalid column name(s): '" + missing + "'");
-      }
-    }
-
     return new Builder()
-        .setFilePath(filePath)
+        .setFilePath(csvFilePath)
         .setFileCharset(fileCharset)
-        .setSkipHeader(skipHeader)
         .setUniqueKeyColumns(uniqueKeyColumns)
-        .setCsvColumns(csvColumns)
         .setCsvFormat(csvFormat)
         .setContentTemplate(ContentTemplate.fromConfiguration("csv"))
         .setColumnsToDelimiter(columnsToDelimiter)
@@ -204,22 +248,20 @@ class CSVFileManager {
   }
 
   /**
-   * Reads the csv file and verifies that the column names match the names referred to in the
-   * configuration properties.
+   * Reads the csv file.
    *
    * @return a {@link CloseableIterable} to read the records from
    * @throws IOException If an I/O error occurs when parsing the csv file
    */
   public CloseableIterable<CSVRecord> getCSVFile() throws IOException {
     CSVParser csvParser = csvFormat.parse(getReader());
-    verifyColumns(csvParser.getHeaderMap().keySet());
     return new CSVFile(csvParser);
   }
 
   /**
-   * Creates {@link Item} for a csvRecord
+   * Creates an {@link Item} for a csvRecord.
    *
-   * @param csvRecord a particular row in csv file
+   * @param csvRecord a particular row in the csv file
    * @return {@link Item}
    * @throws IOException If an I/O error occurs when generating multimap for column names and
    * values
@@ -235,7 +277,7 @@ class CSVFileManager {
   /**
    * Creates {@link ByteArrayContent} for a csvRecord based on {@link ContentTemplate}
    *
-   * @param csvRecord a particular row in csv file
+   * @param csvRecord a particular row in the CSV file
    * @return {@link ByteArrayContent}
    * @throws IOException If an I/O error occurs when generating multimap for column names and
    * corresponding values for the csvRecord
@@ -246,9 +288,9 @@ class CSVFileManager {
   }
 
   /**
-   * Generates a multimap for each column names and corresponding values in csvRecord. Splits the
-   * multivalued field using default delimiter ','. Parses date fields based on the date time
-   * format specified by user in the configuration properties.
+   * Generates a multimap for each column name and corresponding values in the
+   * csvRecord. Splits the multivalued field using the configured delimiter or the default
+   * delimiter ','.
    *
    * @param csvRecord csvRecord
    * @return a multimap for csv column names and values in csvRecord
@@ -274,8 +316,8 @@ class CSVFileManager {
   }
 
   /**
-   * Construct unique Id based on uniqueKeyColumns. If uniqueKeyColumns is empty, use hash of the
-   * whole CSVRecord.
+   * Constructs a unique ID based on uniqueKeyColumns. If uniqueKeyColumns is empty, uses a
+   * hash of the whole CSVRecord.
    *
    * @param csvRecord a csv record
    * @return uniqueId
@@ -306,30 +348,24 @@ class CSVFileManager {
     this.csvFilePath = builder.csvFilePath;
     this.fileCharset = builder.fileCharset;
     this.columnsToDelimiter = builder.columnsToDelimiter;
-    // parse unique key columns, required field
     this.uniqueKeyColumns = new LinkedHashSet<>(builder.uniqueKeyColumns);
-    logger.log(Level.CONFIG, "uniqueKeyColumns: {0}", uniqueKeyColumns);
-    // those content fields are needed for contentQuailty later
     this.urlBuilder = builder.urlBuilder;
-    this.csvFormat = createCsvFormat(builder);
+    this.csvFormat = builder.csvFormat;
   }
 
   static class Builder {
-    private String filePath;
+    private Path csvFilePath;
     private Charset fileCharset;
-    private boolean skipHeader = false;
-    private List<String> csvColumns;
     private List<String> uniqueKeyColumns;
     private ContentTemplate contentTemplate;
-    private Path csvFilePath;
     private Map<String, String> columnsToDelimiter;
     private UrlBuilder urlBuilder;
-    private String csvFormat;
+    private CSVFormat csvFormat;
 
     Builder() {}
 
-    Builder setFilePath(String filePath) {
-      this.filePath = filePath;
+    Builder setFilePath(Path csvFilePath) {
+      this.csvFilePath = csvFilePath;
       return this;
     }
 
@@ -338,22 +374,12 @@ class CSVFileManager {
       return this;
     }
 
-    Builder setSkipHeader(boolean skipHeader) {
-      this.skipHeader = skipHeader;
-      return this;
-    }
-
     Builder setUniqueKeyColumns(List<String> uniqueKeyColumns) {
       this.uniqueKeyColumns = uniqueKeyColumns;
       return this;
     }
 
-    Builder setCsvColumns(List<String> csvColumns) {
-      this.csvColumns = csvColumns;
-      return this;
-    }
-
-    Builder setCsvFormat(String csvFormat) {
+    Builder setCsvFormat(CSVFormat csvFormat) {
       this.csvFormat = csvFormat;
       return this;
     }
@@ -374,16 +400,13 @@ class CSVFileManager {
     }
 
     Builder verify() {
-      checkNotNullNotEmpty(filePath, "csv file path");
-      csvFilePath = Paths.get(filePath);
-      if (!Files.exists(csvFilePath)) {
-        throw new InvalidConfigurationException("csv file " + filePath + " does not exists");
-      }
+      checkNotNull(csvFilePath);
       checkNotNull(fileCharset);
       checkNotNull(uniqueKeyColumns);
-      checkNotNull(csvColumns);
       checkNotNull(contentTemplate);
       checkNotNull(columnsToDelimiter);
+      checkNotNull(urlBuilder);
+      checkNotNull(csvFormat);
       return this;
     }
 
@@ -392,44 +415,48 @@ class CSVFileManager {
     }
   }
 
+  /**
+   * Gets a buffered reader using a larger buffer size than the default in the CSV parser.
+   */
   private Reader getReader() throws IOException {
     URI csvUri = csvFilePath.toUri();
     return new BufferedReader(
         new InputStreamReader(csvUri.toURL().openStream(), fileCharset), 16 * 1024 * 1024);
   }
 
-  private CSVFormat createCsvFormat(Builder builder) {
+  private static CSVFormat createCsvFormat(String csvFormatName, List<String> csvColumns,
+    boolean skipHeader) {
     CSVFormat csvFormat = null;
-    if (builder.csvFormat.isEmpty()) {
+    if (csvFormatName.isEmpty()) {
       csvFormat = CSVFormat.DEFAULT.withIgnoreSurroundingSpaces();
     } else {
       Set<CSVFormat.Predefined> csvFormats = getPredefinedCsvFormats();
       for (CSVFormat.Predefined format : csvFormats) {
-        if (format.toString().equalsIgnoreCase(builder.csvFormat)) {
+        if (format.toString().equalsIgnoreCase(csvFormatName)) {
           csvFormat = format.getFormat();
           break;
         }
       }
       if (csvFormat == null) {
         throw new InvalidConfigurationException(
-            "Invalid CSVFormat " + builder.csvFormat + ", must be one of " + csvFormats);
+            "Invalid CSVFormat " + csvFormatName + ", must be one of " + csvFormats);
       }
     }
     csvFormat = applyCsvFormatMethods(csvFormat);
-    if (builder.csvColumns.isEmpty()) {
+    if (csvColumns.isEmpty()) {
       checkState(
-          !builder.skipHeader,
+          !skipHeader,
           "csv.csvColumns property must be specified "
               + "if csv.skipHeaderRecord is true");
       return csvFormat.withHeader();
     } else {
       return csvFormat
-          .withHeader(builder.csvColumns.toArray(new String[0]))
-          .withSkipHeaderRecord(builder.skipHeader);
+          .withHeader(csvColumns.toArray(new String[0]))
+          .withSkipHeaderRecord(skipHeader);
     }
   }
 
-  private Set<CSVFormat.Predefined> getPredefinedCsvFormats() {
+  private static Set<CSVFormat.Predefined> getPredefinedCsvFormats() {
     return new TreeSet<>(Arrays.asList(CSVFormat.Predefined.values()));
   }
 
@@ -437,7 +464,7 @@ class CSVFileManager {
    * Gets a map of supported {@code CSVFormat.with}* methods to functions that map
    * a configured string value to an appropriate argument for the method.
    */
-  private Map<Method, Function<String, Object>> getCsvFormatMethods() {
+  private static Map<Method, Function<String, Object>> getCsvFormatMethods() {
     // We need overloaded methods to be equal, which Method.equals does not do.
     Map<Method, Function<String, Object>> map = new TreeMap<>(comparing(Method::getName));
     for (Method method : CSVFormat.class.getDeclaredMethods()) {
@@ -468,7 +495,12 @@ class CSVFileManager {
     return map;
   }
 
-  private CSVFormat applyCsvFormatMethods(CSVFormat csvFormat) {
+  /**
+   * For each CSVFormat class method with a name starting with "with", look for a
+   * configuration parameter of the form csv.format.<methodName>. Call that method using
+   * the configuration parameter's value.
+   */
+  private static CSVFormat applyCsvFormatMethods(CSVFormat csvFormat) {
     for (Map.Entry<Method, Function<String, Object>> entry : getCsvFormatMethods().entrySet()) {
       Method method = entry.getKey();
       String name = method.getName();
@@ -490,40 +522,25 @@ class CSVFileManager {
     return csvFormat;
   }
 
-  private static void checkNotNullNotEmpty(String value, String field) {
-    checkNotNull(value, field + " can't be null");
-    checkArgument(!value.isEmpty(), field + " can't be empty");
-  }
-
-  private static void checkNotNullNotEmpty(List<String> value, String field) {
-    checkNotNull(value, field + " can't be null");
-    checkArgument(!value.isEmpty(), field + " can't be empty");
-  }
-
-  private void verifyColumns(Set<String> headerSet) {
-    verifyColumns(UNIQUE_KEY_COLUMNS, uniqueKeyColumns, headerSet);
-    Set<String> missing = urlBuilder.getMissingColumns(headerSet);
-    checkConfiguration(missing.isEmpty(),
-        getMissingMessage(UrlBuilder.CONFIG_COLUMNS, missing, headerSet));
-  }
-
   /**
    * Checks if the column names in toCheck can be found in golden.
    *
    * @param toCheck column names to verify
    * @param golden column names get from csv file
    */
-  private static void verifyColumns(String configKey, Set<String> toCheck, Set<String> golden) {
+  private static void verifyColumns(String configKey, Set<String> toCheck,
+      String goldenDescription, Set<String> golden) {
     Set<String> missing = Sets.difference(toCheck, golden);
     if (!missing.isEmpty()) {
-      throw new InvalidConfigurationException(getMissingMessage(configKey, missing, golden));
+      throw new InvalidConfigurationException(
+          getMissingMessage(configKey, missing, goldenDescription, golden));
     }
   }
 
   private static String getMissingMessage(String configKey, Set<String> missing,
-      Set<String> golden) {
-    return String.format("Invalid column names in %s: %s missing from %s",
-        configKey, missing, golden);
+      String goldenDescription, Set<String> golden) {
+    return String.format("Invalid column names in %s: %s missing from %s (%s)",
+        configKey, missing, golden, goldenDescription);
   }
 
   /**
