@@ -13,6 +13,7 @@
 * Add options to proxy authentication: HTTP or SOCKS
 * Optimize CPU usage by simplifying execution logic on a thread pool
 
-### CSV connecter changes
+### CSV connector changes
 
 * CSV - Support different CSV Formats
+
