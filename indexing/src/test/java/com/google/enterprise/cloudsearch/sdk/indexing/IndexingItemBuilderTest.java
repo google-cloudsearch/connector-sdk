@@ -19,6 +19,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
 
+import com.google.api.client.util.DateTime;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.ItemMetadata;
 import com.google.api.services.cloudsearch.v1.model.ItemStructuredData;
@@ -216,21 +217,58 @@ public class IndexingItemBuilderTest {
   }
 
   @Test
-  public void testItemMetadata() {
+  public void build_valueSetters() {
     StructuredData.init(new Schema());
 
     Multimap<String, Object> values = ArrayListMultimap.create();
+    Item subject = new IndexingItemBuilder("foo")
+        .setValues(values)
+        .setMimeType(FieldOrValue.withValue("text/plain"))
+        .setTitle(FieldOrValue.withValue(""))
+        .setSourceRepositoryUrl(FieldOrValue.withValue("beta"))
+        .setContentLanguage(FieldOrValue.withValue("two"))
+        .setHash(FieldOrValue.withValue(""))
+        .setContainerName(FieldOrValue.withValue("Mom"))
+        .setUpdateTime(FieldOrValue.withValue(new DateTime("2018-08-08T15:48:17.000Z")))
+        .setCreateTime(FieldOrValue.withValue(new DateTime("2017-07-07T15:48:17.000Z")))
+        .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
+        .build();
+    assertThat(subject,
+        equalTo(
+            new Item()
+            .setName("foo")
+            .setMetadata(
+                new ItemMetadata()
+                .setMimeType("text/plain")
+                .setSourceRepositoryUrl("beta")
+                .setContentLanguage("two")
+                .setContainerName("Mom")
+                .setUpdateTime("2018-08-08T15:48:17.000Z")
+                .setCreateTime("2017-07-07T15:48:17.000Z")
+                .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
+              )));
+  }
+
+  @Test
+  public void build_fieldSetters() {
+    StructuredData.init(new Schema());
+
+    Multimap<String, Object> values = ArrayListMultimap.create();
+    values.put("name", "");
+    values.put("parent", "Mom");
     values.put("beta", "two");
     values.put("beta", "early release");
     values.put("date", "Wed, 08 Aug 2018 15:48:17 +0000");
+    values.put("fingerprint", "42");
+    values.put("contentType", "text/plain");
 
     Item subject = new IndexingItemBuilder("foo")
         .setValues(values)
-        .setContainerName(null)
-        .setHash("")
-        .setMimeType("text/plain")
-        .setTitle(FieldOrValue.withValue(""))
-        .setSourceRepositoryUrl(FieldOrValue.withValue("beta"))
+        .setContainerName(FieldOrValue.withField("parent"))
+        .setHash(FieldOrValue.withField("fingerprint"))
+        .setMimeType(FieldOrValue.withField("contentType"))
+        .setTitle(FieldOrValue.withField("name"))
+        .setSourceRepositoryUrl(FieldOrValue.withValue("beta")) // Test field vs value.
         .setContentLanguage(FieldOrValue.withField("beta"))
         .setUpdateTime(FieldOrValue.withField("date"))
         .setCreateTime(null)
@@ -245,8 +283,34 @@ public class IndexingItemBuilderTest {
                 .setMimeType("text/plain")
                 .setSourceRepositoryUrl("beta")
                 .setContentLanguage("two")
+                .setHash("42")
+                .setContainerName("Mom")
                 .setUpdateTime("2018-08-08T15:48:17.000Z")
                 .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
+              )));
+  }
+
+  @Test
+  public void build_deprecatedSetters() {
+    StructuredData.init(new Schema());
+
+    Multimap<String, Object> values = ArrayListMultimap.create();
+    @SuppressWarnings("deprecation")
+        Item subject = new IndexingItemBuilder("foo")
+            .setValues(values)
+            .setContainerName("parent")
+            .setHash("something pithy")
+            .setMimeType("text/plain")
+            .build();
+    assertThat(subject,
+        equalTo(
+            new Item()
+            .setName("foo")
+            .setMetadata(
+                new ItemMetadata()
+                .setContainerName("parent")
+                .setHash("something pithy")
+                .setMimeType("text/plain")
               )));
   }
 
@@ -311,21 +375,27 @@ public class IndexingItemBuilderTest {
   @Test
   public void testFromConfiguration_fields() {
     Properties config = new Properties();
+    config.put(IndexingItemBuilder.MIME_TYPE_FIELD, "contentType");
     config.put(IndexingItemBuilder.TITLE_FIELD, "name");
     config.put(IndexingItemBuilder.SOURCE_REPOSITORY_URL_FIELD, "url");
     config.put(IndexingItemBuilder.CONTENT_LANGUAGE_FIELD, "language");
     config.put(IndexingItemBuilder.UPDATE_TIME_FIELD, "publishDate");
     config.put(IndexingItemBuilder.CREATE_TIME_FIELD, "originDate");
     config.put(IndexingItemBuilder.CONTENT_LANGUAGE_FIELD, "lang");
+    config.put(IndexingItemBuilder.HASH_FIELD, "fingerprint");
+    config.put(IndexingItemBuilder.CONTAINER_NAME_FIELD, "parent");
     setupConfig.initConfig(config);
     StructuredData.init(new Schema());
 
     Multimap<String, Object> values = ArrayListMultimap.create();
+    values.put("contentType", "text/plain");
     values.put("name", "My Name is Sam");
     values.put("url", "http://example.com/?id=42");
     values.put("publishDate", "Wed, 08 Aug 2018 15:48:17 +0000");
     values.put("originDate", "Fri, 07 Jul 2017 01:02:03 +0000");
     values.put("lang", "en-US");
+    values.put("fingerprint", "2357");
+    values.put("parent", "Mom");
 
     Item subject = IndexingItemBuilder.fromConfiguration("foo")
         .setValues(values)
@@ -336,23 +406,29 @@ public class IndexingItemBuilderTest {
             .setName("foo")
             .setMetadata(
                 new ItemMetadata()
+                .setMimeType("text/plain")
                 .setTitle("My Name is Sam")
                 .setSourceRepositoryUrl("http://example.com/?id=42")
                 .setUpdateTime("2018-08-08T15:48:17.000Z")
                 .setCreateTime("2017-07-07T01:02:03.000Z")
                 .setContentLanguage("en-US")
+                .setHash("2357")
+                .setContainerName("Mom")
               )));
   }
 
   @Test
   public void testFromConfiguration_values() {
     Properties config = new Properties();
+    config.put(IndexingItemBuilder.MIME_TYPE_VALUE, "text/plain");
     config.put(IndexingItemBuilder.TITLE_VALUE, "name");
     config.put(IndexingItemBuilder.SOURCE_REPOSITORY_URL_VALUE, "url");
     config.put(IndexingItemBuilder.CONTENT_LANGUAGE_VALUE, "language");
     config.put(IndexingItemBuilder.UPDATE_TIME_VALUE, "2010-10-10T10:10:10-10:00");
     config.put(IndexingItemBuilder.CREATE_TIME_VALUE, "2001-01-01T00:00:00Z");
     config.put(IndexingItemBuilder.CONTENT_LANGUAGE_VALUE, "lang");
+    config.put(IndexingItemBuilder.HASH_VALUE, "2357");
+    config.put(IndexingItemBuilder.CONTAINER_NAME_VALUE, "Mom");
     setupConfig.initConfig(config);
     StructuredData.init(new Schema());
 
@@ -372,11 +448,14 @@ public class IndexingItemBuilderTest {
             .setName("foo")
             .setMetadata(
                 new ItemMetadata()
+                .setMimeType("text/plain")
                 .setTitle("name")
                 .setSourceRepositoryUrl("url")
                 .setUpdateTime("2010-10-10T10:10:10.000-10:00")
                 .setCreateTime("2001-01-01T00:00:00.000Z")
                 .setContentLanguage("lang")
+                .setHash("2357")
+                .setContainerName("Mom")
               )));
   }
 }
