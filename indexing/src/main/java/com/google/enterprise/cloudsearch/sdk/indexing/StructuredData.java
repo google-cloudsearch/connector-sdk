@@ -18,6 +18,7 @@ package com.google.enterprise.cloudsearch.sdk.indexing;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.math.IntMath.checkedMultiply;
 import static java.nio.charset.Charset.defaultCharset;
 
 import com.google.api.client.json.JsonObjectParser;
@@ -52,9 +53,11 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.chrono.IsoChronology;
 import java.time.format.DateTimeFormatter;
@@ -531,8 +534,10 @@ public class StructuredData {
           } else if (a instanceof Long) {
             return getApiDate(new Date((long) a));
           } else if (a instanceof DateTime) {
-            Date input = new Date(((DateTime) a).getValue());
-            return getApiDate(input);
+            DateTime dt = (DateTime) a;
+            Instant instant = Instant.ofEpochMilli(dt.getValue());
+            ZoneOffset zone = ZoneOffset.ofTotalSeconds(checkedMultiply(dt.getTimeZoneShift(), 60));
+            return getApiDate(instant.atZone(zone));
           } else if (a instanceof String) {
             return getApiDate(parseDateTime((String) a));
           }

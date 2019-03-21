@@ -16,7 +16,9 @@
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertThat;
 
 import com.google.api.client.util.DateTime;
@@ -36,6 +38,7 @@ import java.util.Collections;
 import java.util.Properties;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 
@@ -45,6 +48,7 @@ public class IndexingItemBuilderTest {
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public SetupConfigRule setupConfig = SetupConfigRule.uninitialized();
   @Rule public ResetStructuredDataRule resetStructuredData = new ResetStructuredDataRule();
+  @Rule public ExpectedException thrown = ExpectedException.none();
 
   @Test
   public void testItemName() {
@@ -498,5 +502,72 @@ public class IndexingItemBuilderTest {
                 .setContainerName("Mom")
                 .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
               )));
+  }
+
+  @Test
+  public void fieldOrValue_withField() {
+    assertThat(FieldOrValue.withField("foo").toString(), containsString("foo"));
+  }
+
+  @Test
+  public void fieldOrValue_withField_empty() {
+    thrown.expect(IllegalArgumentException.class);
+    FieldOrValue.withField("");
+  }
+
+  @Test
+  public void fieldOrValue_withField_null() {
+    thrown.expect(IllegalArgumentException.class);
+    FieldOrValue.withField(null);
+  }
+
+  @Test
+  public void fieldOrValue_withValue() {
+    assertThat(FieldOrValue.withValue("foo").toString(), containsString("foo"));
+  }
+
+  @Test
+  public void fieldOrValue_withValue_empty_isAllowed() {
+    FieldOrValue.withValue("");
+  }
+
+  @Test
+  public void fieldOrValue_withValue_null_isAllowed() {
+    FieldOrValue.withValue(null);
+  }
+
+  @Test
+  public void fieldOrValue_equals_null_returnsFalse() {
+    FieldOrValue<?> subject = FieldOrValue.withField("foo");
+    assertThat(subject, not(equalTo(null)));
+  }
+
+  @Test
+  public void fieldOrValue_equals_nonFieldOrValue_returnsFalse() {
+    FieldOrValue<?> subject = FieldOrValue.withField("foo");
+    assertThat(subject, not(equalTo("foo")));
+  }
+
+  @Test
+  public void fieldOrValue_equals_reflexive_returnsTrue() {
+    FieldOrValue<?> subject = FieldOrValue.withField("foo");
+    assertThat(subject, equalTo(subject));
+    assertThat(subject.hashCode(), equalTo(subject.hashCode()));
+  }
+
+  @Test
+  public void fieldOrValue_equals_differentTypes_returnsFalse() {
+    FieldOrValue<?> field = FieldOrValue.withField("foo");
+    FieldOrValue<?> value = FieldOrValue.withValue("foo");
+    assertThat(field, not(equalTo(value)));
+    assertThat(field.hashCode(), not(equalTo(value.hashCode())));
+  }
+
+  @Test
+  public void fieldOrValue_equals_sameFieldDifferentValues_returnsFalse() {
+    FieldOrValue<?> field = FieldOrValue.withField("foo");
+    FieldOrValue<?> custom = new FieldOrValue<String>("foo", "foo");
+    assertThat(field, not(equalTo(custom)));
+    assertThat(field.hashCode(), not(equalTo(custom.hashCode())));
   }
 }

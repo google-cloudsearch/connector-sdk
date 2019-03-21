@@ -51,11 +51,13 @@ import com.google.api.services.cloudsearch.v1.model.DebugOptions;
 import com.google.api.services.cloudsearch.v1.model.IndexItemRequest;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.ItemContent;
+import com.google.api.services.cloudsearch.v1.model.ItemMetadata;
 import com.google.api.services.cloudsearch.v1.model.ItemStatus;
 import com.google.api.services.cloudsearch.v1.model.ListItemsResponse;
 import com.google.api.services.cloudsearch.v1.model.Operation;
 import com.google.api.services.cloudsearch.v1.model.PollItemsRequest;
 import com.google.api.services.cloudsearch.v1.model.PollItemsResponse;
+import com.google.api.services.cloudsearch.v1.model.Principal;
 import com.google.api.services.cloudsearch.v1.model.PushItem;
 import com.google.api.services.cloudsearch.v1.model.PushItemRequest;
 import com.google.api.services.cloudsearch.v1.model.Schema;
@@ -558,6 +560,57 @@ public class IndexingServiceTest {
         .when(batchingService)
         .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
+    this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
+    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+  }
+
+  @Test
+  public void indexItem_withAcl() throws IOException, InterruptedException {
+    Item item = new Item()
+        .setName(GOOD_ID)
+        .setMetadata(new ItemMetadata().setContainerName("parent"))
+        .encodeVersion("1".getBytes(UTF_8));
+    new Acl.Builder()
+        .setReaders(
+            Arrays.asList(
+                new Principal().setUserResourceName("AllowedUser"),
+                new Principal().setGroupResourceName("AllowedGroup")))
+        .setInheritFrom("parent")
+        .setInheritanceType(Acl.InheritanceType.PARENT_OVERRIDE)
+        .build()
+        .applyTo(item);
+
+    Item expected = new Item()
+        .setName("datasources/source/items/" + GOOD_ID)
+        .setMetadata(new ItemMetadata().setContainerName("datasources/source/items/parent"))
+        .encodeVersion("1".getBytes(UTF_8));
+    new Acl.Builder()
+        .setReaders(
+            Arrays.asList(
+                new Principal()
+                    .setUserResourceName("identitysources/identitySources/users/AllowedUser"),
+                new Principal()
+                    .setGroupResourceName("identitysources/identitySources/groups/AllowedGroup")))
+        .setInheritFrom("datasources/source/items/parent")
+        .setInheritanceType(Acl.InheritanceType.PARENT_OVERRIDE)
+        .build()
+        .applyTo(expected);
+
+    doAnswer(
+            invocation -> {
+              Items.Index updateRequest = invocation.getArgument(0);
+              assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
+              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+              assertEquals(RequestMode.SYNCHRONOUS.name(), indexItemRequest.getMode());
+              assertEquals(expected, indexItemRequest.getItem());
+
+              SettableFuture<Operation> result = SettableFuture.create();
+              result.set(new Operation());
+              return result;
+            })
+        .when(batchingService)
+        .indexItem(any());
+
     this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
