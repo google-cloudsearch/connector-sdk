@@ -18,12 +18,14 @@ package com.google.enterprise.cloudsearch.sdk.indexing;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
+import com.google.api.services.cloudsearch.v1.model.GSuitePrincipal;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.ItemAcl;
 import com.google.api.services.cloudsearch.v1.model.Principal;
@@ -299,6 +301,74 @@ public class AclTest {
   }
 
   @Test
+  public void addResourcePrefixUser() {
+    Principal principal = Acl.getUserPrincipal("john doe");
+    String before = principal.toString();
+    assertTrue(before, Acl.addResourcePrefixUser(principal, "foo"));
+    String after = principal.toString();
+    assertThat(after, not(equalTo(before)));
+    assertFalse(after, Acl.addResourcePrefixUser(principal, "foo"));
+    assertEquals(after, principal.toString());
+  }
+
+  @Test
+  public void addResourcePrefixGroup() {
+    Principal principal = Acl.getGroupPrincipal("john doe");
+    String before = principal.toString();
+    assertTrue(before, Acl.addResourcePrefixGroup(principal, "foo"));
+    String after = principal.toString();
+    assertThat(after, not(equalTo(before)));
+    assertFalse(after, Acl.addResourcePrefixGroup(principal, "foo"));
+    assertEquals(after, principal.toString());
+  }
+
+  @Test
+  public void getPrincipalType_googleUser() {
+    Principal principal = Acl.getGoogleUserPrincipal("john doe");
+    assertEquals(Acl.PrincipalType.GSUITE_USER, Acl.getPrincipalType(principal));
+  }
+
+  @Test
+  public void getPrincipalType_googleGroup() {
+    Principal principal = Acl.getGoogleGroupPrincipal("my friends");
+    assertEquals(Acl.PrincipalType.GSUITE_GROUP, Acl.getPrincipalType(principal));
+  }
+
+  @Test
+  public void getPrincipalType_googleDomain() {
+    Principal principal = Acl.getCustomerPrincipal();
+    assertEquals(Acl.PrincipalType.GSUITE_DOMAIN, Acl.getPrincipalType(principal));
+  }
+
+  @Test
+  public void getPrincipalType_externalUser() {
+    Principal principal = Acl.getUserPrincipal("john doe");
+    assertEquals(Acl.PrincipalType.USER, Acl.getPrincipalType(principal));
+  }
+
+  @Test
+  public void getPrincipalType_externalGroup() {
+    Principal principal = Acl.getGroupPrincipal("john doe");
+    assertEquals(Acl.PrincipalType.GROUP, Acl.getPrincipalType(principal));
+  }
+
+  @Test
+  public void getPrincipalType_emptyPrincipal() {
+    Principal principal = new Principal();
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("Invalid principal");
+    Acl.getPrincipalType(principal);
+  }
+
+  @Test
+  public void getPrincipalType_emptyGSuitePrincipal() {
+    Principal principal = new Principal().setGsuitePrincipal(new GSuitePrincipal());
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("Invalid principal");
+    Acl.getPrincipalType(principal);
+  }
+
+  @Test
   public void testEqualsNegative() {
     Acl acl = new Acl.Builder()
         .setReaders(user("AllowedUser1", "AllowedUser2"))
@@ -348,6 +418,7 @@ public class AclTest {
                 Collections.singleton(new Principal().setGroupResourceName("#DeniedGroup")))
             .build();
     assertEquals(acl1, acl2);
+    assertEquals(acl1.hashCode(), acl2.hashCode());
   }
 
   @Test
@@ -359,6 +430,7 @@ public class AclTest {
         .build();
     Acl acl2 = new Acl.Builder(acl1).build();
     assertEquals(acl1, acl2);
+    assertEquals(acl1.hashCode(), acl2.hashCode());
   }
 
   @Test
@@ -370,6 +442,21 @@ public class AclTest {
         .build();
     Acl acl2 = new Acl.Builder(acl1).setOwners(user("AllowedUser2")).build();
     assertThat(acl1, not(equalTo(acl2)));
+    assertThat(acl1.hashCode(), not(equalTo(acl2.hashCode())));
+  }
+
+  @Test
+  public void toString_minimal() {
+    Acl acl = new Acl.Builder()
+        .setReaders(user("AllowedUser1", "AllowedUser2"))
+        .setDeniedReaders(group("DeniedGroup"))
+        .setOwners(user("AllowedUser1"))
+        .build();
+    String aclString = acl.toString();
+    assertThat(aclString, startsWith("Acl ["));
+    assertThat(aclString, containsString("AllowedUser1"));
+    assertThat(aclString, containsString("AllowedUser2"));
+    assertThat(aclString, containsString("DeniedGroup"));
   }
 
   @Test

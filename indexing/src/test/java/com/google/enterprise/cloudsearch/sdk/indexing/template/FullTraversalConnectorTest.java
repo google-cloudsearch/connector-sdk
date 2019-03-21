@@ -1248,17 +1248,40 @@ public class FullTraversalConnectorTest {
   }
 
   @Test
-  public void testTraverseWithPreviousDeleteQueueItems() throws Exception {
+  public void traverse_previousDeleteQueueItems_notDone() throws Exception {
     Operation deleteQueueItemsOperation = new Operation().setDone(false);
     when(indexingServiceMock.getOperation("nonempty")).thenReturn(deleteQueueItemsOperation);
     when(checkpointHandlerMock.readCheckpoint(FullTraversalConnector.CHECKPOINT_QUEUE))
         .thenReturn(new QueueCheckpoint.QueueData().setOperationName("nonempty").get());
 
     FullTraversalConnector connector = createConnector(/* useQueues */ true);
-    List<ApiOperation> docs1 = createRepositoryDocsAndResponses(3);
+    List<ApiOperation> docs = createRepositoryDocsAndResponses(3);
     connector.traverse();
 
     verify(repositoryMock, times(0)).getAllDocs(null);
+  }
+
+  @Test
+  public void traverse_previousDeleteQueueItems_done() throws Exception {
+    // Start of traversal checking delete queue operation.
+    Operation deleteQueueItemsOperation = new Operation().setDone(true);
+    when(indexingServiceMock.getOperation("nonempty")).thenReturn(deleteQueueItemsOperation);
+    when(checkpointHandlerMock.readCheckpoint(FullTraversalConnector.CHECKPOINT_QUEUE))
+        .thenReturn(new QueueCheckpoint.QueueData().setOperationName("nonempty").get());
+
+    // End of traversal running delete queue operation.
+    SettableFuture<Operation> deleteQueueFuture = SettableFuture.create();
+    deleteQueueFuture.set(new Operation().setDone(false).setName("deleteQueueItemsName"));
+    when(indexingServiceMock.deleteQueueItems(any())).thenReturn(deleteQueueFuture);
+
+    FullTraversalConnector connector = createConnector(/* useQueues */ true);
+    List<ApiOperation> docs = createRepositoryDocsAndResponses(3);
+    connector.traverse();
+
+    verify(repositoryMock, times(1)).getAllDocs(null);
+    verifyQueueValue(docs, QUEUE_B);
+    verifyQueueCheckpointHandler(2, 3, QUEUE_B_CHECKPOINT_BYTES);
+    verify(indexingServiceMock).deleteQueueItems(QUEUE_A);
   }
 
   @Test

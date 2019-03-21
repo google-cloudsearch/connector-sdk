@@ -17,9 +17,14 @@ package com.google.enterprise.cloudsearch.sdk.indexing.template;
 
 import static java.net.HttpURLConnection.HTTP_BAD_GATEWAY;
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -404,15 +409,16 @@ public class RepositoryDocTest {
   public void testEqualsNegative() {
     RepositoryDoc doc1 = new RepositoryDoc.Builder().setItem(new Item()).build();
     assertEquals(doc1, doc1);
-    assertFalse(doc1.equals(null));
-    assertFalse(doc1.equals(new RepositoryDoc.Builder()));
+    assertThat(doc1, not(equalTo(null)));
+    assertThat(doc1, not(equalTo(new RepositoryDoc.Builder())));
   }
 
   @Test
   public void testEqualsItemMismatch() {
     RepositoryDoc doc1 = new RepositoryDoc.Builder().setItem(new Item().setName("id1")).build();
     RepositoryDoc doc2 = new RepositoryDoc.Builder().setItem(new Item()).build();
-    assertFalse(doc1.equals(doc2));
+    assertThat(doc1, not(equalTo(doc2)));
+    assertThat(doc1.hashCode(), not(equalTo(doc2.hashCode())));
   }
 
   @Test
@@ -429,6 +435,7 @@ public class RepositoryDocTest {
             .setContent(content, ContentFormat.TEXT)
             .build();
     assertEquals(doc1, doc2);
+    assertEquals(doc1.hashCode(), doc2.hashCode());
   }
 
   @Test
@@ -446,6 +453,7 @@ public class RepositoryDocTest {
             .setContent(content2, ContentFormat.TEXT)
             .build();
     assertNotEquals(doc1, doc2);
+    assertNotEquals(doc1.hashCode(), doc2.hashCode());
   }
 
   @Test
@@ -462,6 +470,7 @@ public class RepositoryDocTest {
             .setContent(content, Integer.toString(Objects.hash(content)), ContentFormat.TEXT)
             .build();
     assertEquals(doc1, doc2);
+    assertEquals(doc1.hashCode(), doc2.hashCode());
   }
 
   @Test
@@ -478,6 +487,7 @@ public class RepositoryDocTest {
             .setContent(content, ContentFormat.TEXT)
             .build();
     assertNotEquals(doc1, doc2);
+    assertNotEquals(doc1.hashCode(), doc2.hashCode());
   }
 
   @Test
@@ -495,6 +505,7 @@ public class RepositoryDocTest {
             .addChildId("id2", new PushItem())
             .build();
     assertEquals(doc1, doc2);
+    assertEquals(doc1.hashCode(), doc2.hashCode());
   }
 
   @Test
@@ -512,6 +523,7 @@ public class RepositoryDocTest {
             .addChildId("id1", new PushItem())
             .build();
     assertEquals(doc1, doc2);
+    assertEquals(doc1.hashCode(), doc2.hashCode());
   }
 
   @Test
@@ -529,8 +541,38 @@ public class RepositoryDocTest {
             .addChildId("id2", new PushItem())
             .addChildId("extraId", new PushItem())
             .build();
-    assertFalse(doc1.equals(doc2));
+    assertThat(doc1, not(equalTo(doc2)));
+    assertThat(doc1.hashCode(), not(equalTo(doc2.hashCode())));
   }
+
+  @Test
+  public void toString_minimal() {
+    Item item = new Item().setName("Don Quixote");
+    RepositoryDoc doc =
+        new RepositoryDoc.Builder()
+            .setItem(item)
+            .build();
+    assertThat(doc.toString(), startsWith("RepositoryDoc ["));
+    assertThat(doc.toString(), containsString("Don Quixote"));
+  }
+
+  @Test
+  public void hashCode_reflexive() {
+    Item item = new Item().setName("Don Quixote");
+    RepositoryDoc doc =
+        new RepositoryDoc.Builder()
+            .setItem(item)
+            .build();
+    assertEquals(doc.hashCode(), doc.hashCode());
+  }
+
+  @Test
+  public void hashCode_mismatch() {
+    RepositoryDoc doc1 = new RepositoryDoc.Builder().setItem(new Item().setName("tick")).build();
+    RepositoryDoc doc2 = new RepositoryDoc.Builder().setItem(new Item().setName("tock")).build();
+    assertThat(doc1.hashCode(), not(equalTo(doc2.hashCode())));
+  }
+
 
   private ItemAcl getCustomerAcl() {
     return new ItemAcl().setReaders(Collections.singletonList(Acl.getCustomerPrincipal()));
