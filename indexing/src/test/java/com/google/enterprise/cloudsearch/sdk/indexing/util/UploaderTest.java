@@ -52,6 +52,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicBoolean;
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -60,12 +62,13 @@ import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /**
  * Tests the {@link Uploader} utility.
  */
-@RunWith(MockitoJUnitRunner.class)
+@RunWith(JUnitParamsRunner.class)
 public class UploaderTest {
   private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
   private static final CredentialFactory CREDENTIAL_FACTORY =
@@ -76,6 +79,7 @@ public class UploaderTest {
               .build();
   private static final Path SERVICE_ACCOUNT_FILE_PATH = Paths.get("./service_account.json");
 
+  @Rule public MockitoRule rule = MockitoJUnit.rule();
   @Rule public TemporaryFolder tempFolder = new TemporaryFolder();
   @Rule public ExpectedException thrown = ExpectedException.none();
 
@@ -89,16 +93,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_deleteItem_debuggingFalse() throws Exception {
-    deleteItem(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_deleteItem_debuggingTrue() throws Exception {
-    deleteItem(/*enableDebugging*/ true);
-  }
-
-  private void deleteItem(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void deleteItem(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -143,16 +139,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_deleteQueueItems_debuggingFalse() throws Exception {
-    deleteQueueItems(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_deleteQueueItems_debuggingTrue() throws Exception {
-    deleteQueueItems(/*enableDebugging*/ true);
-  }
-
-  private void deleteQueueItems(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void deleteQueueItems(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -198,16 +186,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_getItem_debuggingFalse() throws Exception {
-    getItem(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_getItem_debuggingTrue() throws Exception {
-    getItem(/*enableDebugging*/ true);
-  }
-
-  private void getItem(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void getItem(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -248,16 +228,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_pushItem_debuggingFalse() throws Exception {
-    pushItem(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_pushItem_debuggingTrue() throws Exception {
-    pushItem(/*enableDebugging*/ true);
-  }
-
-  void pushItem(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void pushItem(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -301,16 +273,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_unreserve_debuggingFalse() throws Exception {
-    unreserve(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_unreserve_debuggingTrue() throws Exception {
-    unreserve(/*enableDebugging*/ true);
-  }
-
-  void unreserve(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void unreserve(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -355,16 +319,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_getSchema_debuggingFalse() throws Exception {
-    getSchema(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_getSchema_debuggingTrue() throws Exception {
-    getSchema(/*enableDebugging*/ true);
-  }
-
-  void getSchema(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void getSchema(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -403,16 +359,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_deleteSchema_debuggingFalse() throws Exception {
-    deleteSchema(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_deleteSchema_debuggingTrue() throws Exception {
-    deleteSchema(/*enableDebugging*/ true);
-  }
-
-  void deleteSchema(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void deleteSchema(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -451,16 +399,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_updateSchema_debuggingFalse() throws Exception {
-    updateSchema(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_updateSchema_debuggingTrue() throws Exception {
-    updateSchema(/*enableDebugging*/ true);
-  }
-
-  void updateSchema(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void updateSchema(boolean enableDebugging) throws Exception {
     File schemaFile = tempFolder.newFile("schema.json");
     try (FileOutputStream outputStream =
         new FileOutputStream(
@@ -549,16 +489,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_indexItem_debuggingFalse() throws Exception {
-    indexItem(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_indexItem_debuggingTrue() throws Exception {
-    indexItem(/*enableDebugging*/ true);
-  }
-
-  void indexItem(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void indexItem(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -606,16 +538,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_indexItemAndContent_debuggingFalse() throws Exception {
-    indexItemAndContent(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_indexItemAndContent_debuggingTrue() throws Exception {
-    indexItemAndContent(/*enableDebugging*/ true);
-  }
-
-  void indexItemAndContent(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void indexItemAndContent(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -719,16 +643,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_pollItems_debuggingFalse() throws Exception {
-    pollItems(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_pollItems_debuggingTrue() throws Exception {
-    pollItems(/*enableDebugging*/ true);
-  }
-
-  void pollItems(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void pollItems(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -776,16 +692,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_listItems_debuggingFalse() throws Exception {
-    listItems(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_listItems_debuggingTrue() throws Exception {
-    listItems(/*enableDebugging*/ true);
-  }
-
-  void listItems(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void listItems(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -830,16 +738,8 @@ public class UploaderTest {
   }
 
   @Test
-  public void execute_datasourcesList_debuggingFalse() throws Exception {
-    datasourcesList(/*enableDebugging*/ false);
-  }
-
-  @Test
-  public void execute_datasourcesList_debuggingTrue() throws Exception {
-    datasourcesList(/*enableDebugging*/ true);
-  }
-
-  void datasourcesList(boolean enableDebugging) throws Exception {
+  @Parameters({"true", "false"})
+  public void datasourcesList(boolean enableDebugging) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
