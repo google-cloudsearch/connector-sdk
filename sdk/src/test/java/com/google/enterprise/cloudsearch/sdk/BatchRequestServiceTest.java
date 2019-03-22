@@ -1140,6 +1140,108 @@ public class BatchRequestServiceTest {
     verify(batchExecutor).execute(isA(SnapshotRunnable.class));
   }
 
+  @Test
+  public void batchPolicy_fromConfiguration_maxActiveBatches() throws Exception {
+    int maxActiveBatches = 5;
+    int maxQueueLength = 500;
+    Properties config = new Properties();
+    config.setProperty("batch.maxActiveBatches", String.valueOf(maxActiveBatches));
+    config.setProperty("batch.maxQueueLength", String.valueOf(maxQueueLength));
+    setupConfig.initConfig(config);
+    BatchPolicy batchPolicy = BatchPolicy.fromConfiguration();
+
+    AsyncRequest<GenericJson> requestToBatch =
+        new AsyncRequest<GenericJson>(testRequest, retryPolicy, operationStats);
+    doAnswer(
+            invocation -> {
+              requestToBatch.getCallback().onStart();
+              requestToBatch.getCallback().onSuccess(new GenericJson(), new HttpHeaders());
+              return null;
+            })
+        .when(batchRequestHelper)
+        .executeBatchRequest(any());
+    ExecutorService mockBatchExecutor = Mockito.mock(ExecutorService.class);
+    when(executorFactory.getExecutor()).thenReturn(mockBatchExecutor);
+    when(executorFactory.getScheduledExecutor()).thenReturn(scheduleExecutorService);
+    doAnswer(
+        invocation -> {
+          // Actually run the batch; this is how the active batches semaphore is released.
+          ((SnapshotRunnable) invocation.getArgument(0)).run();
+          return null;
+        })
+        .when(mockBatchExecutor)
+        .execute(isA(SnapshotRunnable.class));
+
+    BatchRequestService batchService =
+        new BatchRequestService.Builder(service)
+            .setExecutorFactory(executorFactory)
+            .setBatchRequestHelper(batchRequestHelper)
+            .setGoogleCredential(credential)
+            .setBatchPolicy(batchPolicy)
+            .build();
+    batchService.startAsync().awaitRunning();
+    // Send more requests than can be active (in batches) at once, but less than
+    // maxQueueLength (we're not testing that here).
+    int numRequests = (maxActiveBatches + 1) * batchPolicy.getMaxBatchSize();
+    assertTrue(numRequests < maxQueueLength);
+    for (int i = 0; i < numRequests; i++) {
+      batchService.add(requestToBatch);
+    }
+    batchService.stopAsync().awaitTerminated();
+
+    ArgumentCaptor<BatchRequestService.SnapshotRunnable> captor =
+        ArgumentCaptor.forClass(BatchRequestService.SnapshotRunnable.class);
+    verify(mockBatchExecutor, Mockito.atLeastOnce()).execute(captor.capture());
+    int requestCount = 0;
+    for (BatchRequestService.SnapshotRunnable batch : captor.getAllValues()) {
+      requestCount += batch.snapshotRequests.size();
+    }
+    assertEquals(numRequests, requestCount);
+  }
+
+  @Test
+  public void batchPolicy_fromConfiguration_maxQueueSize() throws Exception {
+    // If maxQueueLength is less than maxBatchSize, a scheduled executor is required, or
+    // flush will never be called and the test will hang.
+    int maxQueueLength = 15;
+    int batchSize = 10;
+    Properties config = new Properties();
+    config.setProperty("batch.maxQueueLength", String.valueOf(maxQueueLength));
+    config.setProperty("batch.batchSize", String.valueOf(batchSize));
+    setupConfig.initConfig(config);
+    BatchPolicy batchPolicy = BatchPolicy.fromConfiguration();
+
+    ExecutorService batchExecutor = Mockito.mock(ExecutorService.class);
+    when(executorFactory.getExecutor()).thenReturn(batchExecutor);
+    when(executorFactory.getScheduledExecutor()).thenReturn(scheduleExecutorService);
+
+    BatchRequestService batchService =
+        new BatchRequestService.Builder(service)
+            .setExecutorFactory(executorFactory)
+            .setBatchRequestHelper(batchRequestHelper)
+            .setGoogleCredential(credential)
+            .setBatchPolicy(batchPolicy)
+            .build();
+    batchService.startAsync().awaitRunning();
+    // Send more requests than can fit in the request queue. Don't let the number of
+    // batches exceed maxActiveBatches or the batches will hang (see
+    // batchPolicy_fromConfiguration_maxActiveBatches).
+    int numRequests = maxQueueLength * 3;
+    for (int i = 0; i < numRequests; i++) {
+      batchService.add(asyncRequest);
+    }
+    batchService.stopAsync().awaitTerminated();
+
+    ArgumentCaptor<BatchRequestService.SnapshotRunnable> captor =
+        ArgumentCaptor.forClass(BatchRequestService.SnapshotRunnable.class);
+    verify(batchExecutor, Mockito.atLeastOnce()).execute(captor.capture());
+    int requestCount = 0;
+    for (BatchRequestService.SnapshotRunnable batch : captor.getAllValues()) {
+      requestCount += batch.snapshotRequests.size();
+    }
+    assertEquals(numRequests, requestCount);
+  }
+
   private <T> void validateFailedResult(ListenableFuture<T> failed) throws InterruptedException {
     try {
       failed.get();
