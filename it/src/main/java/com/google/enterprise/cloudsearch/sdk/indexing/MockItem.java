@@ -21,12 +21,12 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.common.base.Strings;
 import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.FieldOrValue;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.Optional;
 
 /**
@@ -51,6 +51,11 @@ public class MockItem {
   private static final String VERSION = "version";
   private static final String CREATE_TIME = "createTime";
   private static final String UPDATE_TIME = "updateTime";
+  private static final String ACL = "acl";
+
+  private static final Acl DEFAULT_ACL = new Acl.Builder()
+      .setReaders(ImmutableList.of(Acl.getCustomerPrincipal()))
+      .build();
 
   private final String name;
   private final Multimap<String, Object> values;
@@ -61,9 +66,7 @@ public class MockItem {
   }
 
   public Item getItem() {
-    Acl acl = new Acl.Builder()
-        .setReaders(Collections.singletonList(Acl.getCustomerPrincipal()))
-        .build();
+    Acl acl = MockItem.<Acl>getSingleValue(values, ACL).orElse(DEFAULT_ACL);
     Item item = new IndexingItemBuilder(name)
         .setValues(values)
         .setTitle(FieldOrValue.withField(TITLE))
@@ -90,8 +93,7 @@ public class MockItem {
   }
 
   private static String getSingleStringValue(Multimap<String, Object> values, String key) {
-    Object value = getSingleValue(values, key);
-    return value == null ? null : (String) value;
+    return MockItem.<String>getSingleValue(values, key).orElse(null);
   }
 
   private static byte[] getByteArrayValue(Multimap<String, Object> values, String key) {
@@ -99,15 +101,20 @@ public class MockItem {
     return value == null ? null : value.getBytes(StandardCharsets.UTF_8);
   }
 
-  private static Object getSingleValue(Multimap<String, Object> values, String key) {
+  /**
+   * @throws ClassCastException when there is a mismatch between
+   *         value in the map and expected type.
+   */
+  @SuppressWarnings("unchecked")
+  private static <T> Optional<T> getSingleValue(Multimap<String, Object> values, String key) {
     checkNotNull(values, "values can not be null");
     checkArgument(!Strings.isNullOrEmpty(key), "lookup key can not be null or empty");
-    Optional<Object> result = values
+    return values
         .get(key)
         .stream()
         .filter(v -> v != null)
+        .map(v -> (T) v)
         .findFirst();
-    return result.orElse(null);
   }
 
   /**
@@ -173,6 +180,11 @@ public class MockItem {
 
     public Builder setVersion(String version) {
       values.put(VERSION, version);
+      return this;
+    }
+
+    public Builder setAcl(Acl acl) {
+      values.put(ACL, acl);
       return this;
     }
 

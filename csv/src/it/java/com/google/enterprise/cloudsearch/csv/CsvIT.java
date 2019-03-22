@@ -78,7 +78,7 @@ public class CsvIT {
   private static final String APPLICATION_ID_PROPERTY_NAME =
       qualifyTestProperty("searchApplicationId");
   private static final String AUTH_INFO_PROPERTY_NAME =
-      qualifyTestProperty("authInfo");
+      qualifyTestProperty("authInfoUser1");
   private static final Duration CONNECTOR_RUN_TIME = new Duration(45, TimeUnit.SECONDS);
   private static final Duration CONNECTOR_RUN_POLL_INTERVAL = Duration.FIVE_SECONDS;
   private static String keyFilePath;
@@ -89,6 +89,7 @@ public class CsvIT {
   private static Optional<String> rootUrl;
   private static TestUtils util;
   private static SearchTestUtils searchUtil;
+  private static String testUser;
 
   @Rule public TemporaryFolder configFolder = new TemporaryFolder();
   @Rule public TemporaryFolder csvFileFolder = new TemporaryFolder();
@@ -138,6 +139,7 @@ public class CsvIT {
     String searchApplicationId = System.getProperty(APPLICATION_ID_PROPERTY_NAME);
     String[] authInfo = System.getProperty(AUTH_INFO_PROPERTY_NAME).split(",");
     searchHelper = SearchTestUtils.getSearchHelper(authInfo, searchApplicationId, rootUrl);
+    testUser = authInfo[0];
     StructuredDataHelper.verifyMockContentDatasourceSchema(v1Client.getSchema());
   }
 
@@ -378,7 +380,7 @@ public class CsvIT {
       config.setProperty("itemMetadata.title.field", "empName");
       config.setProperty("connector.runOnce", "true");
       config.setProperty(
-          "defaultAcl.readers.users", "google:connectors1@connectstaging.10bot20.info");
+          "defaultAcl.readers.users", "google:" + testUser);
       config.setProperty("defaultAcl.public", "false");
       IndexingApplication csvConnector =
           runCsvConnector(setupPropertiesConfigAndRunConnector(config));

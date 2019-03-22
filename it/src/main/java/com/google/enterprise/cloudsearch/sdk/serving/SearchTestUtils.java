@@ -36,7 +36,7 @@ import org.awaitility.Duration;
 public class SearchTestUtils {
 
   private static final Logger logger = Logger.getLogger(SearchTestUtils.class.getName());
-  private static final Duration ITEM_EQUAL_TIMEOUT = new Duration(15, TimeUnit.SECONDS);
+  private static final Duration ITEM_EQUAL_TIMEOUT = new Duration(30, TimeUnit.SECONDS);
   private static final Duration ITEM_EQUAL_POLL_INTERVAL = Duration.TWO_SECONDS;
   private final SearchHelper searchHelper;
 

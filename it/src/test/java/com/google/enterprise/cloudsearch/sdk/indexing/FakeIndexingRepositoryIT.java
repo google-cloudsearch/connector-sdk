@@ -20,6 +20,7 @@ import static com.google.enterprise.cloudsearch.sdk.TestProperties.qualifyTestPr
 import static com.google.enterprise.cloudsearch.sdk.Util.getRandomId;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.google.api.services.cloudsearch.v1.model.Date;
@@ -66,16 +67,20 @@ public class FakeIndexingRepositoryIT {
   private static final String ROOT_URL_PROPERTY_NAME = qualifyTestProperty("rootUrl");
   private static final String APPLICATION_ID_PROPERTY_NAME =
       qualifyTestProperty("searchApplicationId");
-  private static final String AUTH_INFO_PROPERTY_NAME =
-      qualifyTestProperty("authInfo");
+  private static final String AUTH_INFO_USER1_PROPERTY_NAME =
+      qualifyTestProperty("authInfoUser1");
+  private static final String AUTH_INFO_USER2_PROPERTY_NAME =
+      qualifyTestProperty("authInfoUser2");
   private static final int WAIT_FOR_CONNECTOR_RUN_SECS = 60;
   private static String keyFilePath;
   private static String indexingSourceId;
   private static Optional<String> rootUrl;
   private static CloudSearchService v1Client;
   private static TestUtils testUtils;
-  private static SearchHelper searchHelper;
-  private static SearchTestUtils searchUtil;
+  private static SearchTestUtils searchUtilUser1;
+  private static SearchTestUtils searchUtilUser2;
+  private static String testUser1;
+  private static String testUser2;
 
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public TemporaryFolder configFolder = new TemporaryFolder();
@@ -88,8 +93,17 @@ public class FakeIndexingRepositoryIT {
     testUtils = new TestUtils(v1Client);
     StructuredDataHelper.verifyMockContentDatasourceSchema(v1Client.getSchema());
     String searchApplicationId = System.getProperty(APPLICATION_ID_PROPERTY_NAME);
-    String[] authInfo = System.getProperty(AUTH_INFO_PROPERTY_NAME).split(",");
-    searchHelper = SearchTestUtils.getSearchHelper(authInfo, searchApplicationId, rootUrl);
+    String[] authInfoUser1 = System.getProperty(AUTH_INFO_USER1_PROPERTY_NAME).split(",");
+    String[] authInfoUser2 = System.getProperty(AUTH_INFO_USER2_PROPERTY_NAME).split(",");
+    SearchHelper searchHelperUser1 =
+        SearchTestUtils.getSearchHelper(authInfoUser1, searchApplicationId, rootUrl);
+    SearchHelper searchHelperUser2 =
+        SearchTestUtils.getSearchHelper(authInfoUser2, searchApplicationId, rootUrl);
+    testUser1 = authInfoUser1[0];
+    testUser2 = authInfoUser2[0];
+    assertNotEquals(testUser1, testUser2);
+    searchUtilUser1 = new SearchTestUtils(searchHelperUser1);
+    searchUtilUser2 = new SearchTestUtils(searchHelperUser2);
   }
 
   private static void validateInputParams() throws Exception {
@@ -236,7 +250,7 @@ public class FakeIndexingRepositoryIT {
     String itemId = Util.getItemId(indexingSourceId, itemName);
     Properties config = new Properties();
     config.setProperty(
-        "defaultAcl.readers.users", "google:connectors1@connectstaging.10bot20.info");
+        "defaultAcl.readers.users", "google:" + testUser1);
     config.setProperty("defaultAcl.public", "false");
     config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
     config.setProperty("defaultAcl.name", "mocksdk_defaultAcl_" + getRandomId());
@@ -252,8 +266,75 @@ public class FakeIndexingRepositoryIT {
     try {
       runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
       testUtils.waitUntilEqual(itemId, item.getItem());
-      searchUtil = new SearchTestUtils(searchHelper);
-      searchUtil.waitUntilItemServed(itemName, itemName);
+      searchUtilUser1.waitUntilItemServed(itemName, itemName);
+    } finally {
+      v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
+    }
+  }
+
+  @Test
+  public void defaultAcl_modeAppend_verifyServing() throws IOException, InterruptedException {
+    String itemName = "AppendAcl_" + getRandomId();
+    String itemId = Util.getItemId(indexingSourceId, itemName);
+    Properties config = new Properties();
+    config.setProperty(
+        "defaultAcl.readers.users", "google:" + testUser2);
+    config.setProperty("defaultAcl.public", "false");
+    config.setProperty("defaultAcl.mode", DefaultAclMode.APPEND.toString());
+    config.setProperty("defaultAcl.name", "mocksdk_appendAcl_" + getRandomId());
+    Acl acl = new Acl.Builder()
+        .setReaders(Collections
+            .singletonList(Acl.getGoogleUserPrincipal(testUser1)))
+        .build();
+    MockItem item = new MockItem.Builder(itemId)
+        .setTitle(itemName)
+        .setMimeType("HTML")
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(acl)
+        .build();
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(Collections.singletonList(item))
+        .build();
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
+      testUtils.waitUntilEqual(itemId, item.getItem());
+      searchUtilUser2.waitUntilItemServed(itemName, itemName);
+      searchUtilUser1.waitUntilItemServed(itemName, itemName);
+    } finally {
+      v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
+    }
+  }
+
+  @Test
+  public void defaultAcl_modeOverride_verifyServing() throws IOException, InterruptedException {
+    String itemName = "OverrideAcl_" + getRandomId();
+    String itemId = Util.getItemId(indexingSourceId, itemName);
+    Properties config = new Properties();
+    config.setProperty(
+        "defaultAcl.readers.users", "google:" + testUser2);
+    config.setProperty("defaultAcl.public", "false");
+    config.setProperty("defaultAcl.mode", DefaultAclMode.OVERRIDE.toString());
+    config.setProperty("defaultAcl.name", "mocksdk_overrideAcl_" + getRandomId());
+    Acl acl = new Acl.Builder()
+        .setReaders(Collections
+            .singletonList(Acl.getGoogleUserPrincipal(testUser1)))
+        .build();
+    MockItem item = new MockItem.Builder(itemId)
+        .setTitle(itemName)
+        .setMimeType("HTML")
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(acl)
+        .build();
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(Collections.singletonList(item))
+        .build();
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
+      testUtils.waitUntilEqual(itemId, item.getItem());
+      searchUtilUser2.waitUntilItemServed(itemName, itemName);
+      searchUtilUser1.waitUntilItemNotServed(itemName, itemName);
     } finally {
       v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
     }
