@@ -86,6 +86,8 @@ public class IndexingItemBuilder {
   private static final String CONTENT_LANGUAGE = "itemMetadata.contentLanguage";
   private static final String HASH = "itemMetadata.hash";
   private static final String CONTAINER_NAME = "itemMetadata.containerName";
+  private static final String SEARCH_QUALITY_METADATA_QUALITY =
+      "itemMetadata.searchQualityMetadata.quality";
   public static final String OBJECT_TYPE = "itemMetadata.objectType";
 
   public static final String MIME_TYPE_FIELD = MIME_TYPE + ".field";
@@ -96,6 +98,8 @@ public class IndexingItemBuilder {
   public static final String CONTENT_LANGUAGE_FIELD = CONTENT_LANGUAGE + ".field";
   public static final String HASH_FIELD = HASH + ".field";
   public static final String CONTAINER_NAME_FIELD = CONTAINER_NAME + ".field";
+  public static final String SEARCH_QUALITY_METADATA_QUALITY_FIELD =
+      SEARCH_QUALITY_METADATA_QUALITY + ".field";
   public static final String OBJECT_TYPE_FIELD = OBJECT_TYPE + ".field";
 
   public static final String MIME_TYPE_VALUE = MIME_TYPE + ".defaultValue";
@@ -106,6 +110,8 @@ public class IndexingItemBuilder {
   public static final String CONTENT_LANGUAGE_VALUE = CONTENT_LANGUAGE + ".defaultValue";
   public static final String HASH_VALUE = HASH + ".defaultValue";
   public static final String CONTAINER_NAME_VALUE = CONTAINER_NAME + ".defaultValue";
+  public static final String SEARCH_QUALITY_METADATA_QUALITY_VALUE =
+      SEARCH_QUALITY_METADATA_QUALITY + ".defaultValue";
   public static final String OBJECT_TYPE_VALUE = OBJECT_TYPE + ".defaultValue";
 
   // These methods are not used above so that the constants will be detected as such by javadoc.
@@ -129,6 +135,7 @@ public class IndexingItemBuilder {
   private FieldOrValue<String> language;
   private FieldOrValue<String> hash;
   private FieldOrValue<String> containerName;
+  private FieldOrValue<Double> searchQualityMetadataQuality;
   private FieldOrValue<String> objectType;
 
   private final Optional<FieldOrValue<String>> configMimeType;
@@ -139,6 +146,7 @@ public class IndexingItemBuilder {
   private final Optional<FieldOrValue<String>> configLanguage;
   private final Optional<FieldOrValue<String>> configHash;
   private final Optional<FieldOrValue<String>> configContainerName;
+  private final Optional<FieldOrValue<Double>> configSearchQualityMetadataQuality;
   private final Optional<FieldOrValue<String>> configObjectType;
 
   private SearchQualityMetadata searchQuality;
@@ -166,6 +174,8 @@ public class IndexingItemBuilder {
    *   <li>{@code itemMetadata.hash.field} - The key for the hash field in the values map.
    *   <li>{@code itemMetadata.containerName.field} - The key for the container name field
    *       in the values map.
+   *   <li>{@code itemMetadata.searchQualityMetadata.quality.field} - The key for the
+   *       SearchQualityMetadata quality field in the values map.
    *   <li>{@code itemMetadata.mimeType.defaultValue} - The value for the media type.
    *   <li>{@code itemMetadata.title.defaultValue} - The value for the title.
    *   <li>{@code itemMetadata.sourceRepositoryUrl.defaultValue} - The value for the URL.
@@ -176,6 +186,8 @@ public class IndexingItemBuilder {
    *   <li>{@code itemMetadata.contentLanguage.defaultValue} - The value for the content language.
    *   <li>{@code itemMetadata.hash.defaultValue} - The value for the hash.
    *   <li>{@code itemMetadata.containerName.defaultValue} - The value for the container name.
+   *   <li>{@code itemMetadata.searchQualityMetadata.quality.defaultValue} - The value for
+   *       the SearchQualityMetadata quality.
    * </ul>
    *
    * <p>Optional configuration parameters for {@code ItemMetadata} and {@code StructuredData}:
@@ -211,6 +223,8 @@ public class IndexingItemBuilder {
         .setLanguage(fieldOrValue(CONTENT_LANGUAGE, Configuration.STRING_PARSER))
         .setHash(fieldOrValue(HASH, Configuration.STRING_PARSER))
         .setContainerName(fieldOrValue(CONTAINER_NAME, Configuration.STRING_PARSER))
+        .setSearchQualityMetadataQuality(fieldOrValue(SEARCH_QUALITY_METADATA_QUALITY,
+                Configuration.DOUBLE_PARSER))
         .setObjectType(
             fieldOrValue(
                 OBJECT_TYPE,
@@ -241,6 +255,7 @@ public class IndexingItemBuilder {
     this.configLanguage = config.language;
     this.configHash = config.hash;
     this.configContainerName = config.containerName;
+    this.configSearchQualityMetadataQuality = config.searchQualityMetadataQuality;
     this.configObjectType = config.objectType;
   }
 
@@ -385,12 +400,31 @@ public class IndexingItemBuilder {
 
   /**
    * Sets the {@code searchQualityMetadata} field value for the {@code ItemMetadata}.
+   * <p>
+   * Using this setter will override any value previously set using {@link
+   * #setSearchQualityMetadataQuality(FieldOrValue<Double>)}.
    *
    * @param searchQuality the {@code SearchQualityMetadata} instance
    * @return this instance
    */
   public IndexingItemBuilder setSearchQualityMetadata(SearchQualityMetadata searchQuality) {
     this.searchQuality = searchQuality;
+    this.searchQualityMetadataQuality = null;
+    return this;
+  }
+
+  /**
+   * Sets the {@code searchQualityMetadata.quality} field value for the {@code ItemMetadata}.
+   * <p>
+   * Using this setter will override any value previously set using {@link
+   * #setSearchQualityMetadata(SearchQualityMetadata)}.
+   *
+   * @param quality the source of the {@code searchQualityMetadata.quality} value
+   * @return this instance
+   */
+  public IndexingItemBuilder setSearchQualityMetadataQuality(FieldOrValue<Double> quality) {
+    this.searchQualityMetadataQuality = quality;
+    this.searchQuality = null;
     return this;
   }
 
@@ -534,6 +568,14 @@ public class IndexingItemBuilder {
         metadata::setContainerName);
     if (searchQuality != null) {
       metadata.setSearchQualityMetadata(searchQuality);
+    } else {
+      SearchQualityMetadata searchQualityMetadata = new SearchQualityMetadata();
+      setFromFieldOrValues(searchQualityMetadataQuality, configSearchQualityMetadataQuality,
+          values, StructuredData.DOUBLE_CONVERTER, Objects::isNull, Function.identity(),
+          searchQualityMetadata::setQuality);
+      if (searchQualityMetadata.getQuality() != null) {
+        metadata.setSearchQualityMetadata(searchQualityMetadata);
+      }
     }
     if (version != null) {
       item.encodeVersion(version);
@@ -724,6 +766,7 @@ public class IndexingItemBuilder {
     private Optional<FieldOrValue<String>> language = Optional.empty();
     private Optional<FieldOrValue<String>> hash = Optional.empty();
     private Optional<FieldOrValue<String>> containerName = Optional.empty();
+    private Optional<FieldOrValue<Double>> searchQualityMetadataQuality = Optional.empty();
     private Optional<FieldOrValue<String>> objectType = Optional.empty();
 
     public ConfigDefaults setMimeType(Optional<FieldOrValue<String>> mimeType) {
@@ -763,6 +806,11 @@ public class IndexingItemBuilder {
 
     public ConfigDefaults setContainerName(Optional<FieldOrValue<String>> containerName) {
       this.containerName = containerName;
+      return this;
+    }
+
+    public ConfigDefaults setSearchQualityMetadataQuality(Optional<FieldOrValue<Double>> quality) {
+      this.searchQualityMetadataQuality = quality;
       return this;
     }
 
