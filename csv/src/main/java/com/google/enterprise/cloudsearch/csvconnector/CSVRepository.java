@@ -117,14 +117,10 @@ public class CSVRepository implements Repository {
     }
 
     RepositoryDoc createRepositoryDoc(CSVRecord csvRecord) {
-      try {
-        return new RepositoryDoc.Builder()
-            .setItem(csvFileManager.createItem(csvRecord))
-            .setContent(csvFileManager.createContent(csvRecord), ContentFormat.HTML)
-            .build();
-      } catch (IOException e) {
-        throw new RuntimeException("Error creating document from CSV record.", e);
-      }
+      return new RepositoryDoc.Builder()
+          .setItem(csvFileManager.createItem(csvRecord))
+          .setContent(csvFileManager.createContent(csvRecord), ContentFormat.HTML)
+          .build();
     }
   }
 }

@@ -21,6 +21,7 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -614,5 +615,43 @@ public class CSVRepositoryTest {
     CSVRepository csvRepository = new CSVRepository();
     thrown.expect(InvalidConfigurationException.class);
     csvRepository.init(localMockRepositoryContext);
+  }
+
+  @Test
+  public void getChanges_emptyIterable() throws Exception {
+    CSVRepository csvRepository = new CSVRepository();
+    try (CheckpointCloseableIterable<ApiOperation> iterable = csvRepository.getChanges(null)) {
+      assertNull(iterable.getCheckpoint());
+      assertFalse(iterable.hasMore());
+      Iterator<ApiOperation> iterator = iterable.iterator();
+      assertNotNull(iterator);
+      assertFalse(iterator.hasNext());
+    }
+  }
+
+  @Test
+  public void getDoc_throwsException() throws Exception {
+    CSVRepository csvRepository = new CSVRepository();
+    thrown.expect(UnsupportedOperationException.class);
+    csvRepository.getDoc(null);
+  }
+
+  @Test
+  public void exists_throwsException() throws Exception {
+    CSVRepository csvRepository = new CSVRepository();
+    thrown.expect(UnsupportedOperationException.class);
+    csvRepository.exists(null);
+  }
+
+  @Test
+  public void getIds_returnsNull() throws Exception {
+    CSVRepository csvRepository = new CSVRepository();
+    assertNull(csvRepository.getIds(null));
+  }
+
+  @Test
+  public void close_doesNothing() throws Exception {
+    CSVRepository csvRepository = new CSVRepository();
+    csvRepository.close();
   }
 }
