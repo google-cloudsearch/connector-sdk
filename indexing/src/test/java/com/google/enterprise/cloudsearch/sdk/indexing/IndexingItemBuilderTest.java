@@ -231,7 +231,7 @@ public class IndexingItemBuilderTest {
         .setContainerName(FieldOrValue.withValue("Mom"))
         .setUpdateTime(FieldOrValue.withValue(new DateTime("2018-08-08T15:48:17.000Z")))
         .setCreateTime(FieldOrValue.withValue(new DateTime("2017-07-07T15:48:17.000Z")))
-        .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
+        .setSearchQualityMetadataQuality(FieldOrValue.withValue(0.5d))
         .build();
     assertThat(subject,
         equalTo(
@@ -261,6 +261,7 @@ public class IndexingItemBuilderTest {
     values.put("date", "Wed, 08 Aug 2018 15:48:17 +0000");
     values.put("fingerprint", "42");
     values.put("contentType", "text/plain");
+    values.put("quality", "0.5");
 
     Item subject = new IndexingItemBuilder("foo")
         .setValues(values)
@@ -272,7 +273,7 @@ public class IndexingItemBuilderTest {
         .setContentLanguage(FieldOrValue.withField("beta"))
         .setUpdateTime(FieldOrValue.withField("date"))
         .setCreateTime(null)
-        .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
+        .setSearchQualityMetadataQuality(FieldOrValue.withField("quality"))
         .build();
     assertThat(subject,
         equalTo(
@@ -286,6 +287,41 @@ public class IndexingItemBuilderTest {
                 .setHash("42")
                 .setContainerName("Mom")
                 .setUpdateTime("2018-08-08T15:48:17.000Z")
+                .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
+              )));
+  }
+
+  @Test
+  public void build_searchQualityMetadataSetters_mostRecentWins() {
+    StructuredData.init(new Schema());
+
+    Multimap<String, Object> values = ArrayListMultimap.create();
+    values.put("quality", "0.5");
+
+    Item objectWins = new IndexingItemBuilder("foo")
+        .setValues(values)
+        .setSearchQualityMetadataQuality(FieldOrValue.withField("quality"))
+        .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.9d))
+        .build();
+    assertThat(objectWins,
+        equalTo(
+            new Item()
+            .setName("foo")
+            .setMetadata(
+                new ItemMetadata()
+                .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.9d))
+              )));
+    Item fieldOrValueWins = new IndexingItemBuilder("foo")
+        .setValues(values)
+        .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.9d))
+        .setSearchQualityMetadataQuality(FieldOrValue.withField("quality"))
+        .build();
+    assertThat(fieldOrValueWins,
+        equalTo(
+            new Item()
+            .setName("foo")
+            .setMetadata(
+                new ItemMetadata()
                 .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
               )));
   }
@@ -384,6 +420,7 @@ public class IndexingItemBuilderTest {
     config.put(IndexingItemBuilder.CONTENT_LANGUAGE_FIELD, "lang");
     config.put(IndexingItemBuilder.HASH_FIELD, "fingerprint");
     config.put(IndexingItemBuilder.CONTAINER_NAME_FIELD, "parent");
+    config.put(IndexingItemBuilder.SEARCH_QUALITY_METADATA_QUALITY_FIELD, "quality");
     setupConfig.initConfig(config);
     StructuredData.init(new Schema());
 
@@ -396,6 +433,7 @@ public class IndexingItemBuilderTest {
     values.put("lang", "en-US");
     values.put("fingerprint", "2357");
     values.put("parent", "Mom");
+    values.put("quality", "0.5");
 
     Item subject = IndexingItemBuilder.fromConfiguration("foo")
         .setValues(values)
@@ -414,6 +452,7 @@ public class IndexingItemBuilderTest {
                 .setContentLanguage("en-US")
                 .setHash("2357")
                 .setContainerName("Mom")
+                .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
               )));
   }
 
@@ -429,6 +468,7 @@ public class IndexingItemBuilderTest {
     config.put(IndexingItemBuilder.CONTENT_LANGUAGE_VALUE, "lang");
     config.put(IndexingItemBuilder.HASH_VALUE, "2357");
     config.put(IndexingItemBuilder.CONTAINER_NAME_VALUE, "Mom");
+    config.put(IndexingItemBuilder.SEARCH_QUALITY_METADATA_QUALITY_VALUE, "0.5");
     setupConfig.initConfig(config);
     StructuredData.init(new Schema());
 
@@ -456,6 +496,7 @@ public class IndexingItemBuilderTest {
                 .setContentLanguage("lang")
                 .setHash("2357")
                 .setContainerName("Mom")
+                .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
               )));
   }
 }
