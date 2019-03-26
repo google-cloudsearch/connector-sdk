@@ -263,10 +263,8 @@ class CSVFileManager {
    *
    * @param csvRecord a particular row in the csv file
    * @return {@link Item}
-   * @throws IOException If an I/O error occurs when generating multimap for column names and
-   * values
    */
-  public Item createItem(CSVRecord csvRecord) throws IOException {
+  public Item createItem(CSVRecord csvRecord) {
     return IndexingItemBuilder.fromConfiguration(getUniqueId(csvRecord))
         .setValues(generateMultiMap(csvRecord))
         .setSourceRepositoryUrl(FieldOrValue.withValue(getViewUrl(csvRecord)))
@@ -279,10 +277,8 @@ class CSVFileManager {
    *
    * @param csvRecord a particular row in the CSV file
    * @return {@link ByteArrayContent}
-   * @throws IOException If an I/O error occurs when generating multimap for column names and
-   * corresponding values for the csvRecord
    */
-  public ByteArrayContent createContent(CSVRecord csvRecord) throws IOException {
+  public ByteArrayContent createContent(CSVRecord csvRecord) {
     String htmlContent = contentTemplate.apply(generateMultiMap(csvRecord));
     return ByteArrayContent.fromString("text/html", htmlContent);
   }
