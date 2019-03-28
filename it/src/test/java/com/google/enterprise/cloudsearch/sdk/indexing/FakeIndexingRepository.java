@@ -167,7 +167,7 @@ public class FakeIndexingRepository implements Repository {
 
   private RepositoryDoc getItem(MockItem createItem) {
     AbstractInputStreamContent content =
-        ByteArrayContent.fromString("", createItem.getItem().getName());
+        ByteArrayContent.fromString("", createItem.getItem().toString());
     return new RepositoryDoc.Builder()
         .setItem(createItem.getItem())
         .setContent(content, ContentFormat.RAW)
