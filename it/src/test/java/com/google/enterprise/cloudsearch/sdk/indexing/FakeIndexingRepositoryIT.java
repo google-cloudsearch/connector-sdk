@@ -239,6 +239,7 @@ public class FakeIndexingRepositoryIT {
         "defaultAcl.readers.users", "google:connectors1@connectstaging.10bot20.info");
     config.setProperty("defaultAcl.public", "false");
     config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
+    config.setProperty("defaultAcl.name", "mocksdk_defaultAcl_" + getRandomId());
     MockItem item = new MockItem.Builder(itemId)
         .setTitle(itemName)
         .setMimeType("HTML")

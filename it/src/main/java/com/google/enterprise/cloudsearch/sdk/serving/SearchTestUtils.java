@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -35,7 +36,7 @@ import org.awaitility.Duration;
 public class SearchTestUtils {
 
   private static final Logger logger = Logger.getLogger(SearchTestUtils.class.getName());
-  private static final Duration ITEM_EQUAL_TIMEOUT = Duration.TEN_SECONDS;
+  private static final Duration ITEM_EQUAL_TIMEOUT = new Duration(15, TimeUnit.SECONDS);
   private static final Duration ITEM_EQUAL_POLL_INTERVAL = Duration.TWO_SECONDS;
   private final SearchHelper searchHelper;
 
@@ -44,10 +45,11 @@ public class SearchTestUtils {
   }
 
   public void waitUntilItemServed(String itemId, String query) throws IOException {
-    Awaitility.await()
-        .atMost(ITEM_EQUAL_TIMEOUT)
+    Awaitility.with()
         .pollInterval(ITEM_EQUAL_POLL_INTERVAL)
-        .untilTrue(new AtomicBoolean(resultExists(itemId, query)));
+        .await()
+        .atMost(ITEM_EQUAL_TIMEOUT)
+        .until(() -> resultExists(itemId, query));
   }
 
   public void waitUntilItemNotServed(String itemId, String query) throws IOException {
@@ -58,8 +60,6 @@ public class SearchTestUtils {
   }
 
   private boolean resultExists(String itemId, String query) throws IOException {
-    boolean served = false;
-    boolean serving;
     SearchResponse searchResponse = searchHelper.search(query);
     long resultCountExact = searchResponse.getResultCountExact();
     logger.log(Level.FINE, "Search response: {0}", searchResponse.toPrettyString());
@@ -67,21 +67,18 @@ public class SearchTestUtils {
       for (SearchResult result : searchResponse.getResults()) {
         boolean titlePresent = result.getTitle().equals(itemId);
         boolean isSnippetRight = result.getSnippet().getSnippet().contains(query);
-        serving = titlePresent && isSnippetRight;
-        if (serving) {
+        if (titlePresent && isSnippetRight) {
           logger.log(Level.FINE, "Expected Item in Search Result: {0}", result);
-          served = true;
-        } else {
-          served = false;
+          return true;
         }
       }
     }
-    return served;
+    return false;
   }
 
   /**
    * Utility method to return SearchHelper object.
-   * 
+   *
    * @param authInfo string array containing
    * userEmail of the user to client secrets file,
    * credentialsDirectory path containing the StoredCredential file and
