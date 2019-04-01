@@ -5,7 +5,7 @@
   <parent>
     <groupId>com.google.enterprise.cloudsearch</groupId>
     <artifactId>google-cloudsearch-connector-parent</artifactId>
-    <version>v1-0.0.4-SNAPSHOT</version>
+    <version>v1-0.0.4</version>
   </parent>
   <name>Google Cloud Search CSV Connector</name>
   <artifactId>google-cloudsearch-csv-connector</artifactId>
@@ -142,11 +142,23 @@
     <dependency>
       <groupId>com.google.enterprise.cloudsearch</groupId>
       <artifactId>google-cloudsearch-indexing-connector-sdk</artifactId>
-      <version>v1-0.0.3</version>
+      <version>v1-0.0.4</version>
     </dependency>
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.google.enterprise.cloudsearch</groupId>
+      <artifactId>google-cloudsearch-connector-it-common</artifactId>
+      <version>v1-0.0.4</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.google.truth</groupId>
+      <artifactId>truth</artifactId>
+      <version>0.41</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

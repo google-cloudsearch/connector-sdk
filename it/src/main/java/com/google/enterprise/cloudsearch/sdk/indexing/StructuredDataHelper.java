@@ -15,8 +15,8 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
-import static com.google.common.truth.Truth.assertThat;
 import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
 
 import com.google.api.services.cloudsearch.v1.model.BooleanPropertyOptions;
 import com.google.api.services.cloudsearch.v1.model.DatePropertyOptions;
@@ -121,10 +121,10 @@ public class StructuredDataHelper {
 
   public static void assertStructuredData(Item actualItem, Item expectedItem,
       String schemaObjectType) throws IOException {
-    assertThat(schemaObjectType).isEqualTo(actualItem.getMetadata().getObjectType());
+    assertEquals(schemaObjectType, actualItem.getMetadata().getObjectType());
     Collections.sort(getItemProperties(expectedItem), NAMED_PROPERTY_COMPARATOR);
     Collections.sort(getItemProperties(actualItem), NAMED_PROPERTY_COMPARATOR);
-    assertThat(getItemProperties(expectedItem)).isEqualTo(getItemProperties(actualItem));
+    assertEquals(getItemProperties(expectedItem), getItemProperties(actualItem));
   }
 
   private static List<NamedProperty> getItemProperties(Item itemResponse) {
@@ -162,6 +162,6 @@ public class StructuredDataHelper {
         .getObjectDefinitions()
         .stream()
         .forEach(o-> o.getPropertyDefinitions().sort(PROPERTY_DEFINITION_COMPARATOR));
-    assertThat(expectedSchema).isEqualTo(actualSchema);
+    assertEquals(expectedSchema, actualSchema);
   }
 }

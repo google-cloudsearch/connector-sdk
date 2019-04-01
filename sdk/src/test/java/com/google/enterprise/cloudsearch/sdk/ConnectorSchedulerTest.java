@@ -17,12 +17,14 @@ package com.google.enterprise.cloudsearch.sdk;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.enterprise.cloudsearch.sdk.ConnectorScheduler.OneAtATimeRunnable;
+import com.google.enterprise.cloudsearch.sdk.StatsManager.ResetStatsRule;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRule;
 import java.io.IOException;
@@ -40,7 +42,6 @@ import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 
 /** Tests for {@link ConnectorScheduler}. */
-
 @RunWith(MockitoJUnitRunner.class)
 public class ConnectorSchedulerTest {
   static final Logger logger = Logger.getLogger(ConnectorSchedulerTest.class.getName());
@@ -48,6 +49,7 @@ public class ConnectorSchedulerTest {
   @Rule public ExpectedException thrown = ExpectedException.none();
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public SetupConfigRule setupConfig = SetupConfigRule.uninitialized();
+  @Rule public ResetStatsRule resetStats = new ResetStatsRule();
 
   private abstract static class AbstractConnector implements Connector<ConnectorContext> {
 
@@ -67,6 +69,7 @@ public class ConnectorSchedulerTest {
     public NothingConnector(int count) {
       latch = new CountDownLatch(count);
     }
+
     @Override
     public void traverse() throws IOException, InterruptedException {
       latch.countDown();
@@ -74,7 +77,7 @@ public class ConnectorSchedulerTest {
   }
 
   private abstract static class IncrementalConnector extends AbstractConnector
-  implements IncrementalChangeHandler {}
+      implements IncrementalChangeHandler {}
 
   private static class RetryExceptionHandler implements ExceptionHandler {
 
@@ -324,6 +327,12 @@ public class ConnectorSchedulerTest {
     traverser.start();
     assertTrue(latch.await(30, TimeUnit.SECONDS));
     traverser.stop();
+
+    assertEquals(
+        1,
+        StatsManager.getInstance()
+            .getComponent("IncrementalTraverser")
+            .getSuccessCount("complete"));
   }
 
   @Test
@@ -365,6 +374,11 @@ public class ConnectorSchedulerTest {
     assertTrue(latch.await(30, TimeUnit.SECONDS));
     assertTrue(success.get());
     traverser.stop();
+    assertEquals(
+        1,
+        StatsManager.getInstance()
+            .getComponent("IncrementalTraverser")
+            .getSuccessCount("complete"));
   }
 
   private void setupConfig(Map<String, String> configuration) {

@@ -18,8 +18,8 @@ package com.google.enterprise.cloudsearch.sdk.identity;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.api.services.admin.directory.model.User;
-import com.google.api.services.cloudidentity.v1beta1.model.Group;
-import com.google.api.services.cloudidentity.v1beta1.model.Membership;
+import com.google.api.services.cloudidentity.v1.model.Group;
+import com.google.api.services.cloudidentity.v1.model.Membership;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;

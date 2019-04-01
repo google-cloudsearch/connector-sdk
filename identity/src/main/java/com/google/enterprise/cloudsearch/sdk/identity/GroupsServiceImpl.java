@@ -24,14 +24,14 @@ import com.google.api.client.googleapis.services.json.AbstractGoogleJsonClientRe
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
-import com.google.api.services.cloudidentity.v1beta1.CloudIdentity;
-import com.google.api.services.cloudidentity.v1beta1.CloudIdentity.Groups;
-import com.google.api.services.cloudidentity.v1beta1.CloudIdentity.Groups.Memberships;
-import com.google.api.services.cloudidentity.v1beta1.model.Group;
-import com.google.api.services.cloudidentity.v1beta1.model.ListMembershipsResponse;
-import com.google.api.services.cloudidentity.v1beta1.model.Membership;
-import com.google.api.services.cloudidentity.v1beta1.model.Operation;
-import com.google.api.services.cloudidentity.v1beta1.model.SearchGroupsResponse;
+import com.google.api.services.cloudidentity.v1.CloudIdentity;
+import com.google.api.services.cloudidentity.v1.CloudIdentity.Groups;
+import com.google.api.services.cloudidentity.v1.CloudIdentity.Groups.Memberships;
+import com.google.api.services.cloudidentity.v1.model.Group;
+import com.google.api.services.cloudidentity.v1.model.ListMembershipsResponse;
+import com.google.api.services.cloudidentity.v1.model.Membership;
+import com.google.api.services.cloudidentity.v1.model.Operation;
+import com.google.api.services.cloudidentity.v1.model.SearchGroupsResponse;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
@@ -66,7 +66,7 @@ public class GroupsServiceImpl extends BaseApiService<CloudIdentity> implements 
   private static final OperationStats GROUP_SERVICE_STATS =
       StatsManager.getComponent("GroupsService");
   private static final String SEARCH_QUERY_FORMAT =
-      "namespace = %s AND labels:system/groups/external";
+      "parent == '%s' && 'system/groups/external' in labels";
   private static final String GROUP_RESOURCE_PART = "groups";
   private static final String MEMBERSHIPS_RESOURCE_PART = "memberships";
   private static final Splitter RESOURCE_NAME_SPLITTER = Splitter.on("/").omitEmptyStrings();

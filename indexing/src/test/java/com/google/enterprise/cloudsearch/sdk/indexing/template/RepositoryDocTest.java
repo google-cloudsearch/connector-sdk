@@ -15,18 +15,26 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing.template;
 
+import static java.net.HttpURLConnection.HTTP_BAD_GATEWAY;
+import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.google.api.client.googleapis.json.GoogleJsonError;
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.http.AbstractInputStreamContent;
 import com.google.api.client.http.ByteArrayContent;
+import com.google.api.client.http.HttpHeaders;
+import com.google.api.client.http.HttpResponseException;
 import com.google.api.client.json.GenericJson;
 import com.google.api.client.util.Key;
 import com.google.api.services.cloudsearch.v1.model.Item;
@@ -35,6 +43,7 @@ import com.google.api.services.cloudsearch.v1.model.Operation;
 import com.google.api.services.cloudsearch.v1.model.PushItem;
 import com.google.api.services.cloudsearch.v1.model.RepositoryError;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.enterprise.cloudsearch.sdk.indexing.Acl;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
@@ -50,12 +59,12 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
 /** Tests for {@link RepositoryDoc}. */
-
 @RunWith(MockitoJUnitRunner.class)
 public class RepositoryDocTest {
 
@@ -80,11 +89,75 @@ public class RepositoryDocTest {
               return updateFuture;
             })
         .when(mockIndexingService)
-        .indexItem(item, RequestMode.SYNCHRONOUS);
+        .indexItem(item, RequestMode.UNSPECIFIED);
     doc.execute(mockIndexingService);
     InOrder inOrder = inOrder(mockIndexingService);
-    inOrder.verify(mockIndexingService).indexItem(item, RequestMode.SYNCHRONOUS);
+    inOrder.verify(mockIndexingService).indexItem(item, RequestMode.UNSPECIFIED);
     assertEquals("id1", doc.getItem().getName());
+  }
+
+  @Test(expected = IOException.class)
+  public void execute_indexItemNotFound_notPushedToQueue_throwsIOException() throws Exception {
+    Item item = new Item().setName("id1").setAcl(getCustomerAcl());
+    RepositoryDoc doc = new RepositoryDoc.Builder().setItem(item).build();
+    doAnswer(
+            invocation -> {
+              SettableFuture<Operation> updateFuture = SettableFuture.create();
+              updateFuture.setException(
+                  new GoogleJsonResponseException(
+                      new HttpResponseException.Builder(
+                          HTTP_NOT_FOUND, "not found", new HttpHeaders()),
+                      new GoogleJsonError()));
+              return updateFuture;
+            })
+        .when(mockIndexingService)
+        .indexItem(item, RequestMode.UNSPECIFIED);
+    try {
+      doc.execute(mockIndexingService);
+    } finally {
+      InOrder inOrder = inOrder(mockIndexingService);
+      inOrder.verify(mockIndexingService).indexItem(item, RequestMode.UNSPECIFIED);
+      inOrder.verifyNoMoreInteractions();
+      assertEquals("id1", doc.getItem().getName());
+    }
+  }
+
+  @Test(expected = IOException.class)
+  public void execute_indexFailed_pushedToQueue_throwsIOException() throws Exception {
+    Item item =
+        new Item().setName("id1").setQueue("Q1").setPayload("1234").setAcl(getCustomerAcl());
+    RepositoryDoc doc = new RepositoryDoc.Builder().setItem(item).build();
+    doAnswer(
+            invocation -> {
+              SettableFuture<Operation> updateFuture = SettableFuture.create();
+              updateFuture.setException(
+                  new GoogleJsonResponseException(
+                      new HttpResponseException.Builder(
+                          HTTP_BAD_GATEWAY, "bad gateway", new HttpHeaders()),
+                      new GoogleJsonError()));
+              return updateFuture;
+            })
+        .when(mockIndexingService)
+        .indexItem(item, RequestMode.UNSPECIFIED);
+
+    when(mockIndexingService.push(anyString(), any()))
+        .thenReturn(Futures.immediateFuture(new Item()));
+
+    try {
+      doc.execute(mockIndexingService);
+    } finally {
+      InOrder inOrder = inOrder(mockIndexingService);
+      inOrder.verify(mockIndexingService).indexItem(item, RequestMode.UNSPECIFIED);
+      ArgumentCaptor<PushItem> pushItemArgumentCaptor = ArgumentCaptor.forClass(PushItem.class);
+      inOrder
+          .verify(mockIndexingService)
+          .push(eq(item.getName()), pushItemArgumentCaptor.capture());
+      PushItem pushItem = pushItemArgumentCaptor.getValue();
+      assertEquals("Q1", pushItem.getQueue());
+      assertEquals("SERVER_ERROR", pushItem.getRepositoryError().getType());
+      assertEquals("1234", pushItem.getPayload());
+      assertEquals("id1", doc.getItem().getName());
+    }
   }
 
   @Test
@@ -101,8 +174,38 @@ public class RepositoryDocTest {
               return updateFuture;
             })
         .when(mockIndexingService)
-        .indexItemAndContent(any(), any(), any(), eq(ContentFormat.TEXT),
-            eq(RequestMode.SYNCHRONOUS));
+        .indexItemAndContent(
+            any(), any(), any(), eq(ContentFormat.TEXT), eq(RequestMode.UNSPECIFIED));
+    doc.execute(mockIndexingService);
+
+    InOrder inOrder = inOrder(mockIndexingService);
+    inOrder
+        .verify(mockIndexingService)
+        .indexItemAndContent(item, content, null, ContentFormat.TEXT, RequestMode.UNSPECIFIED);
+    assertEquals("id1", doc.getItem().getName());
+    assertEquals(content, doc.getContent());
+  }
+
+  @Test
+  public void testItemAndContentSynchronous() throws IOException, InterruptedException {
+    Item item = new Item().setName("id1").setAcl(getCustomerAcl());
+    AbstractInputStreamContent content = ByteArrayContent.fromString("", "golden");
+    RepositoryDoc doc =
+        new RepositoryDoc.Builder()
+            .setItem(item)
+            .setContent(content, ContentFormat.TEXT)
+            .setRequestMode(RequestMode.SYNCHRONOUS)
+            .build();
+    SettableFuture<Item> updateFuture = SettableFuture.create();
+
+    doAnswer(
+            invocation -> {
+              updateFuture.set(new Item());
+              return updateFuture;
+            })
+        .when(mockIndexingService)
+        .indexItemAndContent(
+            any(), any(), any(), eq(ContentFormat.TEXT), eq(RequestMode.SYNCHRONOUS));
     doc.execute(mockIndexingService);
 
     InOrder inOrder = inOrder(mockIndexingService);
@@ -163,8 +266,8 @@ public class RepositoryDocTest {
               return updateFuture;
             })
         .when(mockIndexingService)
-        .indexItemAndContent(any(), any(), any(), eq(ContentFormat.TEXT),
-            eq(RequestMode.SYNCHRONOUS));
+        .indexItemAndContent(
+            any(), any(), any(), eq(ContentFormat.TEXT), eq(RequestMode.UNSPECIFIED));
 
     SettableFuture<Item> pushFuture = SettableFuture.create();
     doAnswer(
@@ -176,7 +279,7 @@ public class RepositoryDocTest {
         .push(any(), any());
     doc.execute(mockIndexingService);
     verify(mockIndexingService)
-        .indexItemAndContent(item, content, null, ContentFormat.TEXT, RequestMode.SYNCHRONOUS);
+        .indexItemAndContent(item, content, null, ContentFormat.TEXT, RequestMode.UNSPECIFIED);
     verify(mockIndexingService).push("id1", pushItem1);
     verify(mockIndexingService).push("id2", pushItem2);
   }
@@ -204,11 +307,11 @@ public class RepositoryDocTest {
               return updateFuture;
             })
         .when(mockIndexingService)
-        .indexItem(any(), eq(RequestMode.SYNCHRONOUS));
+        .indexItem(any(), eq(RequestMode.UNSPECIFIED));
     doc.execute(mockIndexingService);
     InOrder inOrder = inOrder(mockIndexingService);
-    inOrder.verify(mockIndexingService).indexItem(item, RequestMode.SYNCHRONOUS);
-    inOrder.verify(mockIndexingService).indexItem(expectedFragment, RequestMode.SYNCHRONOUS);
+    inOrder.verify(mockIndexingService).indexItem(item, RequestMode.UNSPECIFIED);
+    inOrder.verify(mockIndexingService).indexItem(expectedFragment, RequestMode.UNSPECIFIED);
   }
 
   @Test
@@ -251,7 +354,8 @@ public class RepositoryDocTest {
         new RepositoryDoc.Builder()
             .setItem(new Item().setName("doc"))
             .addChildId("id1", new PushItem().setQueue("somewhere"))
-            .addChildId("id2",
+            .addChildId(
+                "id2",
                 new PushItem().setRepositoryError(new RepositoryError().setErrorMessage("drat")))
             .build();
     Map<String, PushItem> childIds = doc.getChildIds();
@@ -271,9 +375,9 @@ public class RepositoryDocTest {
   }
 
   /**
-   * Check whether a GenericJson subclass is really cloneable. Most notably,
-   * GenericJson.clone fails on immutable collections. This test is more conservative,
-   * allowing only Boolean, Number, and String fields, and nested GenericJson objects.
+   * Check whether a GenericJson subclass is really cloneable. Most notably, GenericJson.clone fails
+   * on immutable collections. This test is more conservative, allowing only Boolean, Number, and
+   * String fields, and nested GenericJson objects.
    */
   // TODO(jlacey): This could be a Matcher, or otherwise return the offending class.
   private boolean isCloneable(Class<?> jsonClass) {

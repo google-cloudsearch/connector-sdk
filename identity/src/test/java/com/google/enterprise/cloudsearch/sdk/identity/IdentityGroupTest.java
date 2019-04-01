@@ -21,11 +21,11 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
-import com.google.api.services.cloudidentity.v1beta1.model.EntityKey;
-import com.google.api.services.cloudidentity.v1beta1.model.Group;
-import com.google.api.services.cloudidentity.v1beta1.model.Membership;
-import com.google.api.services.cloudidentity.v1beta1.model.Operation;
-import com.google.api.services.cloudidentity.v1beta1.model.Status;
+import com.google.api.services.cloudidentity.v1.model.EntityKey;
+import com.google.api.services.cloudidentity.v1.model.Group;
+import com.google.api.services.cloudidentity.v1.model.Membership;
+import com.google.api.services.cloudidentity.v1.model.Operation;
+import com.google.api.services.cloudidentity.v1.model.Status;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.Futures;
@@ -91,7 +91,7 @@ public class IdentityGroupTest {
   public void testBuilder() {
     Set<Membership> members =
         Collections.singleton(
-            new Membership().setMemberKey(new EntityKey().setId("user@domain.com")));
+            new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com")));
     IdentityGroup group =
         new IdentityGroup.Builder()
             .setGroupIdentity("domain\\group1")
@@ -108,7 +108,7 @@ public class IdentityGroupTest {
   public void testUnmap() throws IOException, InterruptedException, ExecutionException {
     Set<Membership> members =
         Collections.singleton(
-            new Membership().setMemberKey(new EntityKey().setId("user@domain.com")));
+            new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com")));
     IdentityGroup group =
         new IdentityGroup.Builder()
             .setGroupIdentity("domain\\group1")
@@ -126,7 +126,7 @@ public class IdentityGroupTest {
   public void testUnmapFails() throws IOException, InterruptedException, ExecutionException {
     Set<Membership> members =
         Collections.singleton(
-            new Membership().setMemberKey(new EntityKey().setId("user@domain.com")));
+            new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com")));
     IdentityGroup group =
         new IdentityGroup.Builder()
             .setGroupIdentity("domain\\group1")
@@ -143,10 +143,11 @@ public class IdentityGroupTest {
 
   @Test
   public void testSyncPreviousNull() throws IOException, InterruptedException, ExecutionException {
-    Membership member = new Membership().setMemberKey(new EntityKey().setId("user@domain.com"));
+    Membership member =
+        new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com"));
     Membership memberToReturn =
         new Membership()
-            .setMemberKey(new EntityKey().setId("user@domain.com"))
+            .setPreferredMemberKey(new EntityKey().setId("user@domain.com"))
             .setName("groups/id1/memberships/member1");
     Set<Membership> members = Collections.singleton(member);
     IdentityGroup group =
@@ -191,11 +192,11 @@ public class IdentityGroupTest {
     Membership member =
         new Membership()
             .setName("groups/id1/memberships/existing")
-            .setMemberKey(new EntityKey().setId("existing@domain.com"));
+            .setPreferredMemberKey(new EntityKey().setId("existing@domain.com"));
     Membership removed =
         new Membership()
             .setName("groups/id1/memberships/removed")
-            .setMemberKey(new EntityKey().setId("removed@domain.com"));
+            .setPreferredMemberKey(new EntityKey().setId("removed@domain.com"));
 
     IdentityGroup previous =
         new IdentityGroup.Builder()
@@ -205,10 +206,11 @@ public class IdentityGroupTest {
             .setMembers(ImmutableSet.of(member, removed))
             .build();
 
-    Membership added = new Membership().setMemberKey(new EntityKey().setId("user@domain.com"));
+    Membership added =
+        new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com"));
     Membership memberToReturn =
         new Membership()
-            .setMemberKey(new EntityKey().setId("user@domain.com"))
+            .setPreferredMemberKey(new EntityKey().setId("user@domain.com"))
             .setName("groups/id1/memberships/added");
     IdentityGroup current =
         new IdentityGroup.Builder()
@@ -241,11 +243,11 @@ public class IdentityGroupTest {
     Membership member =
         new Membership()
             .setName("groups/id1/memberships/existing")
-            .setMemberKey(new EntityKey().setId("existing@domain.com"));
+            .setPreferredMemberKey(new EntityKey().setId("existing@domain.com"));
     Membership removed =
         new Membership()
             .setName("groups/id1/memberships/removed")
-            .setMemberKey(new EntityKey().setId("removed@domain.com"));
+            .setPreferredMemberKey(new EntityKey().setId("removed@domain.com"));
 
     IdentityGroup previous =
         new IdentityGroup.Builder()
@@ -255,10 +257,11 @@ public class IdentityGroupTest {
             .setMembers(ImmutableSet.of(member, removed))
             .build();
 
-    Membership added = new Membership().setMemberKey(new EntityKey().setId("user@domain.com"));
+    Membership added =
+        new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com"));
     Membership memberToReturn =
         new Membership()
-            .setMemberKey(new EntityKey().setId("user@domain.com"))
+            .setPreferredMemberKey(new EntityKey().setId("user@domain.com"))
             .setName("groups/id1/memberships/added");
     IdentityGroup current =
         new IdentityGroup.Builder()
@@ -293,11 +296,11 @@ public class IdentityGroupTest {
     Membership member =
         new Membership()
             .setName("groups/id1/memberships/existing")
-            .setMemberKey(new EntityKey().setId("existing@domain.com"));
+            .setPreferredMemberKey(new EntityKey().setId("existing@domain.com"));
     Membership removed =
         new Membership()
             .setName("groups/id1/memberships/removed")
-            .setMemberKey(new EntityKey().setId("removed@domain.com"));
+            .setPreferredMemberKey(new EntityKey().setId("removed@domain.com"));
 
     IdentityGroup previous =
         new IdentityGroup.Builder()
@@ -307,10 +310,11 @@ public class IdentityGroupTest {
             .setMembers(ImmutableSet.of(member, removed))
             .build();
 
-    Membership added = new Membership().setMemberKey(new EntityKey().setId("user@domain.com"));
+    Membership added =
+        new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com"));
     Membership memberToReturn =
         new Membership()
-            .setMemberKey(new EntityKey().setId("user@domain.com"))
+            .setPreferredMemberKey(new EntityKey().setId("user@domain.com"))
             .setName("groups/id1/memberships/added");
     IdentityGroup current =
         new IdentityGroup.Builder()
@@ -342,7 +346,7 @@ public class IdentityGroupTest {
     Membership member =
         new Membership()
             .setName("groups/id1/memberships/existing")
-            .setMemberKey(new EntityKey().setId("existing@domain.com"));
+            .setPreferredMemberKey(new EntityKey().setId("existing@domain.com"));
 
     IdentityGroup identityGroup =
         new IdentityGroup.Builder()
@@ -351,10 +355,11 @@ public class IdentityGroupTest {
             .setGroupResourceName("groups/id1")
             .setMembers(ImmutableSet.of(member))
             .build();
-    Membership added = new Membership().setMemberKey(new EntityKey().setId("user@domain.com"));
+    Membership added =
+        new Membership().setPreferredMemberKey(new EntityKey().setId("user@domain.com"));
     Membership memberToReturn =
         new Membership()
-            .setMemberKey(new EntityKey().setId("user@domain.com"))
+            .setPreferredMemberKey(new EntityKey().setId("user@domain.com"))
             .setName("groups/id1/memberships/added");
     IdentityGroup expected =
         new IdentityGroup.Builder()
@@ -376,7 +381,7 @@ public class IdentityGroupTest {
     Membership member =
         new Membership()
             .setName("groups/id1/memberships/existing")
-            .setMemberKey(new EntityKey().setId("existing@domain.com"));
+            .setPreferredMemberKey(new EntityKey().setId("existing@domain.com"));
 
     IdentityGroup identityGroup =
         new IdentityGroup.Builder()
@@ -385,7 +390,8 @@ public class IdentityGroupTest {
             .setGroupResourceName("groups/id1")
             .setMembers(ImmutableSet.of(member))
             .build();
-    Membership added = new Membership().setMemberKey(new EntityKey().setId("existing@domain.com"));
+    Membership added =
+        new Membership().setPreferredMemberKey(new EntityKey().setId("existing@domain.com"));
     IdentityGroup expected =
         new IdentityGroup.Builder()
             .setGroupIdentity("domain\\group1")
@@ -404,12 +410,12 @@ public class IdentityGroupTest {
     Membership member =
         new Membership()
             .setName("groups/id1/memberships/existing")
-            .setMemberKey(new EntityKey().setId("existing@domain.com"));
+            .setPreferredMemberKey(new EntityKey().setId("existing@domain.com"));
     EntityKey memberKeyToRemove = new EntityKey().setId("removed@domain.com");
     Membership removed =
         new Membership()
             .setName("groups/id1/memberships/removed")
-            .setMemberKey(memberKeyToRemove);
+            .setPreferredMemberKey(memberKeyToRemove);
 
     IdentityGroup identityGroup =
         new IdentityGroup.Builder()
@@ -440,7 +446,7 @@ public class IdentityGroupTest {
     Membership member =
         new Membership()
             .setName("groups/id1/memberships/existing")
-            .setMemberKey(new EntityKey().setId("existing@domain.com"));
+            .setPreferredMemberKey(new EntityKey().setId("existing@domain.com"));
 
     IdentityGroup identityGroup =
         new IdentityGroup.Builder()
