@@ -80,6 +80,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -132,11 +133,12 @@ public class StructuredData {
       new JsonObjectParser(JacksonFactory.getDefaultInstance());
 
   private static final AtomicBoolean initialized = new AtomicBoolean();
-  private static final List<DateTimeParser> dateTimeParsers = new ArrayList<>();
+  private static final AtomicReference<ImmutableList<DateTimeParser>> dateTimeParsers =
+      new AtomicReference<>(ImmutableList.of());
 
   /** A map from object definition names to instances of this class. */
-  private static final Map<String, StructuredData> structuredDataMapping =
-      new HashMap<String, StructuredData>();
+  private static final AtomicReference<ImmutableMap<String, StructuredData>> structuredDataMapping =
+      new AtomicReference<>(ImmutableMap.of());
 
   /** A map from property definition names to a typed ValueExtractor that builds a NamedProperty. */
   private final ImmutableMap<String, ValueExtractor<?>> conversionMap;
@@ -150,14 +152,14 @@ public class StructuredData {
    * data fields. This method must be executed before any other structured data methods can be
    * called.
    *
-   * <p>Only one of {@code initFromConfiguration} or {@link #init} can be called.
+   * <p>If called again after initialization, the schema data will be reread from either
+   * the configured local schema file or the default schema.
    *
    * @param indexingService {@link IndexingService} instance used to get the default schema
    */
   public static synchronized void initFromConfiguration(IndexingService indexingService) {
-    checkState(!isInitialized(), "StructuredData already initialized.");
-
-    dateTimeParsers.addAll(DEFAULT_DATETIME_PARSERS);
+    ImmutableList.Builder<DateTimeParser> listBuilder = new ImmutableList.Builder<>();
+    listBuilder.addAll(DEFAULT_DATETIME_PARSERS);
     List<String> dateTimePatterns =
         Configuration.getMultiValue(
             DATETIME_PATTERNS, Collections.emptyList(), Configuration.STRING_PARSER,
@@ -166,7 +168,7 @@ public class StructuredData {
     InvalidConfigurationException patternErrors = null;
     for (String pattern : dateTimePatterns) {
       try {
-        dateTimeParsers.add(new DateTimeParser(pattern));
+        listBuilder.add(new DateTimeParser(pattern));
       } catch (IllegalArgumentException e) {
         InvalidConfigurationException ice = new InvalidConfigurationException(
             "Invalid date-time pattern \"" + pattern + "\": " + e.getMessage());
@@ -180,6 +182,7 @@ public class StructuredData {
     if (patternErrors != null) {
       throw patternErrors;
     }
+    dateTimeParsers.set(listBuilder.build());
 
     Schema schema;
     String localSchemaPath = Configuration.getString(LOCAL_SCHEMA, "").get();
@@ -215,32 +218,30 @@ public class StructuredData {
    * data fields. This method must be executed before any other structured data methods can be
    * called.
    *
-   * <p>Only one of {@link #initFromConfiguration} or {@code init} can be called.
+   * <p>If called again after initialization, the schema data will be updated to that in
+   * the {@code schema} parameter.
    *
    * @param schema the schema defined in the data source
    */
   // TODO(jlacey): Should we deprecate this method, in favor of initFromConfiguration?
   public static synchronized void init(Schema schema) {
-    checkState(!isInitialized(), "StructuredData already initialized.");
     checkNotNull(schema, "schema cannot be null");
 
     // Handle a direct call to init, rather than initFromConfiguration.
-    if (dateTimeParsers.isEmpty()) {
-      dateTimeParsers.addAll(DEFAULT_DATETIME_PARSERS);
-    }
+    dateTimeParsers.compareAndSet(ImmutableList.of(), DEFAULT_DATETIME_PARSERS);
 
     List<ObjectDefinition> objectDefinitions =
         schema.getObjectDefinitions() == null
             ? Collections.emptyList()
             : schema.getObjectDefinitions();
-    Map<String, StructuredData> mappings =
+    ImmutableMap<String, StructuredData> mappings =
         objectDefinitions
             .stream()
             .collect(
-                Collectors.toMap(
+                ImmutableMap.toImmutableMap(
                     objDefinition -> objDefinition.getName(),
                     objDefinition -> new StructuredData(objDefinition)));
-    structuredDataMapping.putAll(mappings);
+    structuredDataMapping.set(mappings);
     initialized.set(true);
   }
 
@@ -265,7 +266,7 @@ public class StructuredData {
    */
   public static boolean hasObjectDefinition(String objectType) {
     checkState(isInitialized(), "StructuredData not initialized");
-    return structuredDataMapping.containsKey(objectType);
+    return structuredDataMapping.get().containsKey(objectType);
   }
 
   /**
@@ -286,7 +287,7 @@ public class StructuredData {
 
   private static StructuredData getInstance(String objectType) {
     checkState(isInitialized(), "StructuredData not initialized");
-    StructuredData structuredData = structuredDataMapping.get(objectType);
+    StructuredData structuredData = structuredDataMapping.get().get(objectType);
     checkArgument(structuredData != null, "invalid object type " + objectType);
     return structuredData;
   }
@@ -314,8 +315,8 @@ public class StructuredData {
   }
 
   private static synchronized void reset() {
-    dateTimeParsers.clear();
-    structuredDataMapping.clear();
+    dateTimeParsers.set(ImmutableList.of());
+    structuredDataMapping.set(ImmutableMap.of());
     initialized.set(false);
   }
 
@@ -648,7 +649,7 @@ public class StructuredData {
    */
   private static ZonedDateTime parseDateTime(String input) {
     checkState(isInitialized(), "StructuredData not initialized");
-    for (DateTimeParser parser : dateTimeParsers) {
+    for (DateTimeParser parser : dateTimeParsers.get()) {
       try {
         TemporalAccessor accessor = parser.formatter.parse(input);
         LocalDate localDate = LocalDate.from(accessor);

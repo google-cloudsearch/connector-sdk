@@ -73,10 +73,46 @@ public class ConfigurationTest {
   }
 
   @Test
-  public void testMultipleInit() {
-    Configuration.initConfig(new Properties());
-    Properties config2 = Mockito.mock(Properties.class);
+  public void initConfig_callTwiceWithDifferentProperties_throwsException() {
+    Properties config = new Properties();
+    config.setProperty("name", "value");
+    Properties config2 = new Properties();
+    config2.setProperty("name", "value2");
+    config2.setProperty("foo", "bar");
     thrown.expect(IllegalStateException.class);
+    Configuration.initConfig(config);
+    Configuration.initConfig(config2);
+  }
+
+  @Test
+  public void initConfig_callTwiceWithSameProperties_succeeds() {
+    Properties config1 = new Properties();
+    config1.setProperty("foo", "bar");
+
+    Configuration.initConfig(config1);
+    Configuration.initConfig(config1);
+  }
+
+  @Test
+  public void initConfig_callTwiceWithEqualProperties_succeeds() {
+    Properties config1 = new Properties();
+    config1.setProperty("foo", "bar");
+    Properties config2 = new Properties();
+    config2.setProperty("foo", "bar");
+
+    Configuration.initConfig(config1);
+    Configuration.initConfig(config2);
+  }
+
+  @Test
+  public void initConfig_callTwiceWithEqualPropertiesWithDefaults_succeeds() {
+    Properties defaults = new Properties();
+    defaults.setProperty("foo", "bar");
+    Properties config1 = new Properties(defaults);
+    Properties config2 = new Properties();
+    config2.setProperty("foo", "bar");
+
+    Configuration.initConfig(config1);
     Configuration.initConfig(config2);
   }
 
@@ -392,6 +428,7 @@ public class ConfigurationTest {
     setupConfig.initConfig(config);
   }
 
+  @Test
   public void testInitConfigWithStringOverride() throws IOException {
     File tmpfile = temporaryFolder.newFile("testconfig.properties");
     createFile(tmpfile, ISO_8859_1, "test.param = fileValue");
@@ -419,6 +456,18 @@ public class ConfigurationTest {
     Configuration.initConfig(args);
     thrown.expect(InvalidConfigurationException.class);
     Configuration.getString("test.param", null).get();
+  }
+
+  @Test
+  public void initConfig_commandLineCalledTwice_succeeds() throws IOException {
+    File tmpfile = temporaryFolder.newFile("testconfig.properties");
+    createFile(tmpfile, UTF_8, "test.param = fileValue");
+    String tmpfilePath = "-Dconfig=" + tmpfile.getAbsolutePath();
+    String[] args = {tmpfilePath, "-Dtest.param=commandLineValue"};
+    Configuration.initConfig(args);
+    Configuration.initConfig(args);
+    String value = Configuration.getString("test.param", null).get();
+    assertEquals("commandLineValue", value);
   }
 
   private void createFile(File file, Charset charset, String content) throws IOException {

@@ -22,6 +22,8 @@ import static com.google.common.base.Preconditions.checkState;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import java.io.File;
@@ -29,11 +31,15 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
@@ -68,6 +74,7 @@ import org.junit.runners.model.Statement;
  * }</pre>
  */
 public class Configuration {
+  private static final Logger logger = Logger.getLogger(Configuration.class.getName());
   private static final String CONNECTOR_CONFIG_FILE = "connector-config.properties";
   private static final String ARGS_KEY = "-D";
   private static final String ARGS_CONFIGFILE = "config";
@@ -89,7 +96,6 @@ public class Configuration {
    */
   public static void initConfig(String[] args) throws IOException {
     checkNotNull(args, "arguments can not be null");
-    checkState(initialized.get() == false, "Config already initialized.");
     Properties props = parseArgs(args);
     String configFilePath = props.getProperty(ARGS_CONFIGFILE, CONNECTOR_CONFIG_FILE);
     File configFile = new File(configFilePath);
@@ -123,7 +129,20 @@ public class Configuration {
   @SuppressWarnings("rawtypes")
   public static synchronized void initConfig(Properties config) {
     checkNotNull(config, "config can not be null");
-    checkState(initialized.get() == false, "Config already initialized.");
+    if (initialized.get()) {
+      Map<String, String> loadedMap = flatten(loadedConfig);
+      Map<String, String> newMap = flatten(config);
+      if (loadedMap.equals(newMap)) {
+        logger.log(Level.CONFIG, "Attempt to reload config with same values; ignoring.");
+        return;
+      } else {
+        logger.log(Level.CONFIG, "Properties in only one config: "
+            + Sets.symmetricDifference(loadedMap.keySet(), newMap.keySet()));
+        logger.log(Level.CONFIG, "Properties with different values in the configs: "
+            + Maps.difference(loadedMap, newMap).entriesDiffering());
+        checkState(false, "Attempt to reload config with different properties.");
+      }
+    }
     loadedConfig = config;
     synchronized (configurations) {
       try {
@@ -142,6 +161,19 @@ public class Configuration {
       }
     }
     return;
+  }
+
+  /**
+   * Properties objects can have an enclosed default Properties, but Properties doesn't
+   * override equals() to take that into account.
+   *
+   * @param p a Properties object
+   * @return a map with the properties, including any defaults not overridden
+   */
+  private static Map<String, String> flatten(Properties p) {
+    return p.stringPropertyNames()
+        .stream()
+        .collect(ImmutableMap.toImmutableMap(name -> name, name -> p.getProperty(name)));
   }
 
   /**
