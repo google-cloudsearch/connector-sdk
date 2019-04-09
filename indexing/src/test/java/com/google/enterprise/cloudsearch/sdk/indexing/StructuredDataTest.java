@@ -133,16 +133,19 @@ public class StructuredDataTest {
   public void testReInit() {
     StructuredData.init(new Schema());
     assertTrue(StructuredData.isInitialized());
-    thrown.expect(IllegalStateException.class);
     StructuredData.init(new Schema());
+    assertTrue(StructuredData.isInitialized());
   }
 
   @Test
   public void testInit_thenInitFromConfiguration() throws Exception {
+    setupConfig.initConfig(new Properties());
+    when(mockIndexingService.getSchema()).thenReturn(new Schema());
+
     StructuredData.init(new Schema());
     assertTrue(StructuredData.isInitialized());
-    thrown.expect(IllegalStateException.class);
     StructuredData.initFromConfiguration(mockIndexingService);
+    assertTrue(StructuredData.isInitialized());
   }
 
   @Test
@@ -152,8 +155,59 @@ public class StructuredDataTest {
 
     StructuredData.initFromConfiguration(mockIndexingService);
     assertTrue(StructuredData.isInitialized());
-    thrown.expect(IllegalStateException.class);
     StructuredData.init(new Schema());
+    assertTrue(StructuredData.isInitialized());
+  }
+
+  @Test
+  public void initFromConfiguration_multipleCalls_succeeds() throws Exception {
+    setupConfig.initConfig(new Properties());
+    when(mockIndexingService.getSchema()).thenReturn(new Schema());
+
+    StructuredData.initFromConfiguration(mockIndexingService);
+    assertTrue(StructuredData.isInitialized());
+    StructuredData.initFromConfiguration(mockIndexingService);
+    assertTrue(StructuredData.isInitialized());
+  }
+
+  @Test
+  public void init_multipleCallsDifferentSchemas_lastWins() throws Exception {
+    Schema schema1 = new Schema().setObjectDefinitions(
+        Collections.singletonList(getObjectDefinition("myObject1", Collections.emptyList())));
+    Schema schema2 = new Schema().setObjectDefinitions(
+        Collections.singletonList(getObjectDefinition("myObject2", Collections.emptyList())));
+
+    StructuredData.init(schema1);
+    assertTrue(StructuredData.isInitialized());
+    assertTrue(StructuredData.hasObjectDefinition("myObject1"));
+    assertFalse(StructuredData.hasObjectDefinition("myObject2"));
+
+    StructuredData.init(schema2);
+    assertTrue(StructuredData.isInitialized());
+    assertTrue(StructuredData.hasObjectDefinition("myObject2"));
+    assertFalse(StructuredData.hasObjectDefinition("myObject1"));
+  }
+
+  @Test
+  public void initFromConfiguration_multipleCallsDifferentSchemas_lastWins() throws Exception {
+    Schema schema1 = new Schema().setObjectDefinitions(
+        Collections.singletonList(getObjectDefinition("myObject1", Collections.emptyList())));
+    Schema schema2 = new Schema().setObjectDefinitions(
+        Collections.singletonList(getObjectDefinition("myObject2", Collections.emptyList())));
+    when(mockIndexingService.getSchema())
+        .thenReturn(schema1)
+        .thenReturn(schema2);
+
+    setupConfig.initConfig(new Properties());
+    StructuredData.initFromConfiguration(mockIndexingService);
+    assertTrue(StructuredData.isInitialized());
+    assertTrue(StructuredData.hasObjectDefinition("myObject1"));
+    assertFalse(StructuredData.hasObjectDefinition("myObject2"));
+
+    StructuredData.initFromConfiguration(mockIndexingService);
+    assertTrue(StructuredData.isInitialized());
+    assertTrue(StructuredData.hasObjectDefinition("myObject2"));
+    assertFalse(StructuredData.hasObjectDefinition("myObject1"));
   }
 
   @Test
