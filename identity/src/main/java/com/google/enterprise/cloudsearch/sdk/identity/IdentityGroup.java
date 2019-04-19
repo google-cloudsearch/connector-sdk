@@ -19,11 +19,11 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
-import com.google.api.services.cloudidentity.v1beta1.model.EntityKey;
-import com.google.api.services.cloudidentity.v1beta1.model.Group;
-import com.google.api.services.cloudidentity.v1beta1.model.Membership;
-import com.google.api.services.cloudidentity.v1beta1.model.Operation;
-import com.google.api.services.cloudidentity.v1beta1.model.Status;
+import com.google.api.services.cloudidentity.v1.model.EntityKey;
+import com.google.api.services.cloudidentity.v1.model.Group;
+import com.google.api.services.cloudidentity.v1.model.Membership;
+import com.google.api.services.cloudidentity.v1.model.Operation;
+import com.google.api.services.cloudidentity.v1.model.Status;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -68,7 +68,9 @@ public class IdentityGroup extends IdentityPrincipal<IdentityGroup> {
     super(checkNotNullOrEmpty(buider.groupIdentity, "group identity can not be null"));
     Set<Membership> memberships = checkNotNull(buider.members.get(), "members can not be null");
     this.members =
-        memberships.stream().collect(Collectors.toConcurrentMap(k -> k.getMemberKey(), v -> v));
+        memberships
+            .stream()
+            .collect(Collectors.toConcurrentMap(k -> k.getPreferredMemberKey(), v -> v));
     this.groupKey = checkNotNull(buider.groupKey, "groupKey can not be null");
     this.groupResourceName =
         checkNotNull(buider.groupResourceName, "group resource name can not be null");
@@ -234,7 +236,7 @@ public class IdentityGroup extends IdentityPrincipal<IdentityGroup> {
 
   ListenableFuture<Membership> addMember(Membership m, IdentityService identityService)
       throws IOException {
-    Membership existing = members.get(m.getMemberKey());
+    Membership existing = members.get(m.getPreferredMemberKey());
     if (existing != null) {
       return Futures.immediateFuture(existing);
     }
@@ -296,7 +298,7 @@ public class IdentityGroup extends IdentityPrincipal<IdentityGroup> {
   }
 
   private synchronized void addMember(Membership m) {
-    members.put(m.getMemberKey(), m);
+    members.put(m.getPreferredMemberKey(), m);
   }
 
   private synchronized void removeMember(EntityKey memberKey) {

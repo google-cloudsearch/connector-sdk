@@ -15,9 +15,9 @@
  */
 package com.google.enterprise.cloudsearch.sdk.identity;
 
-import com.google.api.services.cloudidentity.v1beta1.model.Group;
-import com.google.api.services.cloudidentity.v1beta1.model.Membership;
-import com.google.api.services.cloudidentity.v1beta1.model.Operation;
+import com.google.api.services.cloudidentity.v1.model.Group;
+import com.google.api.services.cloudidentity.v1.model.Membership;
+import com.google.api.services.cloudidentity.v1.model.Operation;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Service;
 import java.io.IOException;

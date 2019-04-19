@@ -53,7 +53,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.chrono.IsoChronology;
@@ -62,6 +62,7 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.time.temporal.TemporalAccessor;
+import java.time.temporal.TemporalQueries;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collection;
@@ -514,7 +515,7 @@ public class StructuredData {
             return new DateTime((Long) a);
           }
           if (a instanceof String) {
-            return parseDateTime((String) a);
+            return toDateTime(parseDateTime((String) a));
           }
           if (a instanceof Date) {
             return new DateTime((Date) a);
@@ -543,8 +544,7 @@ public class StructuredData {
             Date input = new Date(((DateTime) a).getValue());
             return getApiDate(input);
           } else if (a instanceof String) {
-            Date input = new Date(parseDateTime((String) a).getValue());
-            return getApiDate(input);
+            return getApiDate(parseDateTime((String) a));
           }
           throw new NumberFormatException("Cannot convert \"" + a + "\" to Date");
         }
@@ -644,55 +644,46 @@ public class StructuredData {
   }
 
   /**
-   * Parses a {@code DateTime} object from a string input. Loops over the built-in and
+   * Parses a {@code ZonedDateTime} object from a string input. Loops over the built-in and
    * configured date-time formats.
    *
    * @param input a date-time string, not null
-   * @return a {@code DateTime} object
+   * @return a {@code ZonedDateTime} object
    * @throws NumberFormatException if parsing fails
    */
-  // TODO(jlacey): Avoid extra conversions (e.g., LocalDate -> ZonedDateTime DateTime ->
-  // java.util.Date -> API DATE).
-  private static DateTime parseDateTime(String input) {
+  private static ZonedDateTime parseDateTime(String input) {
     checkState(isInitialized(), "StructuredData not initialized");
-    ArrayList<Exception> suppressed = new ArrayList<>();
     for (DateTimeParser parser : dateTimeParsers) {
       try {
-        TemporalAccessor dateTime = parser.formatter.parseBest(input,
-            ZonedDateTime::from, LocalDateTime::from, LocalDate::from);
-        if (dateTime instanceof ZonedDateTime) {
-          ZonedDateTime zonedDateTime = (ZonedDateTime) dateTime;
-          logger.log(Level.FINEST, "Input string {0} matched {1} with time zone.",
-              new Object[] { input, parser.name });
-          return toDateTime(zonedDateTime);
-        } else if (dateTime instanceof LocalDateTime) {
-          LocalDateTime localDateTime = (LocalDateTime) dateTime;
-          ZonedDateTime zonedDateTime = localDateTime.atZone(ZoneId.systemDefault());
-          logger.log(Level.FINEST, "Input string {0} matched {1} with no time zone.",
-              new Object[] { input, parser.name });
-          return toDateTime(zonedDateTime);
-        } else if (dateTime instanceof LocalDate) {
-          // TODO(jlacey): We could get the offset, if present, from the TemporalAccessor,
-          // but there isn't an OffsetDate or ZonedDate class to use in parseBest.
-          // We're using the local time zone for now.
-          LocalDate localDate = (LocalDate) dateTime;
-          ZonedDateTime zonedDateTime = localDate.atStartOfDay(ZoneId.systemDefault());
+        TemporalAccessor accessor = parser.formatter.parse(input);
+        LocalDate localDate = LocalDate.from(accessor);
+
+        // Check for a time zone or use the default zone.
+        ZoneId zoneId = accessor.query(TemporalQueries.zone());
+        String tzMessage;
+        if (zoneId == null) {
+          zoneId = ZoneId.systemDefault();
+          tzMessage = "time zone";
+        } else {
+          tzMessage = "no time zone";
+        }
+
+        // Check for a time of day or use the earliest time.
+        LocalTime localTime = accessor.query(TemporalQueries.localTime());
+        if (localTime == null) {
           logger.log(Level.FINEST, "Input string {0} matched {1} as date-only.",
               new Object[] { input, parser.name });
-          return toDateTime(zonedDateTime);
+          return localDate.atStartOfDay(zoneId);
+        } else {
+          logger.log(Level.FINEST, "Input string {0} matched {1} with {2}.",
+              new Object[] { input, parser.name, tzMessage });
+          return localDate.atTime(localTime).atZone(zoneId);
         }
-        // The API doc for DateTimeFormatter.parseBest suggests we can't get here.
-        suppressed.add(
-            new IllegalStateException(
-                "Unsupported date-time class " + dateTime.getClass().getName()));
       } catch (DateTimeParseException e) {
         logger.log(Level.FINEST, "{0} with {1}", new Object[] { e, parser.name });
       }
     }
-    NumberFormatException e =
-        new NumberFormatException("Cannot convert \"" + input + "\" to DateTime");
-    suppressed.forEach(e::addSuppressed);
-    throw e;
+    throw new NumberFormatException("Cannot convert \"" + input + "\" to DateTime");
   }
 
   /**
@@ -772,6 +763,14 @@ public class StructuredData {
         /* Calendar.MONTH starts with 0 where as API Date.MONTH starts with 1 */
         .setMonth(cal.get(Calendar.MONTH) + 1)
         .setYear(cal.get(Calendar.YEAR));
+  }
+
+  private static com.google.api.services.cloudsearch.v1.model.Date getApiDate(
+      ZonedDateTime dateTime) {
+    return new com.google.api.services.cloudsearch.v1.model.Date()
+        .setDay(dateTime.getDayOfMonth())
+        .setMonth(dateTime.getMonthValue())
+        .setYear(dateTime.getYear());
   }
 
   private static final NamedPropertyBuilder<String> TEXT_PROPERTY_BUILDER =

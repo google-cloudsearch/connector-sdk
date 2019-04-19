@@ -15,35 +15,35 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
-import static com.google.common.truth.Truth.assertThat;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.SERVICE_KEY_PROPERTY_NAME;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.qualifyTestProperty;
 import static com.google.enterprise.cloudsearch.sdk.Util.getRandomId;
-import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import static java.util.Arrays.asList;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
-import com.google.api.client.googleapis.json.GoogleJsonResponseException;
-import com.google.api.client.repackaged.com.google.common.base.Strings;
 import com.google.api.services.cloudsearch.v1.model.Date;
 import com.google.api.services.cloudsearch.v1.model.Item;
+import com.google.common.base.Strings;
 import com.google.enterprise.cloudsearch.sdk.Util;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
 import com.google.enterprise.cloudsearch.sdk.indexing.StructuredData.ResetStructuredDataRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.FullTraversalConnector;
+import com.google.enterprise.cloudsearch.sdk.sdk.ConnectorStats;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.awaitility.Awaitility;
+import org.awaitility.Duration;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Rule;
@@ -59,16 +59,15 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class FakeIndexingRepositoryIT {
   private static final Logger logger = Logger.getLogger(FakeIndexingRepositoryIT.class.getName());
-  private static final int MAX_RETRIES = 3;
   // The ID of the CloudSearch indexing source where content is stored.
   private static final String DATA_SOURCE_ID_PROPERTY_NAME = qualifyTestProperty("sourceId");
   private static final String ROOT_URL_PROPERTY_NAME = qualifyTestProperty("rootUrl");
-  private static final int WAIT_DURATION_FOR_DELETE_SECS = 20;
   private static final int WAIT_FOR_CONNECTOR_RUN_SECS = 60;
   private static String keyFilePath;
   private static String indexingSourceId;
   private static Optional<String> rootUrl;
   private static CloudSearchService v1Client;
+  private static TestUtils testUtils;
   private String[] args;
 
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
@@ -79,6 +78,7 @@ public class FakeIndexingRepositoryIT {
   public static void initialize() throws Exception {
     validateInputParams();
     v1Client = new CloudSearchService(keyFilePath, indexingSourceId, rootUrl);
+    testUtils = new TestUtils(v1Client);
     StructuredDataHelper.verifyMockContentDatasourceSchema(v1Client.getSchema());
   }
 
@@ -90,8 +90,8 @@ public class FakeIndexingRepositoryIT {
       dataSourceId = System.getProperty(DATA_SOURCE_ID_PROPERTY_NAME);
       serviceKeyPath = Paths.get(System.getProperty(SERVICE_KEY_PROPERTY_NAME));
       rootUrl = Optional.ofNullable(System.getProperty(ROOT_URL_PROPERTY_NAME));
-      assertThat(serviceKeyPath.toFile().exists()).isTrue();
-      assertThat(Strings.isNullOrEmpty(dataSourceId)).isFalse();
+      assertTrue(serviceKeyPath.toFile().exists());
+      assertFalse(Strings.isNullOrEmpty(dataSourceId));
     } catch (AssertionError error) {
       logger.log(Level.SEVERE,
           "Missing input parameters. Rerun the test as \\\"mvn integration-test"
@@ -137,7 +137,7 @@ public class FakeIndexingRepositoryIT {
         .addPage(asList(item))
         .build();
     runFullTraversalConnector(mockRepo);
-    getAndAssertItem(itemId, item.getItem());
+    testUtils.waitUntilEqual(itemId, item.getItem());
   }
 
   @Test
@@ -162,8 +162,8 @@ public class FakeIndexingRepositoryIT {
         .addPage(asList(itemHtm))
         .build();
     runFullTraversalConnector(mockRepo);
-    getAndAssertItem(pdfItemId, itemPdf.getItem());
-    getAndAssertItem(htmItemId, itemHtm.getItem());
+    testUtils.waitUntilEqual(pdfItemId, itemPdf.getItem());
+    testUtils.waitUntilEqual(htmItemId, itemHtm.getItem());
   }
 
   @Test
@@ -186,14 +186,9 @@ public class FakeIndexingRepositoryIT {
         .addPage(asList(itemXslt, itemXml))
         .build();
     runFullTraversalConnector(mockRepo);
-    Item itemXslResponse = null;
-    Item itemXmlUpdateResponse = null;
     try {
-      itemXslResponse = v1Client.getItem(servicesItemId);
-      Item itemXmlResponse = v1Client.getItem(accessResourceItemId);
-      assertItem(itemXslt.getItem(), itemXslResponse);
-      assertItem(itemXml.getItem(), itemXmlResponse);
-
+      testUtils.waitUntilEqual(servicesItemId, itemXslt.getItem());
+      testUtils.waitUntilEqual(accessResourceItemId, itemXml.getItem());
       MockItem updateItemXml = new MockItem.Builder(accessResourceItemId)
           .setTitle("Restricted Permissions")
           .setMimeType("application/xml")
@@ -201,18 +196,25 @@ public class FakeIndexingRepositoryIT {
           .setItemType(ItemType.CONTAINER_ITEM.toString())
           .build();
       FakeIndexingRepository mockRepoIterate = new FakeIndexingRepository.Builder()
-          .addPage(asList(updateItemXml))
+          .addPage(Collections.singletonList(updateItemXml))
           .build();
-      runFullTraversalConnector(mockRepoIterate);
-      itemXmlUpdateResponse = v1Client.getItem(accessResourceItemId);
-      assertItem(updateItemXml.getItem(), itemXmlUpdateResponse);
-      // Verify itemXslt is deleted during first traversal connector(mockRepo) run.
-      // If item still exists, it may be due to delay in the API-side to delete.
-      assertItemDeleted(servicesItemId);
+      // If there are unfinished operations in the Indexing API, then the connector will exit
+      // without completing a full traversal (see b/123352680), so keep running the connector until
+      // it completes another traversal.
+      final int completedTraversals = ConnectorStats.getSuccessfulFullTraversalsCount();
+      Awaitility.await()
+          .atMost(Duration.FIVE_MINUTES)
+          .pollInSameThread()
+          .until(() -> {
+            runFullTraversalConnector(mockRepoIterate);
+            return ConnectorStats.getSuccessfulFullTraversalsCount() > completedTraversals;
+          });
+      testUtils.waitUntilEqual(accessResourceItemId, updateItemXml.getItem());
+      // servicesItemId should have been deleted after the second full traversal since it no longer
+      // exists in the repository.
+      testUtils.waitUntilDeleted(servicesItemId);
     } finally {
-      if (itemXmlUpdateResponse != null) {
-        v1Client.deleteItem(itemXmlUpdateResponse.getName(), itemXmlUpdateResponse.getVersion());
-      }
+      v1Client.deleteItemsIfExist(asList(servicesItemId, accessResourceItemId));
     }
   }
 
@@ -288,15 +290,6 @@ public class FakeIndexingRepositoryIT {
     verifyStructuredData(itemId, schemaObjectType, item.getItem());
   }
 
-  private void getAndAssertItem(String itemId, Item expectedItem) throws IOException {
-    Item actualItem = v1Client.getItem(itemId);
-    try {
-      assertItem(expectedItem, actualItem);
-    } finally {
-      v1Client.deleteItem(actualItem.getName(), actualItem.getVersion());
-    }
-  }
-
   private void verifyStructuredData(String itemId, String schemaObjectType,
       Item expectedItem) throws IOException {
     Item actualItem = v1Client.getItem(itemId);
@@ -316,38 +309,7 @@ public class FakeIndexingRepositoryIT {
     mockRepo.awaitForClose(WAIT_FOR_CONNECTOR_RUN_SECS, TimeUnit.SECONDS);
   }
 
-  /**
-   * Verify expected and actual item fields.
-   */
-  private void assertItem(Item expected, Item actual) {
-    logger.log(Level.INFO, "Verifying item {0}...", actual);
-    // TODO(lchandramouli): verify all applicable meta data
-    assertEquals(actual.getStatus().getCode(), "ACCEPTED");
-    assertEquals(expected.getItemType(), actual.getItemType());
-    assertEquals(expected.getMetadata(), actual.getMetadata());
-    assertEquals(expected.getName(), actual.getName());
-  }
-
   private String getItemId(String itemName) {
     return Util.getItemId(indexingSourceId, itemName) + getRandomId();
-  }
-
-  /**
-   * Check if item is deleted.
-   */
-  private void assertItemDeleted(String itemId) throws InterruptedException, IOException {
-    try {
-      for (int i = 0; i < MAX_RETRIES; i++) {
-        v1Client.getItem(itemId);
-        logger.log(Level.WARNING,
-            "Item: {0} still exists after attempt {1}. Checking again", new Object[] {itemId, i});
-        Awaitility.await().atMost(WAIT_DURATION_FOR_DELETE_SECS, TimeUnit.SECONDS);
-      }
-      fail(String.format("Item %s not deleted.", itemId));
-    } catch (GoogleJsonResponseException e) {
-      if (e.getStatusCode() != HTTP_NOT_FOUND) {
-        throw e;
-      }
-    }
   }
 }

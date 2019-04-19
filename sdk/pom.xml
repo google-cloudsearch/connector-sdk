@@ -5,7 +5,7 @@
   <parent>
     <groupId>com.google.enterprise.cloudsearch</groupId>
     <artifactId>google-cloudsearch-connector-parent</artifactId>
-    <version>v1-0.0.4-SNAPSHOT</version>
+    <version>v1-0.0.4</version>
   </parent>
 
   <name>Google Cloud Search Connector SDK</name>
@@ -140,13 +140,22 @@
     <dependency>
       <groupId>com.google.apis</groupId>
       <artifactId>google-api-services-cloudsearch</artifactId>
-      <version>v1-rev4-1.25.0</version>
+      <version>v1-rev18-1.25.0</version>
       <exclusions>
         <exclusion>
           <groupId>com.google.guava</groupId>
           <artifactId>guava-jdk5</artifactId>
         </exclusion>
+        <exclusion>
+          <groupId>com.google.api-client</groupId>
+          <artifactId>google-api-client</artifactId>
+        </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>com.google.api-client</groupId>
+      <artifactId>google-api-client</artifactId>
+      <version>1.25.0</version>
     </dependency>
     <dependency>
       <groupId>com.google.guava</groupId>

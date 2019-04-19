@@ -24,11 +24,11 @@ import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
-import com.google.api.services.cloudidentity.v1beta1.CloudIdentity;
-import com.google.api.services.cloudidentity.v1beta1.CloudIdentity.Groups;
-import com.google.api.services.cloudidentity.v1beta1.model.EntityKey;
-import com.google.api.services.cloudidentity.v1beta1.model.Group;
-import com.google.api.services.cloudidentity.v1beta1.model.SearchGroupsResponse;
+import com.google.api.services.cloudidentity.v1.CloudIdentity;
+import com.google.api.services.cloudidentity.v1.CloudIdentity.Groups;
+import com.google.api.services.cloudidentity.v1.model.EntityKey;
+import com.google.api.services.cloudidentity.v1.model.Group;
+import com.google.api.services.cloudidentity.v1.model.SearchGroupsResponse;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
@@ -151,9 +151,9 @@ public class CloudIdentityFacade {
   }
 
   private Groups.Search makeGroupsSearch(String pageToken) throws IOException {
-    String query = format(
-        "namespace = identitysources/%s AND labels:system/groups/external",
-        identitySource);
+    String query =
+        format(
+            "parent == 'identitysources/%s' && 'system/groups/external' in labels", identitySource);
     return service
         .groups()
         .search()

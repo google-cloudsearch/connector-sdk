@@ -46,10 +46,10 @@ import java.util.logging.Logger;
 /**
  * HTTP unit testing transport class.
  *
- * <p>The unit test must set up the request method/url with its expected response object
- * prior to making a call. It is then up to the unit test code to verify correct response
- * is returned. This class will only receive the request and compare it to known set up
- * requests to parrot back the associated response.
+ * <p>The unit test must set up the request method/url with its expected response object prior to
+ * making a call. It is then up to the unit test code to verify correct response is returned. This
+ * class will only receive the request and compare it to known set up requests to parrot back the
+ * associated response.
  */
 class TestingHttpTransport extends MockHttpTransport {
   private static final String SCHEMA_TYPE = "schema";
@@ -60,6 +60,7 @@ class TestingHttpTransport extends MockHttpTransport {
   private static final String ITEM_LIST_NOT_BRIEF = "?brief=false";
   private static final String ITEM_LIST_TOKEN = "&pageToken=";
   private static final String ITEM_LIST_LIMIT = "&pageSize=";
+  private static final String ENABLE_DEBUGGING = "&debugOptions.enableDebugging=";
 
   private static final String METHOD_GET = "GET";
   private static final String METHOD_POST = "POST";
@@ -116,8 +117,8 @@ class TestingHttpTransport extends MockHttpTransport {
   /**
    * Clear the request/response pairs.
    *
-   * <p>This should be used between consecutive calls only to give a different responses to the
-   * same request.
+   * <p>This should be used between consecutive calls only to give a different responses to the same
+   * request.
    */
   public void clearRequestResponse() {
     this.requestMap.clear();
@@ -134,9 +135,7 @@ class TestingHttpTransport extends MockHttpTransport {
     return (method + "*" + url);
   }
 
-  /**
-   * Build the correctly formatted URL request string.
-   */
+  /** Build the correctly formatted URL request string. */
   private class RequestUrlBuilder {
     private String baseUrl;
     private String sourceId;
@@ -175,6 +174,7 @@ class TestingHttpTransport extends MockHttpTransport {
       this.id = id;
       return this;
     }
+
     private RequestUrlBuilder setOperation(String operation) {
       this.operation = operation;
       return this;
@@ -222,10 +222,10 @@ class TestingHttpTransport extends MockHttpTransport {
   public void addDeleteQueueItemsReqResp(String sourceId, GenericJson response) {
     String url =
         new RequestUrlBuilder()
-        .setBaseUrl(DEFAULT_BASE_URL)
-        .setSourceId(sourceId)
-        .setType(TYPE_ITEM + ITEM_DELETE_QUEUE)
-        .build();
+            .setBaseUrl(DEFAULT_BASE_URL)
+            .setSourceId(sourceId)
+            .setType(TYPE_ITEM + ITEM_DELETE_QUEUE)
+            .build();
     this.setRequestResponse(METHOD_POST, url, response);
   }
 
@@ -236,14 +236,15 @@ class TestingHttpTransport extends MockHttpTransport {
    * @param id the item ID
    * @param response the desired returned response
    */
-  public void addGetItemReqResp(String sourceId, String id, GenericJson response) {
+  public void addGetItemReqResp(
+      String sourceId, String id, boolean enableDebugging, GenericJson response) {
     String url =
         new RequestUrlBuilder()
             .setBaseUrl(DEFAULT_BASE_URL)
             .setSourceId(sourceId)
             .setId(id)
             .setType(TYPE_ITEM)
-            .setOptions("?connectorName=" + connectorName)
+            .setOptions("?connectorName=" + connectorName + ENABLE_DEBUGGING + enableDebugging)
             .build();
     this.setRequestResponse(METHOD_GET, url, response);
   }
@@ -254,12 +255,13 @@ class TestingHttpTransport extends MockHttpTransport {
    * @param sourceId source ID
    * @param response the desired returned response
    */
-  public void addGetSchemaReqResp(String sourceId, GenericJson response) {
+  public void addGetSchemaReqResp(String sourceId, boolean enableDebugging, GenericJson response) {
     String url =
         new RequestUrlBuilder()
             .setBaseUrl(DEFAULT_BASE_URL)
             .setSourceId(sourceId)
             .setType(SCHEMA_TYPE)
+            .setOptions("?" + ENABLE_DEBUGGING + enableDebugging)
             .build();
     this.setRequestResponse(METHOD_GET, url, response);
   }
@@ -271,7 +273,7 @@ class TestingHttpTransport extends MockHttpTransport {
    * @param response the desired returned response
    */
   public void addListItemReqResp(String sourceId, String token, GenericJson response) {
-    addListItemReqResp(sourceId, true, token, response);
+    addListItemReqResp(sourceId, true, token, false, response);
   }
 
   /**
@@ -283,10 +285,11 @@ class TestingHttpTransport extends MockHttpTransport {
    * @param response the desired returned response
    */
   public void addListItemReqResp(
-      String sourceId, boolean brief, String token, GenericJson response) {
+      String sourceId, boolean brief, String token, boolean enableDebugging, GenericJson response) {
     String options = ""; // many options for list Items, order is important
     options += brief ? ITEM_LIST_BRIEF : ITEM_LIST_NOT_BRIEF;
     options += "&connectorName=" + connectorName;
+    options += ENABLE_DEBUGGING + enableDebugging;
     if ((token != null) && !token.isEmpty()) {
       options += ITEM_LIST_TOKEN + token;
     }
@@ -311,7 +314,8 @@ class TestingHttpTransport extends MockHttpTransport {
    * @param id the item ID
    * @param response the desired returned response
    */
-  public void addUpdateItemReqResp(String sourceId, String id, GenericJson response) {
+  public void addUpdateItemReqResp(
+      String sourceId, String id, boolean enableDebugging, GenericJson response) {
     // TODO(tvartak) : Validate incremental using priority
     String url =
         new RequestUrlBuilder()
@@ -319,7 +323,7 @@ class TestingHttpTransport extends MockHttpTransport {
             .setSourceId(sourceId)
             .setId(id)
             .setType(TYPE_ITEM)
-            .setOperation("update")
+            .setOperation("index")
             .build();
     this.setRequestResponse(METHOD_POST, url, response);
   }
@@ -400,8 +404,8 @@ class TestingHttpTransport extends MockHttpTransport {
   }
 
   /**
-   * HTTP unit testing request class is accessed by
-   * {@link TestingHttpTransport#buildRequest(String, String)}.
+   * HTTP unit testing request class is accessed by {@link TestingHttpTransport#buildRequest(String,
+   * String)}.
    */
   private class TestingHttpRequest extends MockLowLevelHttpRequest {
 
@@ -435,8 +439,9 @@ class TestingHttpTransport extends MockHttpTransport {
         result = results.removeFirst();
       } else {
         logger.log(Level.INFO, "Invalid request URL {0}", requestMethod + " " + requestUrl);
-        result = badRequest(this.requestMethod, this.requestUrl,
-            "Unsupported request", HTTP_BAD_REQUEST);
+        result =
+            badRequest(
+                this.requestMethod, this.requestUrl, "Unsupported request", HTTP_BAD_REQUEST);
       }
       return getResponse(result);
     }
@@ -444,8 +449,8 @@ class TestingHttpTransport extends MockHttpTransport {
     /**
      * Convert the passed Json "result" to a response.
      *
-     * <p>A {@code null} result will be converted to a successful response. An error response
-     * will be generated only if the {@code result} is a {@link GoogleJsonError}.
+     * <p>A {@code null} result will be converted to a successful response. An error response will
+     * be generated only if the {@code result} is a {@link GoogleJsonError}.
      *
      * @param result the Json execute result.
      * @return the converted response of the result.
@@ -456,12 +461,14 @@ class TestingHttpTransport extends MockHttpTransport {
       if (result instanceof GoogleJsonError) {
         GoogleJsonError error = (GoogleJsonError) result;
         String errorContent = JSON_FACTORY.toString(new GenericJson().set("error", error));
-        response.setStatusCode(error.getCode())
+        response
+            .setStatusCode(error.getCode())
             .setReasonPhrase(error.getMessage())
             .setContentType(Json.MEDIA_TYPE)
             .setContent(errorContent);
       } else {
-        response.setStatusCode(HTTP_OK)
+        response
+            .setStatusCode(HTTP_OK)
             .setContentType(Json.MEDIA_TYPE)
             .setContent(result == null ? "" : JSON_FACTORY.toString(result));
       }
@@ -469,8 +476,8 @@ class TestingHttpTransport extends MockHttpTransport {
     }
 
     /**
-     * Create an error result when invalid parameters are detected during
-     * {@link TestingHttpRequest#execute()}.
+     * Create an error result when invalid parameters are detected during {@link
+     * TestingHttpRequest#execute()}.
      *
      * @param method problem method ("GET", "PUT", etc.).
      * @param location problem url.
@@ -481,10 +488,10 @@ class TestingHttpTransport extends MockHttpTransport {
       return new GoogleJsonError()
           .set("code", code)
           .set("message", "Bad Request: " + method)
-          .set("errors",
-              Collections.singletonList(new ErrorInfo()
-                  .set("location", location)
-                  .set("message", message)));
+          .set(
+              "errors",
+              Collections.singletonList(
+                  new ErrorInfo().set("location", location).set("message", message)));
     }
   }
 }

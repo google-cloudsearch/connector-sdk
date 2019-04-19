@@ -161,6 +161,7 @@ public class DefaultAcl {
   private final Acl commonAcl;
   private final DefaultAclMode aclMode;
   private final String defaultAclName;
+  private final boolean isPublic;
 
   /**
    * Creates a default ACL object and uploads it to Cloud Search.
@@ -174,30 +175,26 @@ public class DefaultAcl {
   private DefaultAcl(Builder builder) {
     aclMode = builder.aclMode;
     defaultAclName = builder.defaultAclName;
+    isPublic = builder.isPublic;
     if (!aclMode.isEnabled()) {
       commonAcl = null;
+    } else if (isPublic) {
+      commonAcl =
+          new Acl.Builder().setReaders(Collections.singleton(Acl.getCustomerPrincipal())).build();
     } else {
-      if (builder.isPublic) {
-        commonAcl = new Acl.Builder()
-            .setReaders(Collections.singleton(Acl.getCustomerPrincipal()))
-            .build();
-      } else {
-        List<Principal> readers = new ArrayList<Principal>();
-        readers.addAll(builder.readerUsers);
-        readers.addAll(builder.readerGroups);
-        List<Principal> deniedReaders = new ArrayList<Principal>();
-        deniedReaders.addAll(builder.deniedReaderUsers);
-        deniedReaders.addAll(builder.deniedReaderGroups);
-        commonAcl = new Acl.Builder()
-            .setReaders(readers)
-            .setDeniedReaders(deniedReaders)
-            .build();
-      }
-      Item aclParent = new IndexingItemBuilder(defaultAclName)
-          .setItemType(ItemType.VIRTUAL_CONTAINER_ITEM)
-          .setAcl(commonAcl)
-          .setQueue(DEFAULT_ACL_QUEUE)
-          .build();
+      List<Principal> readers = new ArrayList<Principal>();
+      readers.addAll(builder.readerUsers);
+      readers.addAll(builder.readerGroups);
+      List<Principal> deniedReaders = new ArrayList<Principal>();
+      deniedReaders.addAll(builder.deniedReaderUsers);
+      deniedReaders.addAll(builder.deniedReaderGroups);
+      commonAcl = new Acl.Builder().setReaders(readers).setDeniedReaders(deniedReaders).build();
+      Item aclParent =
+          new IndexingItemBuilder(defaultAclName)
+              .setItemType(ItemType.VIRTUAL_CONTAINER_ITEM)
+              .setAcl(commonAcl)
+              .setQueue(DEFAULT_ACL_QUEUE)
+              .build();
       try {
         Operation operation =
             builder.indexingService.indexItem(aclParent, RequestMode.SYNCHRONOUS).get();
@@ -288,8 +285,8 @@ public class DefaultAcl {
 
     if (isAclEmpty(item)) {
       // In every mode use case, if the item has no ACL information (aside from an owner), just set
-      // the "inheritFrom" to the ACL parent.
-      applyInheritedAcl(item);
+      // the ACL as defined in DefaultAcl
+      applyDefaultAcl(item);
       return true;
     } else {
       switch (aclMode) {
@@ -316,7 +313,7 @@ public class DefaultAcl {
           return true;
 
         case OVERRIDE: // replace existing ACL
-          applyInheritedAcl(item);
+          applyDefaultAcl(item);
           return true;
 
         default: // should never get this far
@@ -353,6 +350,19 @@ public class DefaultAcl {
   }
 
   /**
+   * Apply DefaultAcl to an item
+   *
+   * @param item to apply ACL for
+   */
+  private void applyDefaultAcl(Item item) {
+    if (isPublic) {
+      applyPublicAcl(item);
+    } else {
+      applyInheritedAcl(item);
+    }
+  }
+
+  /**
    * Applies a new inherited ACL preserving only the owners if present.
    *
    * @param item the item to use for applying a new inherited ACL
@@ -368,6 +378,22 @@ public class DefaultAcl {
     }
     Acl acl = aclBuilder.build();
     acl.applyTo(item);
+  }
+
+  /**
+   * Applies a new domain public ACL preserving only the owners if present.
+   *
+   * @param item the item to use for applying a domain public ACL
+   */
+  private void applyPublicAcl(Item item) {
+    checkState(isPublic, "can not apply public ACL when isPublic is false");
+    // preserve any owners
+    ItemAcl itemAcl = item.getAcl();
+    if (itemAcl == null || isNullOrEmpty(itemAcl.getOwners())) {
+      commonAcl.applyTo(item);
+    } else {
+      new Acl.Builder(commonAcl).setOwners(itemAcl.getOwners()).build().applyTo(item);
+    }
   }
 
   /**

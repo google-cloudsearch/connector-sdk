@@ -47,6 +47,8 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.testing.http.MockHttpTransport;
 import com.google.api.services.cloudsearch.v1.CloudSearch;
 import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources.Items;
+import com.google.api.services.cloudsearch.v1.model.DebugOptions;
+import com.google.api.services.cloudsearch.v1.model.IndexItemRequest;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.ItemContent;
 import com.google.api.services.cloudsearch.v1.model.ItemStatus;
@@ -147,6 +149,11 @@ public class IndexingServiceTest {
 
   @Before
   public void createService() throws IOException, GeneralSecurityException {
+    createService(false, false);
+  }
+
+  private void createService(boolean enableDebugging, boolean allowUnknownGsuitePrincipals)
+      throws IOException, GeneralSecurityException {
     this.transport = new TestingHttpTransport("datasources/source/connectors/unitTest");
     JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
     CredentialFactory credentialFactory =
@@ -182,6 +189,8 @@ public class IndexingServiceTest {
             .setServiceManagerHelper(serviceManagerHelper)
             .setQuotaServer(quotaServer)
             .setConnectorId("unitTest")
+            .setEnableDebugging(enableDebugging)
+            .setAllowUnknownGsuitePrincipals(allowUnknownGsuitePrincipals)
             .build();
     this.indexingService.startAsync().awaitRunning();
   }
@@ -292,7 +301,7 @@ public class IndexingServiceTest {
             })
         .when(batchingService)
         .deleteItem(any());
-    this.indexingService.deleteItem(GOOD_ID, "abc".getBytes(UTF_8), RequestMode.SYNCHRONOUS).get();
+    this.indexingService.deleteItem(GOOD_ID, "abc".getBytes(UTF_8), RequestMode.UNSPECIFIED).get();
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
 
@@ -376,8 +385,7 @@ public class IndexingServiceTest {
   @Test
   public void testDeleteQueueItems() throws Exception {
     this.transport.addDeleteQueueItemsReqResp(SOURCE_ID, new Operation().setName("testOperation"));
-    ListenableFuture<Operation> result =
-        this.indexingService.deleteQueueItems("testqueue");
+    ListenableFuture<Operation> result = this.indexingService.deleteQueueItems("testqueue");
     assertEquals("testOperation", result.get().getName());
   }
 
@@ -385,7 +393,7 @@ public class IndexingServiceTest {
   @Test
   public void testGetItem() throws IOException {
     Item goodItem = new Item().setName(GOOD_ID);
-    this.transport.addGetItemReqResp(SOURCE_ID, GOOD_ID, goodItem);
+    this.transport.addGetItemReqResp(SOURCE_ID, GOOD_ID, false, goodItem);
     Item item = this.indexingService.getItem(GOOD_ID);
     assertNotNull(item);
     assertTrue(item.getName().equals(goodItem.getName()));
@@ -396,7 +404,7 @@ public class IndexingServiceTest {
   public void testGetItemWithSlash() throws IOException {
     String itemName = "docs/item1";
     Item goodItem = new Item().setName(itemName);
-    this.transport.addGetItemReqResp(SOURCE_ID, "docs%2Fitem1", goodItem);
+    this.transport.addGetItemReqResp(SOURCE_ID, "docs%2Fitem1", false, goodItem);
     Item item = this.indexingService.getItem(itemName);
     assertNotNull(item);
     assertTrue(item.getName().equals(goodItem.getName()));
@@ -404,14 +412,14 @@ public class IndexingServiceTest {
 
   @Test
   public void testGetNotFoundItem() throws IOException {
-    this.transport.addGetItemReqResp(SOURCE_ID, NOTFOUND_ID, NOT_FOUND_ERROR);
+    this.transport.addGetItemReqResp(SOURCE_ID, NOTFOUND_ID, false, NOT_FOUND_ERROR);
     Item item = this.indexingService.getItem(NOTFOUND_ID);
     assertNull(item);
   }
 
   @Test
   public void testGetItemError() throws IOException {
-    this.transport.addGetItemReqResp(SOURCE_ID, BAD_ID, HTTP_FORBIDDEN_ERROR);
+    this.transport.addGetItemReqResp(SOURCE_ID, BAD_ID, false, HTTP_FORBIDDEN_ERROR);
     try {
       this.indexingService.getItem(BAD_ID);
       fail("Should have thrown HTTP_FORBIDDEN exception.");
@@ -433,7 +441,7 @@ public class IndexingServiceTest {
     Item goodItem = new Item().setName("goodId");
     ListItemsResponse listResponse =
         new ListItemsResponse().setItems(Collections.singletonList(goodItem));
-    this.transport.addListItemReqResp(SOURCE_ID, true, null, listResponse);
+    this.transport.addListItemReqResp(SOURCE_ID, true, null, false, listResponse);
     for (Item item : this.indexingService.listItem(BRIEF)) {
       assertNotNull(item);
       assertTrue(item.getName().equals(goodItem.getName()));
@@ -445,7 +453,7 @@ public class IndexingServiceTest {
     Item goodItem = new Item().setName("goodId");
     ListItemsResponse listResponse =
         new ListItemsResponse().setItems(Collections.singletonList(goodItem));
-    this.transport.addListItemReqResp(SOURCE_ID, true, "", listResponse);
+    this.transport.addListItemReqResp(SOURCE_ID, true, "", false, listResponse);
     for (Item item : this.indexingService.listItem(BRIEF)) {
       assertNotNull(item);
       assertTrue(item.getName().equals(goodItem.getName()));
@@ -457,7 +465,7 @@ public class IndexingServiceTest {
     Item goodItem = new Item().setName("goodId");
     ListItemsResponse listResponse =
         new ListItemsResponse().setItems(Collections.singletonList(goodItem));
-    this.transport.addListItemReqResp(SOURCE_ID, false, "", listResponse);
+    this.transport.addListItemReqResp(SOURCE_ID, false, "", false, listResponse);
     for (Item item : this.indexingService.listItem(!BRIEF)) {
       assertNotNull(item);
       assertTrue(item.getName().equals(goodItem.getName()));
@@ -480,8 +488,8 @@ public class IndexingServiceTest {
     ListItemsResponse listResponse1 =
         new ListItemsResponse().setItems(firstSetItems).setNextPageToken("somestring");
     ListItemsResponse listResponse2 = new ListItemsResponse().setItems(secondSetItems);
-    this.transport.addListItemReqResp(SOURCE_ID, true, "", listResponse1);
-    this.transport.addListItemReqResp(SOURCE_ID, true, "somestring", listResponse2);
+    this.transport.addListItemReqResp(SOURCE_ID, true, "", false, listResponse1);
+    this.transport.addListItemReqResp(SOURCE_ID, true, "somestring", false, listResponse2);
 
     Iterable<Item> listIterator = this.indexingService.listItem(BRIEF);
     assertNotNull(listIterator);
@@ -496,7 +504,7 @@ public class IndexingServiceTest {
     Item goodItem = new Item().setName("goodId");
     ListItemsResponse listResponse =
         new ListItemsResponse().setItems(Collections.singletonList(goodItem));
-    this.transport.addListItemReqResp(SOURCE_ID, true, "", listResponse);
+    this.transport.addListItemReqResp(SOURCE_ID, true, "", false, listResponse);
     Iterable<Item> listIterator = this.indexingService.listItem(BRIEF);
     for (Item item : listIterator) {
       assertNotNull(item);
@@ -511,7 +519,7 @@ public class IndexingServiceTest {
     Item goodItem = new Item().setName("goodId");
     ListItemsResponse listResponse =
         new ListItemsResponse().setItems(Collections.singletonList(goodItem));
-    this.transport.addListItemReqResp(SOURCE_ID, true, "", listResponse);
+    this.transport.addListItemReqResp(SOURCE_ID, true, "", false, listResponse);
     Iterable<Item> listIterator = this.indexingService.listItem(BRIEF);
     Item item = listIterator.iterator().next();
     assertTrue(item.getName().equals(goodItem.getName()));
@@ -522,7 +530,7 @@ public class IndexingServiceTest {
   @Test
   public void testListItemEmpty() throws IOException {
     ListItemsResponse listResponse = new ListItemsResponse();
-    this.transport.addListItemReqResp(SOURCE_ID, true, "", listResponse);
+    this.transport.addListItemReqResp(SOURCE_ID, true, "", false, listResponse);
     Iterable<Item> listIterator = this.indexingService.listItem(BRIEF);
     assertTrue(!listIterator.iterator().hasNext());
   }
@@ -536,16 +544,79 @@ public class IndexingServiceTest {
 
   /* update */
   @Test
-  public void testUpdateItem() throws IOException {
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, new Operation());
+  public void testUpdateItem() throws IOException, InterruptedException {
+    doAnswer(
+            invocation -> {
+              Items.Index updateRequest = invocation.getArgument(0);
+              assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
+              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+              assertEquals(RequestMode.SYNCHRONOUS.name(), indexItemRequest.getMode());
+              SettableFuture<Operation> result = SettableFuture.create();
+              result.set(new Operation());
+              return result;
+            })
+        .when(batchingService)
+        .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
-    this.indexingService.indexItem(item, RequestMode.ASYNCHRONOUS);
+    this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
 
   @Test
-  public void testUpdateItemWithContent() throws IOException {
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, new Operation());
+  public void testUpdateItemDebugOptionsEnabled() throws Exception {
+    createService(/*debugging*/ true, /*allowUnknownGsuitePrincipals*/ false);
+    doAnswer(
+            invocation -> {
+              Items.Index updateRequest = invocation.getArgument(0);
+              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+              assertTrue(indexItemRequest.getDebugOptions().getEnableDebugging());
+              assertFalse(indexItemRequest.getIndexItemOptions().getAllowUnknownGsuitePrincipals());
+              return Futures.immediateFuture(new Operation());
+            })
+        .when(batchingService)
+        .indexItem(any());
+    Item item = new Item().setName(GOOD_ID);
+    this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
+    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+  }
+
+  @Test
+  public void testUpdateItemAllowUnknownGsuitePrincipals() throws Exception {
+    createService(/*debugging*/ false, /*allowUnknownGsuitePrincipals*/ true);
+    doAnswer(
+            invocation -> {
+              Items.Index updateRequest = invocation.getArgument(0);
+              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+              assertFalse(indexItemRequest.getDebugOptions().getEnableDebugging());
+              assertTrue(indexItemRequest.getIndexItemOptions().getAllowUnknownGsuitePrincipals());
+              return Futures.immediateFuture(new Operation());
+            })
+        .when(batchingService)
+        .indexItem(any());
+    Item item = new Item().setName(GOOD_ID);
+    this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
+    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+  }
+
+  @Test
+  public void testUpdateItemWithContent() throws IOException, InterruptedException {
+    doAnswer(
+            invocation -> {
+              Items.Index updateRequest = invocation.getArgument(0);
+              assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
+              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+              assertEquals(RequestMode.ASYNCHRONOUS.name(), indexItemRequest.getMode());
+              assertEquals(
+                  new ItemContent()
+                      .encodeInlineContent("Hello World.".getBytes(UTF_8))
+                      .setContentFormat("TEXT"),
+                  indexItemRequest.getItem().getContent());
+              SettableFuture<Operation> result = SettableFuture.create();
+              result.set(new Operation());
+              return result;
+            })
+        .when(batchingService)
+        .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
     ByteArrayContent content = ByteArrayContent.fromString("text/plain", "Hello World.");
     this.indexingService.indexItemAndContent(
@@ -560,9 +631,7 @@ public class IndexingServiceTest {
     this.indexingService.indexItemAndContent(
         item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
     assertEquals(
-        new ItemContent()
-            .encodeInlineContent(new byte[0])
-            .setContentFormat("TEXT"),
+        new ItemContent().encodeInlineContent(new byte[0]).setContentFormat("TEXT"),
         item.getContent());
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
@@ -571,7 +640,7 @@ public class IndexingServiceTest {
   public void testUpdateItemWithEmptyInputStreamContent() throws IOException {
     this.transport.addUploadItemsReqResp(
         SOURCE_ID, GOOD_ID, new UploadItemRef().setName(testName.getMethodName()));
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, OPERATION_DONE);
+    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, OPERATION_DONE);
 
     Item item = new Item().setName(GOOD_ID);
     InputStreamContent content =
@@ -592,12 +661,12 @@ public class IndexingServiceTest {
   public void testUpdateItemWithContentUpload() throws IOException {
     this.transport.addUploadItemsReqResp(
         SOURCE_ID, GOOD_ID, new UploadItemRef().setName(testName.getMethodName()));
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, OPERATION_DONE);
+    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, OPERATION_DONE);
 
     Item item = new Item().setName(GOOD_ID);
     InputStreamContent content =
-        new InputStreamContent("text/html",
-            new ByteArrayInputStream("Hello World.".getBytes(UTF_8)));
+        new InputStreamContent(
+            "text/html", new ByteArrayInputStream("Hello World.".getBytes(UTF_8)));
     when(contentUploadService.uploadContent(testName.getMethodName(), content))
         .thenReturn(Futures.immediateFuture(null));
     this.indexingService.indexItemAndContent(
@@ -618,9 +687,7 @@ public class IndexingServiceTest {
     this.indexingService.indexItemAndContent(
         item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
     assertEquals(
-        new ItemContent()
-            .encodeInlineContent(new byte[0])
-            .setContentFormat("TEXT"),
+        new ItemContent().encodeInlineContent(new byte[0]).setContentFormat("TEXT"),
         item.getContent());
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
@@ -629,7 +696,7 @@ public class IndexingServiceTest {
   public void testUpdateItemWithFileContent() throws IOException {
     this.transport.addUploadItemsReqResp(
         SOURCE_ID, GOOD_ID, new UploadItemRef().setName(testName.getMethodName()));
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, OPERATION_DONE);
+    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, OPERATION_DONE);
 
     File largeFile = temporaryFolder.newFile();
     Files.asCharSink(largeFile, UTF_8).write("Longer text that triggers an upload");
@@ -649,7 +716,7 @@ public class IndexingServiceTest {
 
   @Test
   public void testUpdateItemWithContentHash() throws IOException {
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, OPERATION_DONE);
+    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, OPERATION_DONE);
     Item item = new Item().setName(GOOD_ID);
     ByteArrayContent content = ByteArrayContent.fromString("text/plain", "Hello World.");
     String hash = Integer.toString(Objects.hash(content));
@@ -745,10 +812,8 @@ public class IndexingServiceTest {
   @Test
   public void testGetSchema() throws IOException {
     // BaseApiService.setDefaultValuesForPrimitiveTypes assigns the empty lists.
-    Schema schema = new Schema()
-        .setObjectDefinitions(Collections.emptyList())
-        .setOperationIds(Collections.emptyList());
-    this.transport.addGetSchemaReqResp(SOURCE_ID, schema);
+    Schema schema = new Schema().setObjectDefinitions(Collections.emptyList());
+    this.transport.addGetSchemaReqResp(SOURCE_ID, false, schema);
     assertEquals(schema, indexingService.getSchema());
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
@@ -958,7 +1023,8 @@ public class IndexingServiceTest {
               assertEquals(
                   new PushItemRequest()
                       .setItem(new PushItem())
-                      .setConnectorName("datasources/source/connectors/unitTest"),
+                      .setConnectorName("datasources/source/connectors/unitTest")
+                      .setDebugOptions(new DebugOptions().setEnableDebugging(false)),
                   pushRequest.getJsonContent());
               return getExceptionFuture(HTTP_FORBIDDEN_ERROR);
             })
@@ -994,7 +1060,8 @@ public class IndexingServiceTest {
               assertEquals(
                   new UnreserveItemsRequest()
                       .setQueue("queueName")
-                      .setConnectorName("datasources/source/connectors/unitTest"),
+                      .setConnectorName("datasources/source/connectors/unitTest")
+                      .setDebugOptions(new DebugOptions().setEnableDebugging(false)),
                   unreserveRequest.getJsonContent());
               return getExceptionFuture(HTTP_FORBIDDEN_ERROR);
             })

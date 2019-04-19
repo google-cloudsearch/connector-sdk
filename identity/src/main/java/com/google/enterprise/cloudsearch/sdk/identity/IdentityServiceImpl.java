@@ -18,9 +18,9 @@ package com.google.enterprise.cloudsearch.sdk.identity;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.api.services.admin.directory.model.User;
-import com.google.api.services.cloudidentity.v1beta1.model.Group;
-import com.google.api.services.cloudidentity.v1beta1.model.Membership;
-import com.google.api.services.cloudidentity.v1beta1.model.Operation;
+import com.google.api.services.cloudidentity.v1.model.Group;
+import com.google.api.services.cloudidentity.v1.model.Membership;
+import com.google.api.services.cloudidentity.v1.model.Operation;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ListenableFuture;
 import java.io.IOException;

@@ -19,6 +19,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
@@ -560,9 +561,7 @@ public class StructuredDataTest {
 
       Converter<Object, DateTime> converter = StructuredData.DATETIME_CONVERTER;
       for (String dateString : new String[] {
-            // Time zones are not parsed from strings with no time, so anything will match.
             "2018-08-08-04:00",
-            "2018-08-08-07:00",
             "2018-08-08",
           }) {
         try {
@@ -574,6 +573,47 @@ public class StructuredDataTest {
     } finally {
       TimeZone.setDefault(original);
     }
+  }
+
+  @Test
+  public void testDateTimeConverter_dateOnly_mismatch() throws IOException {
+    setupConfig.initConfig(new Properties());
+    when(mockIndexingService.getSchema()).thenReturn(new Schema());
+    StructuredData.initFromConfiguration(mockIndexingService);
+
+    TimeZone original = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone("GMT-04:00"));
+    try {
+      String rfc3339String = "2018-08-08T00:00:00.000-04:00";
+      DateTime expected = new DateTime(rfc3339String);
+      // Baseline so we don't chase unexpected errors below.
+      assertEquals("Baseline failure", rfc3339String, expected.toString());
+
+      Converter<Object, DateTime> converter = StructuredData.DATETIME_CONVERTER;
+      for (String dateString : new String[] {
+            // Time zones are still parsed from strings with no time.
+            "2018-08-08-07:00",
+          }) {
+        try {
+          collector.checkThat(dateString, converter.convert(dateString), not(equalTo(expected)));
+        } catch (NumberFormatException e) {
+          collector.addError(e);
+        }
+      }
+    } finally {
+      TimeZone.setDefault(original);
+    }
+  }
+
+  @Test
+  public void testDateTimeConverter_noDate() throws IOException {
+    setupConfig.initConfig(new Properties());
+    when(mockIndexingService.getSchema()).thenReturn(new Schema());
+    StructuredData.initFromConfiguration(mockIndexingService);
+
+    Converter<Object, DateTime> converter = StructuredData.DATETIME_CONVERTER;
+    thrown.expect(NumberFormatException.class);
+    converter.convert("15:48:17-04:00");
   }
 
   @Test
@@ -622,14 +662,45 @@ public class StructuredDataTest {
 
       Converter<Object, DateTime> converter = StructuredData.DATETIME_CONVERTER;
       for (String dateString : new String[] {
-            // Time zones are not parsed from strings with no time, so anything will match.
-            "2018-08-08-07:00",
+            "2018-08-08-04:00",
             "Wed, 8 Aug 2018 00:00:00 -0400",
             "8/8/18",
             "08 aUg 2018",
           }) {
         try {
           collector.checkThat(dateString, converter.convert(dateString), equalTo(expected));
+        } catch (NumberFormatException e) {
+          collector.addError(e);
+        }
+      }
+    } finally {
+      TimeZone.setDefault(original);
+    }
+  }
+
+  @Test
+  public void testDateTimeConverter_configuredPatterns_dateOnly_mismatch() throws IOException {
+    when(mockIndexingService.getSchema()).thenReturn(new Schema());
+    Properties config = new Properties();
+    config.put(StructuredData.DATETIME_PATTERNS, "M/d/yy ;dd MMM uuuu");
+    setupConfig.initConfig(config);
+    StructuredData.initFromConfiguration(mockIndexingService);
+
+    TimeZone original = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone("GMT-04:00"));
+    try {
+      String rfc3339String = "2018-08-08T00:00:00.000-04:00";
+      DateTime expected = new DateTime(rfc3339String);
+      // Baseline so we don't chase unexpected errors below.
+      assertEquals("Baseline failure", rfc3339String, expected.toString());
+
+      Converter<Object, DateTime> converter = StructuredData.DATETIME_CONVERTER;
+      for (String dateString : new String[] {
+            // Time zones are still parsed from strings with no time.
+            "2018-08-08-07:00",
+          }) {
+        try {
+          collector.checkThat(dateString, converter.convert(dateString), not(equalTo(expected)));
         } catch (NumberFormatException e) {
           collector.addError(e);
         }
@@ -685,12 +756,14 @@ public class StructuredDataTest {
     Converter<Object, Date> converter = StructuredData.DATE_CONVERTER;
     for (String dateString : new String[] {
           // API Date class doesn't have a time zone, so anything will match.
+          // TODO(jlacey): We could construct offsets relative to the actual local time zone,
+          // rather than assuming that +14:00 and -11:00 will always test rollover.
           "2018-08-08T15:48:17.000-07:00",
           "2018-08-08 15:48:17-04:00",
           "Wed, 8 Aug 2018 15:48:17 -0700",
-          "08 Aug 2018 15:48:17 -0400",
-          "2018-08-08-04:00",
-          "2018-08-08-07:00",
+          "08 Aug 2018 15:48:17 +0100",
+          "2018-08-08T23:48:17-11:00", // 2018-08-09 in most local time zones.
+          "2018-08-08+14:00", // 2018-08-07 in most local time zones.
           "2018-08-08",
         }) {
       try {
@@ -699,6 +772,28 @@ public class StructuredDataTest {
         collector.addError(e);
       }
     }
+  }
+
+  @Test
+  public void testDateTime_noDate() throws IOException {
+    setupConfig.initConfig(new Properties());
+    when(mockIndexingService.getSchema()).thenReturn(new Schema());
+    StructuredData.initFromConfiguration(mockIndexingService);
+
+    Converter<Object, Date> converter = StructuredData.DATE_CONVERTER;
+    thrown.expect(NumberFormatException.class);
+    converter.convert("15:48:17-04:00");
+  }
+
+  @Test
+  public void testDateTime_unparsedCharacters() throws IOException {
+    setupConfig.initConfig(new Properties());
+    when(mockIndexingService.getSchema()).thenReturn(new Schema());
+    StructuredData.initFromConfiguration(mockIndexingService);
+
+    Converter<Object, Date> converter = StructuredData.DATE_CONVERTER;
+    thrown.expect(NumberFormatException.class);
+    converter.convert("2018-08-08T15:48:17.000-07:00 and so on");
   }
 
   private void setupSchema() {

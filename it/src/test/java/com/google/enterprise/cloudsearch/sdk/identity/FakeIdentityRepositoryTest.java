@@ -20,7 +20,7 @@ import static java.lang.String.format;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.google.api.services.cloudidentity.v1beta1.model.EntityKey;
+import com.google.api.services.cloudidentity.v1.model.EntityKey;
 import com.google.common.collect.Sets;
 import com.google.common.truth.Correspondence;
 import java.io.IOException;
@@ -60,7 +60,7 @@ public class FakeIdentityRepositoryTest {
     };
     final IdentityUserCorrespondence userCorrespondence = new IdentityUserCorrespondence(domain);
     final IdentityGroupCorrespondence groupCorrespondence = new IdentityGroupCorrespondence(domain);
-    
+
     FakeIdentityRepository repo =
         new FakeIdentityRepository.Builder(domain)
         .addSnapshot(userSnapshots[0], groupSnapshots[0])
@@ -243,12 +243,11 @@ public class FakeIdentityRepositoryTest {
               .build();
         });
     when(mockRepoContext.buildEntityKeyForGroup(any()))
-        .thenAnswer(invocation -> {
-          Object[] args = invocation.getArguments();
-          return new EntityKey()
-              .setId((String) args[0])
-              .setNamespace("MOCK_NAMESPACE");
-        });
+        .thenAnswer(
+            invocation -> {
+              Object[] args = invocation.getArguments();
+              return new EntityKey().setId((String) args[0]).setNamespace("MOCK_NAMESPACE");
+            });
   }
 
   /**

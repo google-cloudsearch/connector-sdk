@@ -20,6 +20,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.not;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -58,6 +59,8 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.TimeZone;
 import org.junit.Before;
@@ -159,6 +162,51 @@ public class CSVRepositoryTest {
   }
 
   @Test
+  public void testGetAllDocs_empty() throws IOException, InterruptedException {
+    File tmpfile = temporaryFolder.newFile(testName.getMethodName() + ".csv");
+    createFile(tmpfile, "term, definition, author\n");
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CSVFileManager.UNIQUE_KEY_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    config.put(CONTENT_HIGH, "term,definition");
+    config.put(CONTENT_LOW, "author");
+    setupConfig.initConfig(config);
+
+    CSVRepository csvRepository = new CSVRepository();
+    csvRepository.init(mockRepositoryContext);
+
+    try (CheckpointCloseableIterable<ApiOperation> allDocs = csvRepository.getAllDocs(null)) {
+      Iterator<ApiOperation> it = allDocs.iterator();
+      assertFalse(it.hasNext());
+      thrown.expect(NoSuchElementException.class);
+      it.next();
+    }
+  }
+
+  @Test
+  public void testGetAllDocs_iterateTwice() throws IOException, InterruptedException {
+    File tmpfile = temporaryFolder.newFile(testName.getMethodName() + ".csv");
+    createFile(tmpfile, testCSV);
+    Properties config = new Properties();
+    config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term");
+    config.put(CONTENT_TITLE, "term");
+    setupConfig.initConfig(config);
+
+    CSVRepository csvRepository = new CSVRepository();
+    csvRepository.init(mockRepositoryContext);
+
+    try (CheckpointCloseableIterable<ApiOperation> allDocs = csvRepository.getAllDocs(null)) {
+      HashSet<String> names = new HashSet<>();
+      allDocs.iterator();
+      thrown.expect(IllegalStateException.class);
+      allDocs.iterator();
+    }
+  }
+
+  @Test
   public void testGetAllDocs() throws IOException, InterruptedException {
     File tmpfile = temporaryFolder.newFile(testName.getMethodName() + ".csv");
     createFile(tmpfile, testCSVSingle);
@@ -179,7 +227,7 @@ public class CSVRepositoryTest {
         RepositoryDoc doc = (RepositoryDoc) operation;
 
         assertEquals(ContentFormat.HTML, doc.getContentFormat());
-        assertEquals(RequestMode.SYNCHRONOUS, doc.getRequestMode());
+        assertEquals(RequestMode.UNSPECIFIED, doc.getRequestMode());
         assertEquals(null, doc.getItem().getAcl());
         assertEquals("moma search", doc.getItem().getName());
 

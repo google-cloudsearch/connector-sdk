@@ -20,6 +20,8 @@ import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.enterprise.cloudsearch.sdk.StatsManager.OperationStats;
+import com.google.enterprise.cloudsearch.sdk.StatsManager.OperationStats.Event;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -30,7 +32,12 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /** Handles scheduling and execution of connector traversal related tasks. */
-public class ConnectorScheduler <T extends ConnectorContext> {
+public class ConnectorScheduler<T extends ConnectorContext> {
+
+  private static final OperationStats INCREMENTAL_TRAVERSER =
+      StatsManager.getComponent("IncrementalTraverser");
+  private static final OperationStats FULL_TRAVERSER = StatsManager.getComponent("FullTraverser");
+
   private static final Logger logger = Logger.getLogger(ConnectorScheduler.class.getName());
 
   private final Connector<T> connector;
@@ -48,21 +55,17 @@ public class ConnectorScheduler <T extends ConnectorContext> {
    */
   private ScheduledExecutorService scheduleExecutor;
 
-  //TODO(imysak): add backgroundExecutor in Context to share with TraverserWorkers
+  // TODO(imysak): add backgroundExecutor in Context to share with TraverserWorkers
   /**
    * Executor for performing work in the background. This executor is general purpose and is
    * commonly used in conjunction with {@link #scheduleExecutor}.
    */
   private ExecutorService backgroundExecutor;
 
-  /**
-   * Connector schedule specified in the configuration.
-   */
+  /** Connector schedule specified in the configuration. */
   private ConnectorSchedule connectorSchedule;
 
-  /**
-   * Task for calling {@link Connector#traverse} periodically.
-   */
+  /** Task for calling {@link Connector#traverse} periodically. */
   private BackgroundRunnable traversalRunnable;
 
   private BackgroundRunnable incrementalTraversalRunnable;
@@ -72,12 +75,12 @@ public class ConnectorScheduler <T extends ConnectorContext> {
   /** Pointer to shutdown method to be executed when traversal is complete. */
   @FunctionalInterface
   public interface ShutdownHolder {
+
     /** Shutdown method to be executed when traversal is complete. */
     void shutdown();
   }
 
-  protected ConnectorScheduler(
-      AbstractBuilder<? extends AbstractBuilder, T> builder) {
+  protected ConnectorScheduler(AbstractBuilder<? extends AbstractBuilder, T> builder) {
     this.connector = checkNotNull(builder.connector);
     this.context = checkNotNull(builder.context);
     this.shutdownHolder = checkNotNull(builder.shutdownHolder);
@@ -121,8 +124,10 @@ public class ConnectorScheduler <T extends ConnectorContext> {
 
     // TODO(sfruhwald)
     // TODO(imysak): Temporary solution to print all stats once per 5 minute
-    Runnable loggingStatsRunnable = new BackgroundRunnable(new OneAtATimeRunnable(
-        () -> logger.info(StatsManager.getInstance().printStats()), "StatsLog"));
+    Runnable loggingStatsRunnable =
+        new BackgroundRunnable(
+            new OneAtATimeRunnable(
+                () -> logger.info(StatsManager.getInstance().printStats()), "StatsLog"));
     scheduleExecutor.scheduleAtFixedRate(loggingStatsRunnable, 1, 5, TimeUnit.MINUTES);
   }
 
@@ -172,8 +177,9 @@ public class ConnectorScheduler <T extends ConnectorContext> {
             : traversalSchedule.getTraversalIntervalSeconds();
     scheduleExecutor.schedule(
         new ShutdownAfterCompleteRunnable(
-            new ConnectorTraversal(connector, context.getTraversalExceptionHandler()))
-        , initialDelay, TimeUnit.SECONDS);
+            new ConnectorTraversal(connector, context.getTraversalExceptionHandler())),
+        initialDelay,
+        TimeUnit.SECONDS);
   }
 
   /** Stops traversal process and worker threads. */
@@ -209,13 +215,15 @@ public class ConnectorScheduler <T extends ConnectorContext> {
     executor.shutdownNow();
   }
 
-  protected abstract static class AbstractBuilder <B extends AbstractBuilder<B, T>,
-      T extends ConnectorContext> {
+  protected abstract static class AbstractBuilder<
+      B extends AbstractBuilder<B, T>, T extends ConnectorContext> {
+
     public Connector<T> connector;
     public T context;
     public ShutdownHolder shutdownHolder = () -> {};
 
     protected abstract B getThis();
+
     public abstract ConnectorScheduler<T> build();
 
     public B setConnector(Connector<T> connector) {
@@ -236,6 +244,7 @@ public class ConnectorScheduler <T extends ConnectorContext> {
 
   /** Builder for {@link ConnectorScheduler} instances. */
   public static class Builder extends AbstractBuilder<Builder, ConnectorContext> {
+
     @Override
     protected Builder getThis() {
       return this;
@@ -250,6 +259,7 @@ public class ConnectorScheduler <T extends ConnectorContext> {
 
   /** Wrapper object to maintain connector traversal schedule. */
   protected static class ConnectorSchedule {
+
     // Number of seconds in a day 24 * 60 * 60
     private static final int NUM_SECONDS_IN_A_DAY = 86400;
     private final int traversalIntervalSecs;
@@ -265,8 +275,7 @@ public class ConnectorScheduler <T extends ConnectorContext> {
               .get();
       incrementalTraversalSecs =
           Configuration.getInteger(Application.INCREMENTAL_INTERVAL_SECONDS, 300).get();
-      performTraversalOnStart =
-          Configuration.getBoolean(Application.TRAVERSE_ON_START, true).get();
+      performTraversalOnStart = Configuration.getBoolean(Application.TRAVERSE_ON_START, true).get();
       pollQueueIntervalSecs = Configuration.getInteger(Application.POLL_INTERVAL_SECONDS, 10).get();
       runOnce = Configuration.getBoolean(Application.RUN_ONCE, false).get();
     }
@@ -293,6 +302,7 @@ public class ConnectorScheduler <T extends ConnectorContext> {
   }
 
   private static class IncrementalTraversal implements Runnable {
+
     private final IncrementalChangeHandler incrementalChangeHandler;
     private final ExceptionHandler exceptionHandler;
 
@@ -327,18 +337,23 @@ public class ConnectorScheduler <T extends ConnectorContext> {
 
     @Override
     public void run() {
+      Event completionEvent = INCREMENTAL_TRAVERSER.event("complete").start();
       try {
         incrementalTraversal();
+        completionEvent.success();
       } catch (InterruptedException ex) {
         logger.log(Level.WARNING, "Interrupted. Aborted connector traversal.", ex);
+        completionEvent.failure();
         Thread.currentThread().interrupt();
       } catch (Throwable t) {
         logger.log(Level.WARNING, "Failure during incremental traversal", t);
+        completionEvent.failure();
       }
     }
   }
 
   private static class ConnectorTraversal implements Runnable {
+
     private final Connector connector;
     private final ExceptionHandler handler;
 
@@ -376,13 +391,17 @@ public class ConnectorScheduler <T extends ConnectorContext> {
 
     @Override
     public void run() {
+      Event completionEvent = FULL_TRAVERSER.event("complete").start();
       try {
         connectorTraversal();
+        completionEvent.success();
       } catch (InterruptedException ex) {
         logger.log(Level.WARNING, "Interrupted. Aborted connector traversal.", ex);
+        completionEvent.failure();
         Thread.currentThread().interrupt();
       } catch (Throwable t) {
         logger.log(Level.WARNING, "Failure during traversal", t);
+        completionEvent.failure();
       }
     }
   }
@@ -393,6 +412,7 @@ public class ConnectorScheduler <T extends ConnectorContext> {
    * instance directly to {@link #getBackgroundExecutor}, otherwise an odd infinite loop will occur.
    */
   protected class BackgroundRunnable implements Runnable {
+
     private final Runnable delegate;
 
     public BackgroundRunnable(Runnable delegate) {
@@ -410,11 +430,13 @@ public class ConnectorScheduler <T extends ConnectorContext> {
   }
 
   protected class ShutdownAfterCompleteRunnable implements Runnable {
+
     private final Runnable toRun;
 
     ShutdownAfterCompleteRunnable(Runnable toRun) {
       this.toRun = toRun;
     }
+
     @Override
     public void run() {
       try {
@@ -430,6 +452,7 @@ public class ConnectorScheduler <T extends ConnectorContext> {
    */
   @VisibleForTesting
   public static class OneAtATimeRunnable implements Runnable {
+
     private AtomicBoolean isRunning = new AtomicBoolean();
     private final Runnable toRun;
     private final Runnable alreadyRunning;
@@ -471,6 +494,7 @@ public class ConnectorScheduler <T extends ConnectorContext> {
   }
 
   protected static class AlreadyRunningRunnable implements Runnable {
+
     private final String tag;
 
     AlreadyRunningRunnable(String tag) {

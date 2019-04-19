@@ -219,9 +219,18 @@ public class StatsManager {
       }
     }
 
+    public int getSuccessCount(String operation) {
+      return successCounter.count(operation);
+    }
+
     @VisibleForTesting
     int getRegisteredCount(String operation) {
       return opCounter.count(operation);
+    }
+
+    @VisibleForTesting
+    int getFailureCount(String operation) {
+      return failureCounter.count(operation);
     }
 
     public void logResult(String operation, String result) {
