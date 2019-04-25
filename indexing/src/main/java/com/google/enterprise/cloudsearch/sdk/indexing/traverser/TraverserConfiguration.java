@@ -324,6 +324,17 @@ public class TraverserConfiguration {
     }
 
     /**
+     * Sets hostload (number of worker threads) used by {@link TraverserWorker}
+     *
+     * @param hostLoad number of worker threads ised by traverser worker
+     * @return this builder
+     */
+    public Builder hostLoad(int hostLoad) {
+      this.hostload = hostLoad;
+      return this;
+    }
+
+    /**
      * Builds a {@link TraverserConfiguration} instance.
      *
      * @return the fully formed {@link TraverserConfiguration} instance

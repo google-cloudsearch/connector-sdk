@@ -130,6 +130,56 @@ public class ParallelProcessingTraverserWorkerTest {
   }
 
   /**
+   * Test method for {@link ParallelProcessingTraverserWorker#poll()} with {@link
+   * ParallelProcessingTraverserWorker} handling {@link Error} thrown by {@link ItemRetriever}.
+   *
+   * @throws IOException
+   * @throws InterruptedException
+   */
+  @Test
+  public void testPollAndProcessHandleAssertionError() throws IOException, InterruptedException {
+    conf =
+        (new TraverserConfiguration.Builder("test"))
+            .name("name")
+            .itemRetriever(itemRetriever)
+            .hostLoad(1)
+            .build();
+    ParallelProcessingTraverserWorker worker =
+        new ParallelProcessingTraverserWorker(conf, indexingService, executorService);
+    List<Item> entries =
+        Arrays.asList(
+            (new Item()).setName("id-1").setQueue("custom"),
+            (new Item()).setName("id-2").setQueue("custom"),
+            (new Item()).setName("id-3").setQueue("custom"));
+    final Set<String> expectedIds = new HashSet<String>(Arrays.asList("id-1", "id-2", "id-3"));
+    final CountDownLatch countDown = new CountDownLatch(3);
+    when(indexingService.poll(any(PollItemsRequest.class)))
+        .thenReturn(entries)
+        .thenReturn(Collections.emptyList());
+    doCallRealMethod().when(executorService).execute(any());
+
+    doAnswer(
+            (invocation) -> {
+              Object[] args = invocation.getArguments();
+              Item entry = (Item) args[0];
+              assertTrue(expectedIds.remove(entry.getName()));
+              countDown.countDown();
+              if ("id-2".equals(entry.getName())) {
+                throw new AssertionError();
+              }
+              return null;
+            })
+        .when(itemRetriever)
+        .process(any());
+
+    worker.poll();
+    // If we skips one of the polled item (most likely due to bug), latch will never be 0. Timeout
+    // here safeguards tests from being stuck.
+    countDown.await(1L, TimeUnit.SECONDS);
+    assertTrue(expectedIds.isEmpty());
+  }
+
+  /**
    * Test method for {@link ParallelProcessingTraverserWorker#poll()} with connector throwing {@link
    * RepositoryException}.
    *
