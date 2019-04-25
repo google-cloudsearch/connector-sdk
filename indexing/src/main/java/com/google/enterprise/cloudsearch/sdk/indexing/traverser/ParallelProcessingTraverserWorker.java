@@ -151,7 +151,6 @@ class ParallelProcessingTraverserWorker extends AbstractTraverserWorker implemen
         while ((polledItem = queue.poll()) != null) {
           try {
             timeLimiter.callWithTimeout(new ProcessingFunction(polledItem), timeout, timeunit);
-            // TODO(imysak): should we return entry in Queue in case of TimeOutException ?
           } catch (InterruptedException e) {
             logger.log(
                 Level.WARNING,
@@ -165,11 +164,11 @@ class ParallelProcessingTraverserWorker extends AbstractTraverserWorker implemen
                     "Processing queue entry %s timed out, limit %d %s",
                     polledItem, timeout, timeunit),
                 e);
-          } catch (ExecutionException e) {
+          } catch (Throwable t) {
             logger.log(
                 Level.WARNING,
                 String.format("Exception while processing queue entry %s", polledItem),
-                e);
+                t);
           }
         }
       } finally {
