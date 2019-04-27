@@ -149,10 +149,12 @@ public class IndexingServiceTest {
 
   @Before
   public void createService() throws IOException, GeneralSecurityException {
-    createService(false, false);
+    createService(false, false, false);
   }
 
-  private void createService(boolean enableDebugging, boolean allowUnknownGsuitePrincipals)
+  private void createService(boolean enableDebugging,
+                             boolean allowUnknownGsuitePrincipals,
+                             boolean deleteFileContentAfterUse)
       throws IOException, GeneralSecurityException {
     this.transport = new TestingHttpTransport("datasources/source/connectors/unitTest");
     JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
@@ -191,6 +193,7 @@ public class IndexingServiceTest {
             .setConnectorId("unitTest")
             .setEnableDebugging(enableDebugging)
             .setAllowUnknownGsuitePrincipals(allowUnknownGsuitePrincipals)
+            .setDeleteFileContentAfterUse(deleteFileContentAfterUse)
             .build();
     this.indexingService.startAsync().awaitRunning();
   }
@@ -564,7 +567,9 @@ public class IndexingServiceTest {
 
   @Test
   public void testUpdateItemDebugOptionsEnabled() throws Exception {
-    createService(/*debugging*/ true, /*allowUnknownGsuitePrincipals*/ false);
+    createService(/*debugging*/ true,
+            /*allowUnknownGsuitePrincipals*/ false,
+            /*deleteFileContentAfterUse*/ false);
     doAnswer(
             invocation -> {
               Items.Index updateRequest = invocation.getArgument(0);
@@ -582,7 +587,9 @@ public class IndexingServiceTest {
 
   @Test
   public void testUpdateItemAllowUnknownGsuitePrincipals() throws Exception {
-    createService(/*debugging*/ false, /*allowUnknownGsuitePrincipals*/ true);
+    createService(/*debugging*/ false,
+            /*allowUnknownGsuitePrincipals*/ true,
+            /*deleteFileContentAfterUse*/ false);
     doAnswer(
             invocation -> {
               Items.Index updateRequest = invocation.getArgument(0);
@@ -713,6 +720,49 @@ public class IndexingServiceTest {
         item.getContent());
     verify(quotaServer, times(2)).acquire(Operations.DEFAULT);
   }
+
+  @Test
+  public void testDeleteFileContentAfterUse() throws Exception {
+    createService(/*debugging*/ false,
+            /*allowUnknownGsuitePrincipals*/ false,
+            /*deleteFileContentAfterUse*/ true);
+    this.transport.addUploadItemsReqResp(
+            SOURCE_ID, GOOD_ID, new UploadItemRef().setName(testName.getMethodName()));
+    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, OPERATION_DONE);
+
+    File largeFile = temporaryFolder.newFile();
+    Files.asCharSink(largeFile, UTF_8).write("Longer text that triggers an upload");
+    Item item = new Item().setName(GOOD_ID);
+    FileContent content = new FileContent("text/html", largeFile);
+    when(contentUploadService.uploadContent(testName.getMethodName(), content))
+            .thenReturn(Futures.immediateFuture(null));
+    this.indexingService.indexItemAndContent(
+            item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
+    assertFalse(largeFile.exists());
+    verify(quotaServer, times(2)).acquire(Operations.DEFAULT);
+  }
+
+  @Test
+  public void testDoNotDeleteFileContentAfterUse() throws Exception {
+    createService(/*debugging*/ false,
+            /*allowUnknownGsuitePrincipals*/ false,
+            /*deleteFileContentAfterUse*/ false);
+    this.transport.addUploadItemsReqResp(
+            SOURCE_ID, GOOD_ID, new UploadItemRef().setName(testName.getMethodName()));
+    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, OPERATION_DONE);
+
+    File largeFile = temporaryFolder.newFile();
+    Files.asCharSink(largeFile, UTF_8).write("Longer text that triggers an upload");
+    Item item = new Item().setName(GOOD_ID);
+    FileContent content = new FileContent("text/html", largeFile);
+    when(contentUploadService.uploadContent(testName.getMethodName(), content))
+            .thenReturn(Futures.immediateFuture(null));
+    this.indexingService.indexItemAndContent(
+            item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
+    assertTrue(largeFile.exists());
+    verify(quotaServer, times(2)).acquire(Operations.DEFAULT);
+  }
+
 
   @Test
   public void testUpdateItemWithContentHash() throws IOException {

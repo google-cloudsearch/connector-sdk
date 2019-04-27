@@ -23,6 +23,7 @@ import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
 import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.http.AbstractInputStreamContent;
+import com.google.api.client.http.FileContent;
 import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
@@ -135,6 +136,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   public static final String ENABLE_API_DEBUGGING = "indexingService.enableDebugging";
   public static final String ALLOW_UNKNOWN_GSUITE_PRINCIPALS =
       "indexingService.allowUnknownGsuitePrincipals";
+  public static final String DELETE_FILECONTENT_AFTER_USE = "indexingService.deleteFileContentAfterUse";
 
   private static final OperationStats indexingServiceStats =
       StatsManager.getComponent("IndexingService");
@@ -167,6 +169,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   private final RequestMode requestMode;
   private final boolean enableApiDebugging;
   private final boolean allowUnknownGsuitePrincipals;
+  private final boolean deleteFileContentAfterUse;
 
   /** API Operations */
   public enum Operations {
@@ -247,6 +250,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     this.requestMode = builder.requestMode;
     this.enableApiDebugging = builder.enableApiDebugging;
     this.allowUnknownGsuitePrincipals = builder.allowUnknownGsuitePrincipals;
+    this.deleteFileContentAfterUse = builder.deleteFileContentAfterUse;
   }
 
   public static class Builder extends BaseApiService.AbstractBuilder<Builder, CloudSearch> {
@@ -266,6 +270,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     private int contentUploadReadTimeoutSeconds = DEFAULT_READ_TIMEOUT_SECONDS;
     private boolean enableApiDebugging;
     private boolean allowUnknownGsuitePrincipals;
+    private boolean deleteFileContentAfterUse;
 
     public Builder setSourceId(String sourceId) {
       this.sourceId = sourceId;
@@ -304,6 +309,11 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
 
     public Builder setAllowUnknownGsuitePrincipals(boolean allowUnknownGsuitePrincipals) {
       this.allowUnknownGsuitePrincipals = allowUnknownGsuitePrincipals;
+      return this;
+    }
+
+    public Builder setDeleteFileContentAfterUse(boolean deleteFileContentAfterUse) {
+      this.deleteFileContentAfterUse = deleteFileContentAfterUse;
       return this;
     }
 
@@ -425,6 +435,8 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
       boolean enableApiDebugging = Configuration.getBoolean(ENABLE_API_DEBUGGING, false).get();
       boolean allowUnknownGsuitePrincipals =
           Configuration.getBoolean(ALLOW_UNKNOWN_GSUITE_PRINCIPALS, false).get();
+      boolean deleteFileContentAfterUse =
+          Configuration.getBoolean(DELETE_FILECONTENT_AFTER_USE, false).get();
 
       return new IndexingServiceImpl.Builder()
           .setSourceId(Configuration.getString(SOURCE_ID, null).get())
@@ -449,7 +461,8 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
                       IndexingServiceImpl.DEFAULT_CONTENT_UPLOAD_THRESHOLD_BYTES)
                   .get())
           .setEnableDebugging(enableApiDebugging)
-          .setAllowUnknownGsuitePrincipals(allowUnknownGsuitePrincipals);
+          .setAllowUnknownGsuitePrincipals(allowUnknownGsuitePrincipals)
+          .setDeleteFileContentAfterUse(deleteFileContentAfterUse);
     }
 
     @Override
@@ -783,6 +796,16 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
               .encodeInlineContent(convertStreamToByteArray(content))
               .setHash(contentHash)
               .setContentFormat(contentFormat.name()));
+      if(deleteFileContentAfterUse && content instanceof FileContent) {
+        try {
+          ((FileContent) content).getFile().delete();
+        } catch (Exception e) {
+          logger.log(
+                  Level.WARNING,
+                  "Error deleting FileContent File: {0}",
+                  new Object[] {((FileContent) content).getFile().toString()});
+        }
+      }
       return indexItem(item, requestMode);
     } else {
       UploadItemRef uploadRef = startUpload(item.getName());
@@ -794,12 +817,23 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
       ListenableFuture<Item> itemUploaded =
           Futures.transform(
               contentUploadService.uploadContent(uploadRef.getName(), content),
-              voidVal ->
-                  item.setContent(
-                      new ItemContent()
-                          .setContentDataRef(uploadRef)
-                          .setHash(contentHash)
-                          .setContentFormat(contentFormat.name())),
+              voidVal -> {
+                if(deleteFileContentAfterUse && content instanceof FileContent) {
+                  try {
+                    ((FileContent) content).getFile().delete();
+                  } catch (Exception e) {
+                    logger.log(
+                            Level.WARNING,
+                            "Error deleting FileContent File: {0}",
+                            new Object[] {((FileContent) content).getFile().toString()});
+                  }
+                }
+                return item.setContent(
+                        new ItemContent()
+                                .setContentDataRef(uploadRef)
+                                .setHash(contentHash)
+                                .setContentFormat(contentFormat.name()));
+              },
               MoreExecutors.directExecutor());
 
       return Futures.transformAsync(
