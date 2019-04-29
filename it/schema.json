@@ -1,0 +1,57 @@
+{
+  "objectDefinitions" : [ {
+    "name" : "myMockDataObject",
+    "propertyDefinitions" : [ {
+      "enumPropertyOptions" : {
+        "possibleValues" : [ {
+          "integerValue" : 1,
+          "stringValue" : "one"
+        }, {
+          "integerValue" : 2,
+          "stringValue" : "two"
+        } ]
+      },
+      "isRepeatable" : true,
+      "isReturnable" : true,
+      "name" : "enum"
+    }, {
+      "integerPropertyOptions" : { },
+      "isRepeatable" : true,
+      "isReturnable" : true,
+      "name" : "integer"
+    }, {
+      "isRepeatable" : true,
+      "isReturnable" : true,
+      "name" : "text",
+      "textPropertyOptions" : {
+        "retrievalImportance" : { }
+      }
+    }, {
+      "datePropertyOptions" : { },
+      "isRepeatable" : true,
+      "isReturnable" : true,
+      "name" : "date"
+    }, {
+      "isRepeatable" : true,
+      "isReturnable" : true,
+      "name" : "timestamp",
+      "timestampPropertyOptions" : { }
+    }, {
+      "htmlPropertyOptions" : {
+        "retrievalImportance" : { }
+      },
+      "isRepeatable" : true,
+      "isReturnable" : true,
+      "name" : "html"
+    }, {
+      "doublePropertyOptions" : { },
+      "isRepeatable" : true,
+      "isReturnable" : true,
+      "name" : "double"
+    }, {
+      "booleanPropertyOptions" : { },
+      "isReturnable" : true,
+      "name" : "boolean"
+    } ]
+  } ]
+}
