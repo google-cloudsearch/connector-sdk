@@ -80,6 +80,10 @@ where
 - `api.test.identity.domain`: the domain associated with a Cloud Identity customer. Temporary users
   will be created on this domain during the execution of the test.
 
+It's necessary to set a specific schema for the tests to run, otherwise a check
+during the set-up of the tests will fail. The schema can be found in
+it/schema.json (or it/schema.protoascii).
+
 The following is an example of a complete command:
 
 ```
@@ -94,6 +98,21 @@ mvn verify \
 
 Adding `-Dit.test=<IT class>#<method>` to the command line allows to run only a specific
 test.
+
+Notice also that will it's possible to run only unit tests (using
+`-DskipITs=true`) it's not obvious how to run *only* integration tests
+(`-DskipTests=true` skips both unit and integration tests). A work-around
+for this is specifying `-Dtest=NONE -DfailIfNoTests=false` (assuming that
+there's no test class called `NONE`) plus the appropriate flags to run
+integration tests. For example:
+
+```
+mvn verify \
+    -Dtest=NONE -DfailIfNoTests=false \
+    -DskipITs=false \
+    -Dit.test=SomeTest \
+    ...
+```
 
 ## Code coverage
 

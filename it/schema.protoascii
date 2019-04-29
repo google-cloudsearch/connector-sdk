@@ -1,0 +1,74 @@
+object_definitions {
+  name: "myMockDataObject"
+  property_definitions {
+    name: "html"
+    is_returnable: true
+    is_repeatable: true
+    html_property_options {
+      retrieval_importance {
+      }
+    }
+  }
+  property_definitions {
+    name: "double"
+    is_returnable: true
+    is_repeatable: true
+    double_property_options {
+    }
+  }
+  property_definitions {
+    name: "boolean"
+    is_returnable: true
+    boolean_property_options {
+    }
+  }
+  property_definitions {
+    name: "enum"
+    is_returnable: true
+    is_repeatable: true
+    enum_property_options {
+      possible_values {
+        string_value: "one"
+        integer_value {
+          value: 1
+        }
+      }
+      possible_values {
+        string_value: "two"
+        integer_value {
+          value: 2
+        }
+      }
+    }
+  }
+  property_definitions {
+    name: "integer"
+    is_returnable: true
+    is_repeatable: true
+    integer_property_options {
+    }
+  }
+  property_definitions {
+    name: "text"
+    is_returnable: true
+    is_repeatable: true
+    text_property_options {
+      retrieval_importance {
+      }
+    }
+  }
+  property_definitions {
+    name: "date"
+    is_returnable: true
+    is_repeatable: true
+    date_property_options {
+    }
+  }
+  property_definitions {
+    name: "timestamp"
+    is_returnable: true
+    is_repeatable: true
+    timestamp_property_options {
+    }
+  }
+}
