@@ -20,7 +20,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -69,7 +68,7 @@ public class FullSyncIdentityConnectorTest {
     initConfig(new Properties());
     IdentityConnector connector = new FullSyncIdentityConnector(mockIdentityRepository);
     connector.init(mockConnectorContext);
-    verify(mockIdentityRepository, times(1)).init(any());
+    verify(mockIdentityRepository).init(any());
   }
 
   @Test

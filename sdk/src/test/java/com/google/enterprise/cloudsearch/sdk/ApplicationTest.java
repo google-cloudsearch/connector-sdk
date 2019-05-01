@@ -24,7 +24,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -216,13 +215,13 @@ public class ApplicationTest {
             mockHelper,
             mockTraverserBuilder,
             mockTraverser);
-    inOrder.verify(mockHelper, times(1)).createShutdownHookThread(any(ShutdownHook.class));
-    inOrder.verify(mockExceptionHandler, times(1)).handleException(ex, 1);
-    inOrder.verify(mockHelper, times(1)).createSchedulerBuilderInstance();
-    inOrder.verify(mockTraverserBuilder, times(1)).setConnector(eq(mockConnector));
-    inOrder.verify(mockTraverserBuilder, times(1)).setContext(eq(mockContext));
-    inOrder.verify(mockTraverserBuilder, times(1)).setShutdownHolder(any());
-    inOrder.verify(mockTraverser, times(1)).start();
+    inOrder.verify(mockHelper).createShutdownHookThread(any(ShutdownHook.class));
+    inOrder.verify(mockExceptionHandler).handleException(ex, 1);
+    inOrder.verify(mockHelper).createSchedulerBuilderInstance();
+    inOrder.verify(mockTraverserBuilder).setConnector(eq(mockConnector));
+    inOrder.verify(mockTraverserBuilder).setContext(eq(mockContext));
+    inOrder.verify(mockTraverserBuilder).setShutdownHolder(any());
+    inOrder.verify(mockTraverser).start();
     inOrder.verifyNoMoreInteractions();
   }
 
@@ -234,15 +233,15 @@ public class ApplicationTest {
             .build();
     subject.start();
     InOrder inOrder = inOrder(mockRuntime, mockHelper, mockTraverserBuilder, mockTraverser);
-    inOrder.verify(mockHelper, times(1)).createShutdownHookThread(any(ShutdownHook.class));
-    inOrder.verify(mockHelper, times(1)).getRuntimeInstance();
-    inOrder.verify(mockRuntime, times(1)).addShutdownHook(mockShutdownThread);
-    inOrder.verify(mockHelper, times(1)).createContextBuilderInstance();
-    inOrder.verify(mockHelper, times(1)).createSchedulerBuilderInstance();
-    inOrder.verify(mockTraverserBuilder, times(1)).setConnector(eq(mockConnector));
-    inOrder.verify(mockTraverserBuilder, times(1)).setContext(eq(mockContext));
-    inOrder.verify(mockTraverserBuilder, times(1)).setShutdownHolder(any());
-    inOrder.verify(mockTraverser, times(1)).start();
+    inOrder.verify(mockHelper).createShutdownHookThread(any(ShutdownHook.class));
+    inOrder.verify(mockHelper).getRuntimeInstance();
+    inOrder.verify(mockRuntime).addShutdownHook(mockShutdownThread);
+    inOrder.verify(mockHelper).createContextBuilderInstance();
+    inOrder.verify(mockHelper).createSchedulerBuilderInstance();
+    inOrder.verify(mockTraverserBuilder).setConnector(eq(mockConnector));
+    inOrder.verify(mockTraverserBuilder).setContext(eq(mockContext));
+    inOrder.verify(mockTraverserBuilder).setShutdownHolder(any());
+    inOrder.verify(mockTraverser).start();
     inOrder.verifyNoMoreInteractions();
   }
 
@@ -287,9 +286,9 @@ public class ApplicationTest {
     subject.start();
     subject.shutdown("TestEvent");
     InOrder inOrder = inOrder(spyLogger, mockTraverser, mockConnector);
-    inOrder.verify(spyLogger, times(1)).log(eq(Level.INFO), any(), anyString());
-    inOrder.verify(mockTraverser, times(1)).isStarted();
-    inOrder.verify(mockConnector, times(1)).destroy();
+    inOrder.verify(spyLogger).log(eq(Level.INFO), any(), anyString());
+    inOrder.verify(mockTraverser).isStarted();
+    inOrder.verify(mockConnector).destroy();
   }
 
   @Test
@@ -302,10 +301,10 @@ public class ApplicationTest {
     subject.start();
     subject.shutdown("TestEvent");
     InOrder inOrder = inOrder(spyLogger, mockTraverser, mockConnector);
-    inOrder.verify(spyLogger, times(1)).log(eq(Level.INFO), any(), anyString());
-    inOrder.verify(mockTraverser, times(1)).isStarted();
-    inOrder.verify(mockTraverser, times(1)).stop();
-    inOrder.verify(mockConnector, times(1)).destroy();
+    inOrder.verify(spyLogger).log(eq(Level.INFO), any(), anyString());
+    inOrder.verify(mockTraverser).isStarted();
+    inOrder.verify(mockTraverser).stop();
+    inOrder.verify(mockConnector).destroy();
   }
 
   @Test

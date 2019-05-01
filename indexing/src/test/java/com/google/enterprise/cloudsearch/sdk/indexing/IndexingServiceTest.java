@@ -304,7 +304,7 @@ public class IndexingServiceTest {
         .when(batchingService)
         .deleteItem(any());
     this.indexingService.deleteItem(GOOD_ID, "abc".getBytes(UTF_8), RequestMode.UNSPECIFIED).get();
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -399,7 +399,7 @@ public class IndexingServiceTest {
     Item item = this.indexingService.getItem(GOOD_ID);
     assertNotNull(item);
     assertTrue(item.getName().equals(goodItem.getName()));
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -472,7 +472,7 @@ public class IndexingServiceTest {
       assertNotNull(item);
       assertTrue(item.getName().equals(goodItem.getName()));
     }
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -561,7 +561,7 @@ public class IndexingServiceTest {
         .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
     this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -612,7 +612,7 @@ public class IndexingServiceTest {
         .indexItem(any());
 
     this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -630,7 +630,7 @@ public class IndexingServiceTest {
         .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
     this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -648,7 +648,7 @@ public class IndexingServiceTest {
         .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
     this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -674,7 +674,7 @@ public class IndexingServiceTest {
     ByteArrayContent content = ByteArrayContent.fromString("text/plain", "Hello World.");
     this.indexingService.indexItemAndContent(
         item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -686,7 +686,7 @@ public class IndexingServiceTest {
     assertEquals(
         new ItemContent().encodeInlineContent(new byte[0]).setContentFormat("TEXT"),
         item.getContent());
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -742,7 +742,7 @@ public class IndexingServiceTest {
     assertEquals(
         new ItemContent().encodeInlineContent(new byte[0]).setContentFormat("TEXT"),
         item.getContent());
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -781,7 +781,7 @@ public class IndexingServiceTest {
             .setHash(hash)
             .setContentFormat("TEXT"),
         item.getContent());
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -868,7 +868,7 @@ public class IndexingServiceTest {
     Schema schema = new Schema().setObjectDefinitions(Collections.emptyList());
     this.transport.addGetSchemaReqResp(SOURCE_ID, false, schema);
     assertEquals(schema, indexingService.getSchema());
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   /* poll */
@@ -883,7 +883,7 @@ public class IndexingServiceTest {
     List<Item> entries = this.indexingService.poll(pollRequest);
     assertTrue(entries.size() == 1);
     assertTrue(entries.get(0).getName().equals(GOOD_ID));
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -1065,7 +1065,7 @@ public class IndexingServiceTest {
   public void testPushItem() throws IOException {
     this.transport.addPushItemReqResp(GOOD_ID, SOURCE_ID, new Item());
     this.indexingService.push(GOOD_ID, new PushItem());
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test
@@ -1102,7 +1102,7 @@ public class IndexingServiceTest {
   public void testUnreserveItem() throws IOException {
     this.transport.addUnreserveItemsReqResp(SOURCE_ID, OPERATION_DONE);
     this.indexingService.unreserve("queueName");
-    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+    verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
   @Test

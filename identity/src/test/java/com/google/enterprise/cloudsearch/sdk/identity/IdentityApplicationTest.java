@@ -24,7 +24,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -245,15 +244,15 @@ public class IdentityApplicationTest {
             mockHelper,
             identitySchedulerBuilder,
             identityScheduler);
-    inOrder.verify(mockHelper, times(1)).createShutdownHookThread(any(ShutdownHook.class));
-    inOrder.verify(mockIdentityService, times(1)).startAsync();
-    inOrder.verify(mockIdentityService, times(1)).awaitRunning();
-    inOrder.verify(mockExceptionHandler, times(1)).handleException(ex, 1);
-    inOrder.verify(mockHelper, times(1)).createSchedulerBuilderInstance();
-    inOrder.verify(identitySchedulerBuilder, times(1)).setConnector(eq(mockConnector));
-    inOrder.verify(identitySchedulerBuilder, times(1)).setContext(eq(mockContext));
-    inOrder.verify(identitySchedulerBuilder, times(1)).setShutdownHolder(any());
-    inOrder.verify(identityScheduler, times(1)).start();
+    inOrder.verify(mockHelper).createShutdownHookThread(any(ShutdownHook.class));
+    inOrder.verify(mockIdentityService).startAsync();
+    inOrder.verify(mockIdentityService).awaitRunning();
+    inOrder.verify(mockExceptionHandler).handleException(ex, 1);
+    inOrder.verify(mockHelper).createSchedulerBuilderInstance();
+    inOrder.verify(identitySchedulerBuilder).setConnector(eq(mockConnector));
+    inOrder.verify(identitySchedulerBuilder).setContext(eq(mockContext));
+    inOrder.verify(identitySchedulerBuilder).setShutdownHolder(any());
+    inOrder.verify(identityScheduler).start();
     inOrder.verifyNoMoreInteractions();
   }
 
@@ -266,15 +265,15 @@ public class IdentityApplicationTest {
             .build();
     subject.start();
     InOrder inOrder = inOrder(mockRuntime, mockHelper, identitySchedulerBuilder, identityScheduler);
-    inOrder.verify(mockHelper, times(1)).createShutdownHookThread(any(ShutdownHook.class));
-    inOrder.verify(mockHelper, times(1)).getRuntimeInstance();
-    inOrder.verify(mockRuntime, times(1)).addShutdownHook(mockShutdownThread);
-    inOrder.verify(mockHelper, times(1)).createContextBuilderInstance();
-    inOrder.verify(mockHelper, times(1)).createSchedulerBuilderInstance();
-    inOrder.verify(identitySchedulerBuilder, times(1)).setConnector(eq(mockConnector));
-    inOrder.verify(identitySchedulerBuilder, times(1)).setContext(eq(mockContext));
-    inOrder.verify(identitySchedulerBuilder, times(1)).setShutdownHolder(any());
-    inOrder.verify(identityScheduler, times(1)).start();
+    inOrder.verify(mockHelper).createShutdownHookThread(any(ShutdownHook.class));
+    inOrder.verify(mockHelper).getRuntimeInstance();
+    inOrder.verify(mockRuntime).addShutdownHook(mockShutdownThread);
+    inOrder.verify(mockHelper).createContextBuilderInstance();
+    inOrder.verify(mockHelper).createSchedulerBuilderInstance();
+    inOrder.verify(identitySchedulerBuilder).setConnector(eq(mockConnector));
+    inOrder.verify(identitySchedulerBuilder).setContext(eq(mockContext));
+    inOrder.verify(identitySchedulerBuilder).setShutdownHolder(any());
+    inOrder.verify(identityScheduler).start();
     inOrder.verifyNoMoreInteractions();
   }
 
@@ -322,9 +321,9 @@ public class IdentityApplicationTest {
     subject.start();
     subject.shutdown("TestEvent");
     InOrder inOrder = inOrder(spyLogger, identityScheduler, mockConnector);
-    inOrder.verify(spyLogger, times(1)).log(eq(Level.INFO), any(), anyString());
-    inOrder.verify(identityScheduler, times(1)).isStarted();
-    inOrder.verify(mockConnector, times(1)).destroy();
+    inOrder.verify(spyLogger).log(eq(Level.INFO), any(), anyString());
+    inOrder.verify(identityScheduler).isStarted();
+    inOrder.verify(mockConnector).destroy();
   }
 
   @Test
@@ -338,10 +337,10 @@ public class IdentityApplicationTest {
     subject.start();
     subject.shutdown("TestEvent");
     InOrder inOrder = inOrder(spyLogger, identityScheduler, mockConnector);
-    inOrder.verify(spyLogger, times(1)).log(eq(Level.INFO), any(), anyString());
-    inOrder.verify(identityScheduler, times(1)).isStarted();
-    inOrder.verify(identityScheduler, times(1)).stop();
-    inOrder.verify(mockConnector, times(1)).destroy();
+    inOrder.verify(spyLogger).log(eq(Level.INFO), any(), anyString());
+    inOrder.verify(identityScheduler).isStarted();
+    inOrder.verify(identityScheduler).stop();
+    inOrder.verify(mockConnector).destroy();
   }
 
   @Test

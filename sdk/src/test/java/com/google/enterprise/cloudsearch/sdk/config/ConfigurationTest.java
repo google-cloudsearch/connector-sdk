@@ -22,7 +22,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
@@ -313,7 +312,7 @@ public class ConfigurationTest {
     assertFalse(Configuration.isInitialized());
     assertFalse(stringParam.isInitialized());
     assertFalse(intParam.isInitialized());
-    verify(mockParser, times(1)).parse("valid");
+    verify(mockParser).parse("valid");
   }
 
   @Test

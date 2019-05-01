@@ -18,7 +18,6 @@ package com.google.enterprise.cloudsearch.sdk.indexing.template;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -195,7 +194,7 @@ public class LocalFileCheckpointHandlerTest {
     when(mockCheckpointFile.exists()).thenReturn(false);
     handler.saveCheckpoint("test_checkpoint", null);
     InOrder inOrder = Mockito.inOrder(mockCheckpointFile);
-    inOrder.verify(mockCheckpointFile, times(1)).exists();
+    inOrder.verify(mockCheckpointFile).exists();
     verifyNoMoreInteractions(mockCheckpointFile);
   }
 
@@ -205,6 +204,6 @@ public class LocalFileCheckpointHandlerTest {
         new LocalFileCheckpointHandler("checkpointpath", mockFileHelper);
     when(mockCheckpointFile.exists()).thenReturn(false);
     handler.saveCheckpoint("test_checkpoint", golden);
-    verify(mockFileHelper, times(1)).writeFile(mockCheckpointFile, golden);
+    verify(mockFileHelper).writeFile(mockCheckpointFile, golden);
   }
 }
