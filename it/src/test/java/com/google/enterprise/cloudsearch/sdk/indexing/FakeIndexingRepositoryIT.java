@@ -127,6 +127,15 @@ public class FakeIndexingRepositoryIT {
     keyFilePath = serviceKeyPath.toAbsolutePath().toString();
   }
 
+  private Properties getIncrementalChangesProperties() {
+    Properties p = new Properties();
+    p.setProperty("connector.runOnce", "false"); // Override createRequiredProperties value
+    p.setProperty("schedule.performTraversalOnStart", "true"); // Have getAllDocs happen first
+    p.setProperty("schedule.incrementalTraversalIntervalSecs", "5"); // Default is 300
+    p.setProperty("batch.batchSize", "1"); // Force batch flush after getChanges returns one item
+    return p;
+  }
+
   private Properties createRequiredProperties() throws IOException {
     Properties config = new Properties();
     rootUrl.ifPresent(r -> config.setProperty("api.rootUrl", r));
@@ -418,6 +427,110 @@ public class FakeIndexingRepositoryIT {
         .build();
     runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
     verifyStructuredData(itemId, schemaObjectType, item.getItem());
+  }
+
+  @Test
+  public void incrementalChanges_updateItem_succeeds() throws Exception {
+    String itemId = getItemId("TestItem");
+    MockItem item = new MockItem.Builder(itemId)
+        .setTitle("Original Title in Incremental Changes Test")
+        .setContentLanguage("en-us")
+        .setVersion("1")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .build();
+    MockItem changedItem = new MockItem.Builder(itemId)
+        .setTitle("New Title in Incremental Changes Test")
+        .setContentLanguage("en-us")
+        .setVersion("2")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .build();
+
+    String[] args = setupConfiguration(getIncrementalChangesProperties());
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(asList(item))
+        .build();
+    IndexingApplication application =
+        new IndexingApplication.Builder(new FullTraversalConnector(mockRepo), args)
+        .build();
+    try {
+      application.start();
+      mockRepo.awaitGetAllDocs(WAIT_FOR_CONNECTOR_RUN_SECS , TimeUnit.SECONDS);
+      testUtils.waitUntilEqual(itemId, item.getItem());
+      mockRepo.addChangedItem(changedItem);
+      mockRepo.awaitGetChanges(WAIT_FOR_CONNECTOR_RUN_SECS , TimeUnit.SECONDS);
+      testUtils.waitUntilEqual(itemId, changedItem.getItem());
+    } finally {
+      v1Client.deleteItemsIfExist(asList(itemId));
+      application.shutdown("test ended");
+    }
+  }
+
+  @Test
+  public void incrementalChanges_addItem_succeeds() throws Exception {
+    String itemId1 = getItemId("TestItem1");
+    MockItem item1 = new MockItem.Builder(itemId1)
+        .setTitle("Item 1 in Incremental Changes Test")
+        .setContentLanguage("en-us")
+        .setVersion("1")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .build();
+    String itemId2 = getItemId("TestItem2");
+    MockItem item2 = new MockItem.Builder(itemId2)
+        .setTitle("Item 2 in Incremental Changes Test")
+        .setContentLanguage("en-us")
+        .setVersion("1")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .build();
+
+    String[] args = setupConfiguration(getIncrementalChangesProperties());
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(asList(item1))
+        .build();
+    IndexingApplication application =
+        new IndexingApplication.Builder(new FullTraversalConnector(mockRepo), args)
+        .build();
+    try {
+      application.start();
+      mockRepo.awaitGetAllDocs(WAIT_FOR_CONNECTOR_RUN_SECS , TimeUnit.SECONDS);
+      testUtils.waitUntilEqual(itemId1, item1.getItem());
+      mockRepo.addChangedItem(item2);
+      mockRepo.awaitGetChanges(WAIT_FOR_CONNECTOR_RUN_SECS , TimeUnit.SECONDS);
+      testUtils.waitUntilEqual(itemId1, item1.getItem());
+      testUtils.waitUntilEqual(itemId2, item2.getItem());
+    } finally {
+      v1Client.deleteItemsIfExist(asList(itemId1, itemId2));
+      application.shutdown("test ended");
+    }
+  }
+
+  @Test
+  public void incrementalChanges_deleteItem_succeeds() throws Exception {
+    String itemId1 = getItemId("TestItem1");
+    MockItem item1 = new MockItem.Builder(itemId1)
+        .setTitle("Item To Delete in Incremental Changes Test")
+        .setContentLanguage("en-us")
+        .setVersion("1")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .build();
+
+    String[] args = setupConfiguration(getIncrementalChangesProperties());
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(asList(item1))
+        .build();
+    IndexingApplication application =
+        new IndexingApplication.Builder(new FullTraversalConnector(mockRepo), args)
+        .build();
+    try {
+      application.start();
+      mockRepo.awaitGetAllDocs(WAIT_FOR_CONNECTOR_RUN_SECS , TimeUnit.SECONDS);
+      testUtils.waitUntilEqual(itemId1, item1.getItem());
+      mockRepo.addDeletedItem(itemId1);
+      mockRepo.awaitGetChanges(WAIT_FOR_CONNECTOR_RUN_SECS , TimeUnit.SECONDS);
+      testUtils.waitUntilDeleted(itemId1);
+    } finally {
+      v1Client.deleteItemsIfExist(asList(itemId1));
+      application.shutdown("test ended");
+    }
   }
 
   private void verifyStructuredData(String itemId, String schemaObjectType,
