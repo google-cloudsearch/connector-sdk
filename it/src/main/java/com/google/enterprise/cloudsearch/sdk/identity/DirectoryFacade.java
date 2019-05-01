@@ -234,18 +234,18 @@ public class DirectoryFacade {
   }
 
   public static void main(String[] args) throws IOException, GeneralSecurityException {
-    final String NL = System.lineSeparator();
-    final String commonParams = "<admin_email> <path/to/key.json> <domain>";
+    String nl = System.lineSeparator();
+    String commonParams = "<admin_email> <path/to/key.json> <domain>";
 
     if (args.length < 3) {
       System.err.println(
-          "Wrong number of arguments." + NL
-              + "Usage: " + NL
-              + "  List: DirectoryFacade " + commonParams + " l" + NL
+          "Wrong number of arguments." + nl
+              + "Usage: " + nl
+              + "  List: DirectoryFacade " + commonParams + " l" + nl
               + "  Delete: DirectoryFacade " + commonParams + " d "
-              + "<comma-separated-emails-list>" + NL
+              + "<comma-separated-emails-list>" + nl
               + "  Create: DirectoryFacade " + commonParams + " c "
-              + "<comma-separated-emails-list>" + NL);
+              + "<comma-separated-emails-list>" + nl);
     }
 
     String adminEmail = args[0];
