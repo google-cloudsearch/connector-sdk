@@ -22,7 +22,6 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -204,8 +203,7 @@ public class DefaultAclTest {
     DefaultAcl.fromConfiguration(indexingServiceMock);
 
     readersAcl.applyTo(defaultAclContainer);
-    verify(indexingServiceMock, times(1))
-        .indexItem(defaultAclContainer, RequestMode.SYNCHRONOUS);
+    verify(indexingServiceMock).indexItem(defaultAclContainer, RequestMode.SYNCHRONOUS);
   }
 
   @Test
@@ -222,8 +220,7 @@ public class DefaultAclTest {
         .setReaders(ImmutableList.of(Acl.getGoogleUserPrincipal("user1@example.com")))
         .build()
         .applyTo(defaultAclContainer);
-    verify(indexingServiceMock, times(1))
-        .indexItem(defaultAclContainer, RequestMode.SYNCHRONOUS);
+    verify(indexingServiceMock).indexItem(defaultAclContainer, RequestMode.SYNCHRONOUS);
   }
 
   @Test

@@ -626,7 +626,7 @@ public class BatchRequestServiceTest {
     batchService.add(requestToBatch);
     batchService.flush();
     batchService.stopAsync().awaitTerminated();
-    verify(retryPolicy, times(1)).isRetryableStatusCode(httpErrorCode);
+    verify(retryPolicy).isRetryableStatusCode(httpErrorCode);
     validateFailedResult(requestToBatch.getFuture());
     assertEquals(Status.FAILED, requestToBatch.getStatus());
     assertEquals(0, requestToBatch.getRetries());
@@ -657,7 +657,7 @@ public class BatchRequestServiceTest {
     batchService.add(requestToBatch);
     batchService.flush();
     batchService.stopAsync().awaitTerminated();
-    verify(retryPolicy, times(1)).isRetryableStatusCode(0);
+    verify(retryPolicy).isRetryableStatusCode(0);
     validateFailedResult(requestToBatch.getFuture());
     assertEquals(Status.FAILED, requestToBatch.getStatus());
     assertEquals(0, requestToBatch.getRetries());
@@ -697,7 +697,7 @@ public class BatchRequestServiceTest {
     Future<Integer> result = batchService.flush();
     Thread.interrupted(); // Clear interrupted flag
     batchService.stopAsync().awaitTerminated();
-    verify(retryPolicy, times(1)).isRetryableStatusCode(0);
+    verify(retryPolicy).isRetryableStatusCode(0);
     assertEquals(Status.COMPLETED, requestToBatchSuccessful.getStatus());
     assertEquals(Status.FAILED, requestToBatchFailed.getStatus());
     assertEquals(0, requestToBatchSuccessful.getRetries());
@@ -748,7 +748,7 @@ public class BatchRequestServiceTest {
     batchService.add(requestToBatchFailed);
     Future<Integer> result = batchService.flush();
     batchService.stopAsync().awaitTerminated();
-    verify(retryPolicy, times(1)).isRetryableStatusCode(httpErrorCode);
+    verify(retryPolicy).isRetryableStatusCode(httpErrorCode);
     assertEquals(Status.COMPLETED, requestToBatchSuccessful.getStatus());
     assertEquals(Status.FAILED, requestToBatchFailed.getStatus());
     assertEquals(1, requestToBatchSuccessful.getRetries());
@@ -841,9 +841,9 @@ public class BatchRequestServiceTest {
     batchService.add(requestToBatch);
     batchService.flush();
     batchService.stopAsync().awaitTerminated();
-    verify(retryPolicy, times(1)).isRetryableStatusCode(httpErrorCode);
-    verify(retryPolicy, times(1)).getMaxRetryLimit();
-    verify(backOff, times(1)).nextBackOffMillis();
+    verify(retryPolicy).isRetryableStatusCode(httpErrorCode);
+    verify(retryPolicy).getMaxRetryLimit();
+    verify(backOff).nextBackOffMillis();
     assertEquals(successfulResult, requestToBatch.getFuture().get());
     assertEquals(Status.COMPLETED, requestToBatch.getStatus());
     assertEquals(1, requestToBatch.getRetries());
