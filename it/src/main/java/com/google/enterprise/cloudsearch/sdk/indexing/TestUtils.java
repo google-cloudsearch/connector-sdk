@@ -87,8 +87,8 @@ public class TestUtils {
     logger.log(Level.INFO, "Verifying item {0}...", actual);
     // TODO(lchandramouli): verify all applicable meta data
     assertEquals("ACCEPTED", actual.getStatus().getCode());
-    assertEquals(actual.getItemType(), expected.getItemType());
-    assertEquals(actual.getMetadata(), expected.getMetadata());
-    assertEquals(actual.getName(), expected.getName());
+    assertEquals(expected.getItemType(), actual.getItemType());
+    assertEquals(expected.getMetadata(), actual.getMetadata());
+    assertEquals(expected.getName(), actual.getName());
   }
 }
