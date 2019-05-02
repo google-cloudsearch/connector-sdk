@@ -872,7 +872,9 @@ public class IndexingServiceTest {
   @Test
   public void testGetSchema() throws IOException {
     // BaseApiService.setDefaultValuesForPrimitiveTypes assigns the empty lists.
-    Schema schema = new Schema().setObjectDefinitions(Collections.emptyList());
+    Schema schema = new Schema()
+        .setObjectDefinitions(Collections.emptyList())
+        .setOperationIds(Collections.emptyList());
     this.transport.addGetSchemaReqResp(SOURCE_ID, false, schema);
     assertEquals(schema, indexingService.getSchema());
     verify(quotaServer).acquire(Operations.DEFAULT);
