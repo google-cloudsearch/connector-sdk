@@ -16,8 +16,9 @@ package com.google.enterprise.cloudsearch.sdk.indexing.util;
  */
 
 import static java.nio.charset.Charset.defaultCharset;
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThat;
 
 import com.google.api.client.json.JsonObjectParser;
 import com.google.api.client.json.jackson2.JacksonFactory;
@@ -32,7 +33,6 @@ import java.io.InputStreamReader;
 import org.junit.Test;
 
 /** Tests for {@link UploadRequest}. */
-
 public class UploadRequestTest {
 
   private static String testJsonFile =
@@ -54,9 +54,9 @@ public class UploadRequestTest {
 
     assertEquals("testSourceId", upload.sourceId);
     assertEquals(4, upload.requests.size());
-    assertTrue(upload.requests.get(0) instanceof DeleteRequest);
-    assertTrue(upload.requests.get(1) instanceof GetRequest);
-    assertTrue(upload.requests.get(2) instanceof IndexItemRequest);
-    assertTrue(upload.requests.get(3) instanceof IndexItemAndContentRequest);
+    assertThat(upload.requests.get(0), instanceOf(DeleteRequest.class));
+    assertThat(upload.requests.get(1), instanceOf(GetRequest.class));
+    assertThat(upload.requests.get(2), instanceOf(IndexItemRequest.class));
+    assertThat(upload.requests.get(3), instanceOf(IndexItemAndContentRequest.class));
   }
 }

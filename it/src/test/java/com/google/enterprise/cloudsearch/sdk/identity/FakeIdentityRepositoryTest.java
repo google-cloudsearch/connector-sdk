@@ -15,9 +15,11 @@
  */
 package com.google.enterprise.cloudsearch.sdk.identity;
 
+import static org.hamcrest.CoreMatchers.hasItems;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -115,7 +117,7 @@ public class FakeIdentityRepositoryTest {
         .addSnapshot(
             new String[][] { {"  u1", "  u2", "  u3  "} }, new String[][] {})
         .build();
-    assertTrue(repo.getAllUserEmails().containsAll(ImmutableSet.of("u1@X", "u2@X", "u3@X")));
+    assertThat(repo.getAllUserEmails(), hasItems("u1@X", "u2@X", "u3@X"));
   }
 
   @Test
@@ -124,9 +126,7 @@ public class FakeIdentityRepositoryTest {
         .addSnapshot(
             new String[][] {}, new String[][] { {"  g1", "  g2", "  g3  "} })
         .build();
-    assertTrue(
-        repo.getAllGroupIds()
-            .containsAll(ImmutableSet.of("X/g1", "X/g2", "X/g3")));
+    assertThat(repo.getAllGroupIds(), hasItems("X/g1", "X/g2", "X/g3"));
   }
 
   @Test

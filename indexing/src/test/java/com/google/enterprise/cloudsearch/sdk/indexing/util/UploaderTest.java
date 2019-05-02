@@ -3,6 +3,7 @@ package com.google.enterprise.cloudsearch.sdk.indexing.util;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
@@ -21,10 +22,10 @@ import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.testing.http.MockHttpTransport;
 import com.google.api.client.testing.http.MockLowLevelHttpRequest;
 import com.google.api.client.testing.http.MockLowLevelHttpResponse;
-import com.google.api.services.cloudsearch.v1.CloudSearchRequest;
 import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources;
 import com.google.api.services.cloudsearch.v1.CloudSearch.Indexing.Datasources.Items;
 import com.google.api.services.cloudsearch.v1.CloudSearch.Settings;
+import com.google.api.services.cloudsearch.v1.CloudSearchRequest;
 import com.google.api.services.cloudsearch.v1.model.DeleteQueueItemsRequest;
 import com.google.api.services.cloudsearch.v1.model.IndexItemOptions;
 import com.google.api.services.cloudsearch.v1.model.IndexItemRequest;
@@ -104,7 +105,7 @@ public class UploaderTest {
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/"
                         + "datasources/ds1/items/item1";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 assertEquals("DELETE", method);
                 return buildApiRequest(200, new Operation());
               }
@@ -150,7 +151,7 @@ public class UploaderTest {
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/"
                         + "datasources/ds1/items:deleteQueueItems";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 assertEquals("POST", method);
                 return buildApiRequest(200, new Operation());
               }
@@ -197,7 +198,7 @@ public class UploaderTest {
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/"
                         + "datasources/ds1/items/item1";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 assertEquals("GET", method);
                 return buildApiRequest(200, new Item());
               }
@@ -238,7 +239,7 @@ public class UploaderTest {
                   throws IOException {
                 String expectedUrl = "https://cloudsearch.googleapis.com/v1/indexing/"
                     + "datasources/ds1/items/item1:push";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 assertEquals("POST", method);
                 return buildApiRequest(200, new Item());
               }
@@ -285,7 +286,7 @@ public class UploaderTest {
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/"
                         + "datasources/ds1/items:unreserve";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 return buildApiRequest(200, new Operation());
               }
             });
@@ -330,7 +331,7 @@ public class UploaderTest {
                 assertEquals("GET", method);
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/datasources/ds1/schema";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 return buildApiRequest(200, new Schema());
               }
             });
@@ -370,7 +371,7 @@ public class UploaderTest {
                 assertEquals("DELETE", method);
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/datasources/ds1/schema";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 return buildApiRequest(200, new Schema());
               }
             });
@@ -419,7 +420,7 @@ public class UploaderTest {
                 assertEquals("PUT", method);
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/datasources/ds1/schema";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 return buildApiRequest(200, new Operation());
               }
             });
@@ -501,7 +502,7 @@ public class UploaderTest {
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/"
                         + "datasources/ds1/items/item1:index";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 return buildApiRequest(200, new Operation());
               }
             });
@@ -550,7 +551,7 @@ public class UploaderTest {
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/"
                         + "datasources/ds1/items/item1:index";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 return buildApiRequest(200, new Operation());
               }
             });
@@ -602,7 +603,7 @@ public class UploaderTest {
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/"
                         + "datasources/ds1/items/item1:index";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 return buildApiRequest(200, new Operation());
               }
             });
@@ -655,7 +656,7 @@ public class UploaderTest {
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/"
                         + "datasources/ds1/items:poll";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 return buildApiRequest(200, new Operation());
               }
             });
@@ -704,7 +705,7 @@ public class UploaderTest {
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/"
                         + "datasources/ds1/items";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 return buildApiRequest(200, new Operation());
               }
             });
@@ -749,7 +750,7 @@ public class UploaderTest {
                 assertEquals("GET", method);
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/settings/datasources";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 return buildApiRequest(200, new Operation());
               }
             });
@@ -973,7 +974,7 @@ public class UploaderTest {
                 String expectedUrl =
                     "https://cloudsearch.googleapis.com/v1/indexing/"
                         + "datasources/ds1/items/item1";
-                assertTrue(url + " not starting with " + expectedUrl, url.startsWith(expectedUrl));
+                assertThat(url, startsWith(expectedUrl));
                 assertEquals("DELETE", method);
                 return buildApiRequest(200, new Operation());
               }
