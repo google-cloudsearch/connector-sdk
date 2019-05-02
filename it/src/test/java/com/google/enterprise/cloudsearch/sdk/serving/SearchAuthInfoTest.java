@@ -1,6 +1,6 @@
 package com.google.enterprise.cloudsearch.sdk.serving;
 
-import static junit.framework.TestCase.assertEquals;
+import static org.junit.Assert.assertEquals;
 
 import com.google.common.io.ByteStreams;
 import java.io.File;

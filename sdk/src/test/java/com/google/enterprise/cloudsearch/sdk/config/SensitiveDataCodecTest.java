@@ -18,9 +18,9 @@ package com.google.enterprise.cloudsearch.sdk.config;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.google.enterprise.cloudsearch.sdk.config.SensitiveDataCodec.SecurityLevel;
@@ -107,7 +107,7 @@ public class SensitiveDataCodecTest {
     String encrypt = sensitiveDataCodec.encodeData(readable, SecurityLevel.OBFUSCATED);
     String decrypt = sensitiveDataCodec.decodeData(encrypt);
     assertEquals(readable, decrypt);
-    assertTrue(encrypt.startsWith("obf:"));
+    assertThat(encrypt, startsWith("obf:"));
   }
 
   @Test
@@ -120,7 +120,7 @@ public class SensitiveDataCodecTest {
     assertThat(encrypt, not(containsString("\r\n")));
     String decrypt = sensitiveDataCodec.decodeData(encrypt);
     assertEquals(readable, decrypt);
-    assertTrue(encrypt.startsWith("obf:"));
+    assertThat(encrypt, startsWith("obf:"));
   }
 
   @Test
@@ -150,6 +150,6 @@ public class SensitiveDataCodecTest {
     String encrypt = sensitiveDataCodec.encodeData(readable, SecurityLevel.ENCRYPTED);
     String decrypt = sensitiveDataCodec.decodeData(encrypt);
     assertEquals(readable, decrypt);
-    assertTrue(encrypt.startsWith("pkc:"));
+    assertThat(encrypt, startsWith("pkc:"));
   }
 }

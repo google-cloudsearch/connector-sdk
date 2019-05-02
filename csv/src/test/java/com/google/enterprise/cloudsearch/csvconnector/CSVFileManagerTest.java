@@ -17,10 +17,12 @@ package com.google.enterprise.cloudsearch.csvconnector;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static junit.framework.TestCase.assertEquals;
-import static junit.framework.TestCase.assertFalse;
-import static junit.framework.TestCase.assertTrue;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.endsWith;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThat;
 
 import com.google.api.client.http.ByteArrayContent;
 import com.google.api.services.cloudsearch.v1.model.Item;
@@ -375,8 +377,8 @@ public class CSVFileManagerTest {
     ByteArrayContent content = csvFileManager.createContent(csvRecord);
     String html = CharStreams
           .toString(new InputStreamReader(content.getInputStream(), UTF_8));
-    assertTrue(html.contains("moma search"));
-    assertTrue(html.contains("ID1"));
+    assertThat(html, containsString("moma search"));
+    assertThat(html, containsString("ID1"));
 
   }
 
@@ -534,7 +536,7 @@ public class CSVFileManagerTest {
     String html = CharStreams
         .toString(new InputStreamReader(content.getInputStream(), UTF_8));
     //definition part has empty value
-    assertTrue(html.contains("<p>definition:</p>\n" + "  <h1></h1>"));
+    assertThat(html, containsString("<p>definition:</p>\n" + "  <h1></h1>"));
   }
 
   @Test
@@ -554,7 +556,7 @@ public class CSVFileManagerTest {
     CSVRecord csvRecord = getOnlyElement(csvFile);
 
     Multimap<String, Object> multimap = csvFileManager.generateMultiMap(csvRecord);
-    assertTrue(multimap.get("updated").size() == 2);
+    assertEquals(multimap.get("updated").toString(), 2, multimap.get("updated").size());
   }
 
   @Test
@@ -594,8 +596,8 @@ public class CSVFileManagerTest {
     CSVRecord csvRecord = getOnlyElement(csvFile);
 
     Multimap<String, Object> multimap = csvFileManager.generateMultiMap(csvRecord);
-    assertTrue(multimap.get("author").contains("ID1"));
-    assertTrue(multimap.get("author").contains("ID2,A"));
+    assertThat(multimap.get("author"), hasItem("ID1"));
+    assertThat(multimap.get("author"), hasItem("ID2,A"));
   }
 
   @Test
@@ -851,8 +853,8 @@ public class CSVFileManagerTest {
     CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
     CSVRecord csvRecord = getOnlyElement(csvFileManager.getCSVFile());
 
-    assertFalse(("symbol=" + utf8euro).equals(csvRecord.get("definition")));
-    assertTrue(csvRecord.get("definition").endsWith(UTF_8.newDecoder().replacement()));
+    assertNotEquals("symbol=" + utf8euro, csvRecord.get("definition"));
+    assertThat(csvRecord.get("definition"), endsWith(UTF_8.newDecoder().replacement()));
   }
 
   // Write, read a character that exists in Cp1252, using Cp1252; it should come back as
@@ -897,7 +899,7 @@ public class CSVFileManagerTest {
     CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
     CSVRecord csvRecord = getOnlyElement(csvFileManager.getCSVFile());
 
-    assertFalse(("symbol=" + utf8devanagarishorta).equals(csvRecord.get("definition")));
+    assertNotEquals("symbol=" + utf8devanagarishorta, csvRecord.get("definition"));
   }
 
   // Write, read a character that does not exist in Cp1252 using UTF-8; another check that

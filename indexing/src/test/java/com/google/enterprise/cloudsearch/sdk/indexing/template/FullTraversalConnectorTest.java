@@ -17,11 +17,11 @@ package com.google.enterprise.cloudsearch.sdk.indexing.template;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -316,7 +316,7 @@ public class FullTraversalConnectorTest {
     List<ByteArrayContent> allContent = contentCaptor.getAllValues();
     assertEquals(allItems.size(), numberOfItems);
     for (int i = 0; i < numberOfItems; i++) {
-      assertTrue(targetItems.containsKey(allItems.get(i).getName())); // verify item
+      assertThat(targetItems.keySet(), hasItem(allItems.get(i).getName())); // verify item
       assertEquals(QUEUE_A, allItems.get(i).getQueue());
       String html =
           CharStreams.toString(
@@ -400,7 +400,7 @@ public class FullTraversalConnectorTest {
     List<ByteArrayContent> allContent = contentCaptor.getAllValues();
     assertEquals(allItems.size(), numberOfItems);
     for (int i = 0; i < numberOfItems; i++) {
-      assertTrue(targetItems.containsKey(allItems.get(i).getName())); // verify item
+      assertThat(targetItems.keySet(), hasItem(allItems.get(i).getName())); // verify item
       assertEquals(null, allItems.get(i).getMetadata().getContainerName()); // no container
       String html =
           CharStreams.toString(
@@ -485,7 +485,7 @@ public class FullTraversalConnectorTest {
     List<ByteArrayContent> allContent = contentCaptor.getAllValues();
     assertEquals(allItems.size(), numberOfItems);
     for (int i = 0; i < numberOfItems; i++) {
-      assertTrue(targetItems.containsKey(allItems.get(i).getName())); // verify item
+      assertThat(targetItems.keySet(), hasItem(allItems.get(i).getName())); // verify item
       String html =
           CharStreams.toString(
               new InputStreamReader(allContent.get(i).getInputStream(), UTF_8));
@@ -885,7 +885,7 @@ public class FullTraversalConnectorTest {
     List<ByteArrayContent> allContent = contentCaptor.getAllValues();
     assertEquals(allItems.size(), numberOfItems);
     for (int i = 0; i < numberOfItems; i++) {
-      assertTrue(targetItems.containsKey(allItems.get(i).getName())); // verify item
+      assertThat(targetItems.keySet(), hasItem(allItems.get(i).getName())); // verify item
       String html =
           CharStreams.toString(
               new InputStreamReader(allContent.get(i).getInputStream(), UTF_8));
@@ -956,7 +956,7 @@ public class FullTraversalConnectorTest {
     verify(checkpointHandlerMock)
         .saveCheckpoint(FullTraversalConnector.CHECKPOINT_INCREMENTAL, null);
     assertEquals(item.getName(), itemCaptor.getValue().getName());
-    assertTrue(itemCaptor.getValue().getAcl() == null);
+    assertNull(itemCaptor.getValue().getAcl());
     verifyNoMoreInteractions(indexingServiceMock, checkpointHandlerMock);
   }
 

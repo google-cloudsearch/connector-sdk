@@ -22,6 +22,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.junit.Assert.assertEquals;
@@ -405,7 +406,7 @@ public class IndexingServiceTest {
     this.transport.addGetItemReqResp(SOURCE_ID, GOOD_ID, false, goodItem);
     Item item = this.indexingService.getItem(GOOD_ID);
     assertNotNull(item);
-    assertTrue(item.getName().equals(goodItem.getName()));
+    assertThat(item.getName(), equalTo(goodItem.getName()));
     verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
@@ -416,7 +417,7 @@ public class IndexingServiceTest {
     this.transport.addGetItemReqResp(SOURCE_ID, "docs%2Fitem1", false, goodItem);
     Item item = this.indexingService.getItem(itemName);
     assertNotNull(item);
-    assertTrue(item.getName().equals(goodItem.getName()));
+    assertThat(item.getName(), equalTo(goodItem.getName()));
   }
 
   @Test
@@ -453,7 +454,7 @@ public class IndexingServiceTest {
     this.transport.addListItemReqResp(SOURCE_ID, true, null, false, listResponse);
     for (Item item : this.indexingService.listItem(BRIEF)) {
       assertNotNull(item);
-      assertTrue(item.getName().equals(goodItem.getName()));
+      assertThat(item.getName(), equalTo(goodItem.getName()));
     }
   }
 
@@ -465,7 +466,7 @@ public class IndexingServiceTest {
     this.transport.addListItemReqResp(SOURCE_ID, true, "", false, listResponse);
     for (Item item : this.indexingService.listItem(BRIEF)) {
       assertNotNull(item);
-      assertTrue(item.getName().equals(goodItem.getName()));
+      assertThat(item.getName(), equalTo(goodItem.getName()));
     }
   }
 
@@ -477,7 +478,7 @@ public class IndexingServiceTest {
     this.transport.addListItemReqResp(SOURCE_ID, false, "", false, listResponse);
     for (Item item : this.indexingService.listItem(!BRIEF)) {
       assertNotNull(item);
-      assertTrue(item.getName().equals(goodItem.getName()));
+      assertThat(item.getName(), equalTo(goodItem.getName()));
     }
     verify(quotaServer).acquire(Operations.DEFAULT);
   }
@@ -517,7 +518,7 @@ public class IndexingServiceTest {
     Iterable<Item> listIterator = this.indexingService.listItem(BRIEF);
     for (Item item : listIterator) {
       assertNotNull(item);
-      assertTrue(item.getName().equals(goodItem.getName()));
+      assertThat(item.getName(), equalTo(goodItem.getName()));
     }
     thrown.expect(NoSuchElementException.class);
     assertNotNull(listIterator.iterator().next());
@@ -531,7 +532,7 @@ public class IndexingServiceTest {
     this.transport.addListItemReqResp(SOURCE_ID, true, "", false, listResponse);
     Iterable<Item> listIterator = this.indexingService.listItem(BRIEF);
     Item item = listIterator.iterator().next();
-    assertTrue(item.getName().equals(goodItem.getName()));
+    assertThat(item.getName(), equalTo(goodItem.getName()));
     thrown.expect(UnsupportedOperationException.class);
     listIterator.iterator().remove();
   }
@@ -541,7 +542,7 @@ public class IndexingServiceTest {
     ListItemsResponse listResponse = new ListItemsResponse();
     this.transport.addListItemReqResp(SOURCE_ID, true, "", false, listResponse);
     Iterable<Item> listIterator = this.indexingService.listItem(BRIEF);
-    assertTrue(!listIterator.iterator().hasNext());
+    assertFalse(listIterator.iterator().hasNext());
   }
 
   @Test
@@ -890,8 +891,7 @@ public class IndexingServiceTest {
     pollResponse.setItems(initEntries);
     this.transport.addPollItemReqResp(SOURCE_ID, pollResponse);
     List<Item> entries = this.indexingService.poll(pollRequest);
-    assertTrue(entries.size() == 1);
-    assertTrue(entries.get(0).getName().equals(GOOD_ID));
+    assertThat(transform(entries, Item::getName), equalTo(Collections.singletonList(GOOD_ID)));
     verify(quotaServer).acquire(Operations.DEFAULT);
   }
 
@@ -901,7 +901,7 @@ public class IndexingServiceTest {
     PollItemsResponse pollResponse = new PollItemsResponse();
     this.transport.addPollItemReqResp(SOURCE_ID, pollResponse);
     List<Item> entries = this.indexingService.poll(pollRequest);
-    assertTrue(entries.size() == 0);
+    assertThat(entries.size(), equalTo(0));
   }
 
   @Test
@@ -915,7 +915,7 @@ public class IndexingServiceTest {
     pollResponse.setItems(initEntries);
     this.transport.addPollItemReqResp(SOURCE_ID, pollResponse);
     List<Item> entries = this.indexingService.poll(pollRequest);
-    assertTrue(entries.size() == 10);
+    assertThat(entries.size(), equalTo(10));
   }
 
   @Test
@@ -937,7 +937,7 @@ public class IndexingServiceTest {
     pollResponse.setItems(initEntries);
     this.transport.addPollItemReqResp(SOURCE_ID, pollResponse);
     List<Item> entries = this.indexingService.poll(pollRequest);
-    assertTrue(entries.size() == 5);
+    assertThat(entries.size(), equalTo(5));
   }
 
   @Test
@@ -971,8 +971,7 @@ public class IndexingServiceTest {
                     PollItemStatus.SERVER_ERROR.toString(),
                     PollItemStatus.NEW_ITEM.toString()));
     List<Item> entries = this.indexingService.poll(pollRequest);
-    assertTrue(entries.size() == 1);
-    assertTrue(entries.get(0).getName().equals(GOOD_ID));
+    assertThat(transform(entries, Item::getName), equalTo(Collections.singletonList(GOOD_ID)));
     assertEquals(PollItemStatus.ACCEPTED.toString(), entries.get(0).getStatus().getCode());
   }
 
@@ -995,8 +994,7 @@ public class IndexingServiceTest {
                     PollItemStatus.SERVER_ERROR.toString(),
                     PollItemStatus.NEW_ITEM.toString()));
     List<Item> entries = this.indexingService.poll(pollRequest);
-    assertTrue(entries.size() == 1);
-    assertTrue(entries.get(0).getName().equals("a+b/c"));
+    assertThat(transform(entries, Item::getName), equalTo(Collections.singletonList("a+b/c")));
     assertEquals(PollItemStatus.ACCEPTED.toString(), entries.get(0).getStatus().getCode());
   }
 
@@ -1012,8 +1010,7 @@ public class IndexingServiceTest {
     this.transport.addPollItemReqResp(SOURCE_ID, pollResponse);
     PollItemsRequest pollRequest = new PollItemsRequest();
     List<Item> entries = this.indexingService.poll(pollRequest);
-    assertTrue(entries.size() == 1);
-    assertTrue(entries.get(0).getName().equals(GOOD_ID));
+    assertThat(transform(entries, Item::getName), equalTo(Collections.singletonList(GOOD_ID)));
     assertEquals(PollItemStatus.ACCEPTED.toString(), entries.get(0).getStatus().getCode());
   }
 
@@ -1195,7 +1192,7 @@ public class IndexingServiceTest {
   }
 
   private void validateApiError(ExecutionException e, int errorCode) {
-    assertTrue(e.getCause() instanceof GoogleJsonResponseException);
+    assertThat(e.getCause(), instanceOf(GoogleJsonResponseException.class));
     GoogleJsonResponseException jsonError = (GoogleJsonResponseException) (e.getCause());
     assertEquals(jsonError.getStatusCode(), errorCode);
   }

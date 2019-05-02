@@ -16,8 +16,10 @@
 package com.google.enterprise.cloudsearch.sdk;
 
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -190,7 +192,8 @@ public class BatchRequestServiceTest {
 
     // verify the used requestInitializer
     HttpRequestInitializer requestInitializer = requestInitializerCaptor.getValue();
-    assertTrue(requestInitializer instanceof BatchRequestService.EventLoggingRequestInitializer);
+    assertThat(requestInitializer,
+        instanceOf(BatchRequestService.EventLoggingRequestInitializer.class));
     HttpRequest testRequest =
         new MockHttpTransport().createRequestFactory().buildDeleteRequest(null);
     requestInitializer.initialize(testRequest);
@@ -1247,7 +1250,7 @@ public class BatchRequestServiceTest {
       failed.get();
       fail("missing ExecutionException");
     } catch (ExecutionException ignore) {
-      assertTrue(ignore.getCause() instanceof IOException);
+      assertThat(ignore.getCause(), instanceOf(IOException.class));
     }
   }
 

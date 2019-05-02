@@ -19,7 +19,8 @@ import static com.google.api.services.cloudsearch.v1.CloudSearch.DEFAULT_BASE_UR
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.net.HttpURLConnection.HTTP_BAD_REQUEST;
 import static java.net.HttpURLConnection.HTTP_OK;
-import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 
 import com.google.api.client.googleapis.json.GoogleJsonError;
 import com.google.api.client.googleapis.json.GoogleJsonError.ErrorInfo;
@@ -108,8 +109,10 @@ class TestingHttpTransport extends MockHttpTransport {
    * @param response the response object.
    */
   public void setRequestResponse(String method, String url, GenericJson response) {
-    assertTrue((method != null) && (url != null));
-    assertTrue(!method.isEmpty() && !url.isEmpty());
+    assertNotNull(method);
+    assertNotNull(url);
+    assertNotEquals("", method);
+    assertNotEquals("", url);
     String request = makeKey(method, url);
     if (this.requestMap.get(request) == null) {
       this.requestMap.put(request, new ArrayDeque<>());
