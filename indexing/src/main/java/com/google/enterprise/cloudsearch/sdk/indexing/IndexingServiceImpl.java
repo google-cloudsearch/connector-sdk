@@ -1070,7 +1070,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
 
   private static String decodeResourceName(String name) {
     try {
-      return URLDecoder.decode(name, "UTF-8");
+      return URLDecoder.decode(name.replace("+", "%2B"), "UTF-8");
     } catch (UnsupportedEncodingException e) {
       throw new IllegalArgumentException("unable to decode resource name " + name, e);
     }
