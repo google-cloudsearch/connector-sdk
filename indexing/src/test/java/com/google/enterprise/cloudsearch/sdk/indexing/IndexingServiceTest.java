@@ -15,14 +15,20 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
+import static com.google.common.collect.Lists.transform;
 import static java.net.HttpURLConnection.HTTP_FORBIDDEN;
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.endsWith;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.sameInstance;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -103,6 +109,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
@@ -973,7 +980,7 @@ public class IndexingServiceTest {
     List<Item> initEntries = new ArrayList<>();
     initEntries.add(
         new Item()
-            .setName(ITEMS_RESOURCE_PREFIX + "http:%2F%2Fwww.google.com")
+            .setName(ITEMS_RESOURCE_PREFIX + "a+b%2Fc")
             .setStatus(new ItemStatus().setCode(PollItemStatus.ACCEPTED.toString())));
     pollResponse.setItems(initEntries);
     this.transport.addPollItemReqResp(SOURCE_ID, pollResponse);
@@ -987,7 +994,7 @@ public class IndexingServiceTest {
                     PollItemStatus.NEW_ITEM.toString()));
     List<Item> entries = this.indexingService.poll(pollRequest);
     assertTrue(entries.size() == 1);
-    assertTrue(entries.get(0).getName().equals("http://www.google.com"));
+    assertTrue(entries.get(0).getName().equals("a+b/c"));
     assertEquals(PollItemStatus.ACCEPTED.toString(), entries.get(0).getStatus().getCode());
   }
 
@@ -1062,14 +1069,35 @@ public class IndexingServiceTest {
 
   /* push */
   @Test
-  public void testPushItem() throws IOException {
-    this.transport.addPushItemReqResp(GOOD_ID, SOURCE_ID, new Item());
-    this.indexingService.push(GOOD_ID, new PushItem());
+  public void pushItem_succeeds() throws IOException, InterruptedException {
+    ArgumentCaptor<Items.Push> pushCaptor = ArgumentCaptor.forClass(Items.Push.class);
+    SettableFuture<Item> expected = SettableFuture.create();
+    expected.set(new Item());
+    when(batchingService.pushItem(pushCaptor.capture())).thenReturn(expected);
+
+    ListenableFuture<Item> result = this.indexingService.push("myname", new PushItem());
+
     verify(quotaServer).acquire(Operations.DEFAULT);
+    assertThat(pushCaptor.getValue().getName(), endsWith("/myname"));
+    assertThat(result, sameInstance(expected));
   }
 
   @Test
-  public void testPushItemError() throws IOException, InterruptedException {
+  public void pushItem_escapesResourceName() throws IOException, InterruptedException {
+    ArgumentCaptor<Items.Push> pushCaptor = ArgumentCaptor.forClass(Items.Push.class);
+    SettableFuture<Item> expected = SettableFuture.create();
+    expected.set(new Item());
+    when(batchingService.pushItem(pushCaptor.capture())).thenReturn(expected);
+
+    ListenableFuture<Item> result = this.indexingService.push("a+b/c", new PushItem());
+
+    verify(quotaServer).acquire(Operations.DEFAULT);
+    assertThat(pushCaptor.getValue().getName(), endsWith("/a+b%2Fc"));
+    assertThat(result, sameInstance(expected));
+  }
+
+  @Test
+  public void pushItem_apiError_throwsException() throws IOException, InterruptedException {
     doAnswer(
             invocation -> {
               Items.Push pushRequest = invocation.getArgument(0);
@@ -1092,9 +1120,37 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testPushItemNull() throws IOException {
+  public void pushItem_nullArgument_throwsException() throws IOException {
     thrown.expect(IllegalArgumentException.class);
     this.indexingService.push(GOOD_ID, null);
+  }
+
+  @Test
+  public void pushItem_poll_roundTripEncoding() throws IOException, InterruptedException {
+    // Test all printable ASCII characters, a Latin-1 character, and a larger code point.
+    StringBuilder builder = new StringBuilder("\u00f6\u20ac"); // o-umlaut Euro
+    for (int i = 32; i < 127; i++) {
+      builder.append((char) i);
+    }
+    String name = builder.toString();
+
+    ArgumentCaptor<Items.Push> pushCaptor = ArgumentCaptor.forClass(Items.Push.class);
+    SettableFuture<Item> pushResult = SettableFuture.create();
+    pushResult.set(new Item());
+    when(batchingService.pushItem(pushCaptor.capture())).thenReturn(pushResult);
+
+    ListenableFuture<Item> result = indexingService.push(name, new PushItem());
+    String escapedName = pushCaptor.getValue().getName();
+    transport.addPollItemReqResp(SOURCE_ID,
+        new PollItemsResponse()
+        .setItems(
+            Collections.singletonList(
+                new Item().setName(ITEMS_RESOURCE_PREFIX + escapedName))));
+    List<Item> entries = indexingService.poll(new PollItemsRequest());
+
+    assertThat(escapedName, not(equalTo(name)));
+    assertThat(transform(entries, Item::getName),
+        equalTo(Collections.singletonList(ITEMS_RESOURCE_PREFIX + name)));
   }
 
   /* unreserve */
