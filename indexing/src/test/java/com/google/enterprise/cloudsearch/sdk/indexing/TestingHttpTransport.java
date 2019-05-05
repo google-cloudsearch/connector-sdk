@@ -319,8 +319,25 @@ class TestingHttpTransport extends MockHttpTransport {
    * @param sourceId source ID
    * @param id the item ID
    * @param response the desired returned response
+   * @deprecated use {@link #addIndexItemReqResp}
    */
   public void addUpdateItemReqResp(
+      String sourceId, String id, boolean enableDebugging, GenericJson response) {
+    addIndexItemReqResp(sourceId, id, enableDebugging, response);
+  }
+
+  /**
+   * Add a request/response pair for simulated {@link IndexingService#indexItem(Item, boolean)}
+   * command.
+   *
+   * <p>This command is unique in that it has a non-standard URL format and has additional options
+   * for incremental and content.
+   *
+   * @param sourceId source ID
+   * @param id the item ID
+   * @param response the desired returned response
+   */
+  public void addIndexItemReqResp(
       String sourceId, String id, boolean enableDebugging, GenericJson response) {
     // TODO(tvartak) : Validate incremental using priority
     String url =

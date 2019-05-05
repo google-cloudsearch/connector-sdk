@@ -36,7 +36,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleCredential;
@@ -111,6 +110,7 @@ import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
@@ -118,8 +118,8 @@ import org.mockito.junit.MockitoJUnitRunner;
 @RunWith(MockitoJUnitRunner.class)
 public class IndexingServiceTest {
 
-  private static final Operation OPERATION_DONE = new Operation().setDone(true);
   private static final String ITEMS_RESOURCE_PREFIX = "datasources/source/items/";
+
   @Rule public ExpectedException thrown = ExpectedException.none();
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public SetupConfigRule setupConfig = SetupConfigRule.uninitialized();
@@ -130,6 +130,11 @@ public class IndexingServiceTest {
   @Mock ContentUploadService contentUploadService;
   @Mock ServiceManagerHelper serviceManagerHelper;
   @Mock QuotaServer<IndexingServiceImpl.Operations> quotaServer;
+
+  @Captor ArgumentCaptor<Items.Delete> deleteCaptor;
+  @Captor ArgumentCaptor<Items.Index> indexCaptor;
+  @Captor ArgumentCaptor<Items.Push> pushCaptor;
+  @Captor ArgumentCaptor<Items.Unreserve> unreserveCaptor;
 
   private static final String SOURCE_ID = "source";
   private static final String IDENTITY_SOURCE_ID = "identitySources";
@@ -294,76 +299,47 @@ public class IndexingServiceTest {
 
   /* delete */
   @Test
-  public void testDeleteItemWithVersion()
-      throws IOException, InterruptedException, ExecutionException {
-    this.transport.addDeleteItemReqResp(SOURCE_ID, GOOD_ID, OPERATION_DONE);
-    Operation op = new Operation();
-    doAnswer(
-            invocation -> {
-              Items.Delete deleteRequest = invocation.getArgument(0);
-              assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, deleteRequest.getName());
-              assertEquals(
-                  "abc", new String(Base64.getDecoder().decode(deleteRequest.getVersion())));
-              assertEquals(RequestMode.SYNCHRONOUS.name(), deleteRequest.getMode());
-              SettableFuture<Operation> result = SettableFuture.create();
-              result.set(new Operation());
-              return result;
-            })
-        .when(batchingService)
-        .deleteItem(any());
-    this.indexingService.deleteItem(GOOD_ID, "abc".getBytes(UTF_8), RequestMode.UNSPECIFIED).get();
+  public void deleteVersion_encodesVersion() throws IOException, InterruptedException {
+    indexingService.deleteItem(GOOD_ID, "abc".getBytes(UTF_8), RequestMode.UNSPECIFIED);
+
     verify(quotaServer).acquire(Operations.DEFAULT);
-  }
-
-  @Test
-  public void testDeleteItemWithSlash()
-      throws IOException, InterruptedException, ExecutionException {
-    String itemName = "http://example.com/item1?admin";
-    Operation op = new Operation();
-    doAnswer(
-            invocation -> {
-              Items.Delete deleteRequest = invocation.getArgument(0);
-              assertEquals(
-                  ITEMS_RESOURCE_PREFIX + "http:%2F%2Fexample.com%2Fitem1%3Fadmin",
-                  deleteRequest.getName());
-              assertEquals(RequestMode.SYNCHRONOUS.name(), deleteRequest.getMode());
-              SettableFuture<Operation> result = SettableFuture.create();
-              result.set(op);
-              return result;
-            })
-        .when(batchingService)
-        .deleteItem(any());
+    verify(batchingService).deleteItem(deleteCaptor.capture());
+    Items.Delete deleteRequest = deleteCaptor.getValue();
+    assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, deleteRequest.getName());
     assertEquals(
-        op, this.indexingService.deleteItem(itemName, null, RequestMode.SYNCHRONOUS).get());
+        "abc", new String(Base64.getDecoder().decode(deleteRequest.getVersion())));
+    assertEquals(RequestMode.SYNCHRONOUS.name(), deleteRequest.getMode());
   }
 
   @Test
-  public void testDeleteNotFoundItem()
-      throws IOException, InterruptedException, ExecutionException {
-    doAnswer(
-            invocation -> {
-              Items.Delete deleteRequest = invocation.getArgument(0);
-              assertEquals(ITEMS_RESOURCE_PREFIX + NOTFOUND_ID, deleteRequest.getName());
-              SettableFuture<Operation> result = SettableFuture.create();
-              result.setException(new IOException("not found"));
-              return result;
-            })
-        .when(batchingService)
-        .deleteItem(any());
+  public void deleteItem_escapesResourceName() throws IOException, InterruptedException {
+    String itemName = "http://example.com/item1?admin";
+
+    indexingService.deleteItem(itemName, null, RequestMode.SYNCHRONOUS);
+
+    verify(quotaServer).acquire(Operations.DEFAULT);
+    verify(batchingService).deleteItem(deleteCaptor.capture());
+    Items.Delete deleteRequest = deleteCaptor.getValue();
+    assertEquals(
+        ITEMS_RESOURCE_PREFIX + "http:%2F%2Fexample.com%2Fitem1%3Fadmin",
+        deleteRequest.getName());
+    assertEquals(RequestMode.SYNCHRONOUS.name(), deleteRequest.getMode());
+  }
+
+  @Test
+  public void deleteItem_notFound_throwsException() throws Exception {
+    when(batchingService.deleteItem(any()))
+        .thenReturn(Futures.immediateFailedFuture(new IOException("not found")));
+
     thrown.expect(ExecutionException.class);
+    thrown.expectCause(instanceOf(IOException.class));
     this.indexingService.deleteItem(NOTFOUND_ID, null, RequestMode.UNSPECIFIED).get();
   }
 
   @Test
-  public void testDeleteItemError() throws IOException, InterruptedException {
-    doAnswer(
-            invocation -> {
-              Items.Delete deleteRequest = invocation.getArgument(0);
-              assertEquals(ITEMS_RESOURCE_PREFIX + BAD_ID, deleteRequest.getName());
-              return getExceptionFuture(HTTP_FORBIDDEN_ERROR);
-            })
-        .when(batchingService)
-        .deleteItem(any());
+  public void deleteItem_apiError_throwsException() throws IOException, InterruptedException {
+    when(batchingService.deleteItem(any())).thenReturn(getExceptionFuture(HTTP_FORBIDDEN_ERROR));
+
     try {
       this.indexingService.deleteItem(BAD_ID, null, RequestMode.UNSPECIFIED).get();
       fail("Should have thrown HTTP_FORBIDDEN exception.");
@@ -373,7 +349,7 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testDeleteNullItemId() throws IOException {
+  public void deleteItem_nullItemId_throwsException() throws IOException {
     thrown.expect(IllegalArgumentException.class);
     this.indexingService.deleteItem(null, null, RequestMode.UNSPECIFIED);
   }
@@ -442,7 +418,6 @@ public class IndexingServiceTest {
   public void testGetNullItemId() throws IOException {
     thrown.expect(IllegalArgumentException.class);
     this.indexingService.getItem(null);
-    verifyNoMoreInteractions(quotaServer);
   }
 
   /* list */
@@ -554,22 +529,20 @@ public class IndexingServiceTest {
 
   /* update */
   @Test
-  public void testUpdateItem() throws IOException, InterruptedException {
-    doAnswer(
-            invocation -> {
-              Items.Index updateRequest = invocation.getArgument(0);
-              assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
-              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
-              assertEquals(RequestMode.SYNCHRONOUS.name(), indexItemRequest.getMode());
-              SettableFuture<Operation> result = SettableFuture.create();
-              result.set(new Operation());
-              return result;
-            })
-        .when(batchingService)
-        .indexItem(any());
+  public void indexItem_returnsBatchingServiceResponse() throws IOException, InterruptedException {
+    ListenableFuture<Operation> expected = Futures.immediateFuture(new Operation());
+    when(batchingService.indexItem(any())).thenReturn(expected);
     Item item = new Item().setName(GOOD_ID);
-    this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
+
+    ListenableFuture<Operation> result = indexingService.indexItem(item, RequestMode.UNSPECIFIED);
+
     verify(quotaServer).acquire(Operations.DEFAULT);
+    verify(batchingService).indexItem(indexCaptor.capture());
+    Items.Index updateRequest = indexCaptor.getValue();
+    assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
+    IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+    assertEquals(RequestMode.SYNCHRONOUS.name(), indexItemRequest.getMode());
+    assertThat(result, sameInstance(expected));
   }
 
   @Test
@@ -604,93 +577,81 @@ public class IndexingServiceTest {
         .build()
         .applyTo(expected);
 
-    doAnswer(
-            invocation -> {
-              Items.Index updateRequest = invocation.getArgument(0);
-              assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
-              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
-              assertEquals(RequestMode.SYNCHRONOUS.name(), indexItemRequest.getMode());
-              assertEquals(expected, indexItemRequest.getItem());
-
-              SettableFuture<Operation> result = SettableFuture.create();
-              result.set(new Operation());
-              return result;
-            })
-        .when(batchingService)
-        .indexItem(any());
-
     this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
+
     verify(quotaServer).acquire(Operations.DEFAULT);
+    verify(batchingService).indexItem(indexCaptor.capture());
+    Items.Index updateRequest = indexCaptor.getValue();
+    assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
+    IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+    assertEquals(RequestMode.SYNCHRONOUS.name(), indexItemRequest.getMode());
+    assertEquals(expected, indexItemRequest.getItem());
   }
 
   @Test
-  public void testUpdateItemDebugOptionsEnabled() throws Exception {
+  public void indexItem_debugOptionsEnabled() throws Exception {
     createService(/*debugging*/ true, /*allowUnknownGsuitePrincipals*/ false);
-    doAnswer(
-            invocation -> {
-              Items.Index updateRequest = invocation.getArgument(0);
-              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
-              assertTrue(indexItemRequest.getDebugOptions().getEnableDebugging());
-              assertFalse(indexItemRequest.getIndexItemOptions().getAllowUnknownGsuitePrincipals());
-              return Futures.immediateFuture(new Operation());
-            })
-        .when(batchingService)
-        .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
+
     this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
+
     verify(quotaServer).acquire(Operations.DEFAULT);
+    verify(batchingService).indexItem(indexCaptor.capture());
+    Items.Index updateRequest = indexCaptor.getValue();
+    assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
+    IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+    assertTrue(indexItemRequest.getDebugOptions().getEnableDebugging());
+    assertFalse(indexItemRequest.getIndexItemOptions().getAllowUnknownGsuitePrincipals());
   }
 
   @Test
-  public void testUpdateItemAllowUnknownGsuitePrincipals() throws Exception {
+  public void indexItem_allowUnknownGsuitePrincipals() throws Exception {
     createService(/*debugging*/ false, /*allowUnknownGsuitePrincipals*/ true);
-    doAnswer(
-            invocation -> {
-              Items.Index updateRequest = invocation.getArgument(0);
-              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
-              assertFalse(indexItemRequest.getDebugOptions().getEnableDebugging());
-              assertTrue(indexItemRequest.getIndexItemOptions().getAllowUnknownGsuitePrincipals());
-              return Futures.immediateFuture(new Operation());
-            })
-        .when(batchingService)
-        .indexItem(any());
     Item item = new Item().setName(GOOD_ID);
+
     this.indexingService.indexItem(item, RequestMode.UNSPECIFIED);
+
     verify(quotaServer).acquire(Operations.DEFAULT);
+    verify(batchingService).indexItem(indexCaptor.capture());
+    Items.Index updateRequest = indexCaptor.getValue();
+    assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
+    IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+    assertFalse(indexItemRequest.getDebugOptions().getEnableDebugging());
+    assertTrue(indexItemRequest.getIndexItemOptions().getAllowUnknownGsuitePrincipals());
   }
 
   @Test
-  public void testUpdateItemWithContent() throws IOException, InterruptedException {
-    doAnswer(
-            invocation -> {
-              Items.Index updateRequest = invocation.getArgument(0);
-              assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
-              IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
-              assertEquals(RequestMode.ASYNCHRONOUS.name(), indexItemRequest.getMode());
-              assertEquals(
-                  new ItemContent()
-                      .encodeInlineContent("Hello World.".getBytes(UTF_8))
-                      .setContentFormat("TEXT"),
-                  indexItemRequest.getItem().getContent());
-              SettableFuture<Operation> result = SettableFuture.create();
-              result.set(new Operation());
-              return result;
-            })
-        .when(batchingService)
-        .indexItem(any());
+  public void indexItemAndContent_smallContentIsInlined() throws Exception {
+    ListenableFuture<Operation> expected = Futures.immediateFuture(new Operation());
+    when(batchingService.indexItem(any())).thenReturn(expected);
     Item item = new Item().setName(GOOD_ID);
     ByteArrayContent content = ByteArrayContent.fromString("text/plain", "Hello World.");
-    this.indexingService.indexItemAndContent(
+
+    ListenableFuture<Operation> result = indexingService.indexItemAndContent(
         item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
+
     verify(quotaServer).acquire(Operations.DEFAULT);
+    verify(batchingService).indexItem(indexCaptor.capture());
+    Items.Index updateRequest = indexCaptor.getValue();
+    assertEquals(ITEMS_RESOURCE_PREFIX + GOOD_ID, updateRequest.getName());
+    IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+    assertEquals(RequestMode.ASYNCHRONOUS.name(), indexItemRequest.getMode());
+    assertEquals(
+        new ItemContent()
+        .encodeInlineContent("Hello World.".getBytes(UTF_8))
+        .setContentFormat("TEXT"),
+        indexItemRequest.getItem().getContent());
+    assertThat(result, sameInstance(expected));
   }
 
   @Test
-  public void testUpdateItemWithEmptyContent() throws IOException {
+  public void indexItemAndContent_emptyContentIsInlined() throws Exception {
     Item item = new Item().setName(GOOD_ID);
     ByteArrayContent content = ByteArrayContent.fromString("text/plain", "");
+
     this.indexingService.indexItemAndContent(
         item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
+
     assertEquals(
         new ItemContent().encodeInlineContent(new byte[0]).setContentFormat("TEXT"),
         item.getContent());
@@ -698,18 +659,18 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testUpdateItemWithEmptyInputStreamContent() throws IOException {
+  public void indexItemAndContent_emptyInputStreamContentIsUploaded() throws Exception {
     this.transport.addUploadItemsReqResp(
         SOURCE_ID, GOOD_ID, new UploadItemRef().setName(testName.getMethodName()));
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, OPERATION_DONE);
-
     Item item = new Item().setName(GOOD_ID);
     InputStreamContent content =
         new InputStreamContent("text/html", new ByteArrayInputStream(new byte[0]));
     when(contentUploadService.uploadContent(testName.getMethodName(), content))
         .thenReturn(Futures.immediateFuture(null));
+
     this.indexingService.indexItemAndContent(
         item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
+
     assertEquals(
         new ItemContent()
             .setContentDataRef(new UploadItemRef().setName(testName.getMethodName()))
@@ -719,19 +680,19 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testUpdateItemWithContentUpload() throws IOException {
+  public void indexItemAndContent_largeContentIsUploaded() throws Exception {
     this.transport.addUploadItemsReqResp(
         SOURCE_ID, GOOD_ID, new UploadItemRef().setName(testName.getMethodName()));
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, OPERATION_DONE);
-
     Item item = new Item().setName(GOOD_ID);
     InputStreamContent content =
         new InputStreamContent(
             "text/html", new ByteArrayInputStream("Hello World.".getBytes(UTF_8)));
     when(contentUploadService.uploadContent(testName.getMethodName(), content))
         .thenReturn(Futures.immediateFuture(null));
+
     this.indexingService.indexItemAndContent(
         item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
+
     assertEquals(
         new ItemContent()
             .setContentDataRef(new UploadItemRef().setName(testName.getMethodName()))
@@ -741,12 +702,14 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testUpdateItemWithEmptyFileContent() throws IOException {
+  public void indexItemAndContent_emptyFileContentIsInlined() throws Exception {
     File emptyFile = temporaryFolder.newFile();
     Item item = new Item().setName(GOOD_ID);
     FileContent content = new FileContent("text/html", emptyFile);
+
     this.indexingService.indexItemAndContent(
         item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
+
     assertEquals(
         new ItemContent().encodeInlineContent(new byte[0]).setContentFormat("TEXT"),
         item.getContent());
@@ -754,19 +717,19 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testUpdateItemWithFileContent() throws IOException {
+  public void indexItemAndContent_largeFileContentIsUploaded() throws Exception {
     this.transport.addUploadItemsReqResp(
         SOURCE_ID, GOOD_ID, new UploadItemRef().setName(testName.getMethodName()));
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, OPERATION_DONE);
-
     File largeFile = temporaryFolder.newFile();
     Files.asCharSink(largeFile, UTF_8).write("Longer text that triggers an upload");
     Item item = new Item().setName(GOOD_ID);
     FileContent content = new FileContent("text/html", largeFile);
     when(contentUploadService.uploadContent(testName.getMethodName(), content))
         .thenReturn(Futures.immediateFuture(null));
+
     this.indexingService.indexItemAndContent(
         item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
+
     assertEquals(
         new ItemContent()
             .setContentDataRef(new UploadItemRef().setName(testName.getMethodName()))
@@ -776,13 +739,14 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testUpdateItemWithContentHash() throws IOException {
-    this.transport.addUpdateItemReqResp(SOURCE_ID, GOOD_ID, false, OPERATION_DONE);
+  public void indexItemAndContent_withContentHash() throws Exception {
     Item item = new Item().setName(GOOD_ID);
     ByteArrayContent content = ByteArrayContent.fromString("text/plain", "Hello World.");
     String hash = Integer.toString(Objects.hash(content));
+
     this.indexingService.indexItemAndContent(
         item, content, hash, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
+
     assertEquals(
         new ItemContent()
             .encodeInlineContent("Hello World.".getBytes(UTF_8))
@@ -793,16 +757,10 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testUpdateItemError() throws IOException, InterruptedException {
-    doAnswer(
-            invocation -> {
-              Items.Index updateRequest = invocation.getArgument(0);
-              assertEquals(ITEMS_RESOURCE_PREFIX + ERROR_ID, updateRequest.getName());
-              return getExceptionFuture(HTTP_FORBIDDEN_ERROR);
-            })
-        .when(batchingService)
-        .indexItem(any());
+  public void indexItem_apiError_throwsException() throws Exception {
+    when(batchingService.indexItem(any())).thenReturn(getExceptionFuture(HTTP_FORBIDDEN_ERROR));
     Item item = new Item().setName(ERROR_ID);
+
     try {
       this.indexingService.indexItem(item, RequestMode.SYNCHRONOUS).get();
     } catch (ExecutionException e) {
@@ -811,17 +769,11 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testUpdateItemWithContentError() throws IOException, InterruptedException {
+  public void indexItemAndContent_apiError_throwsException() throws Exception {
+    when(batchingService.indexItem(any())).thenReturn(getExceptionFuture(HTTP_FORBIDDEN_ERROR));
     Item item = new Item().setName(ERROR_ID);
     ByteArrayContent content = ByteArrayContent.fromString("text/plain", "Hello World.");
-    doAnswer(
-            invocation -> {
-              Items.Index updateRequest = invocation.getArgument(0);
-              assertEquals(ITEMS_RESOURCE_PREFIX + ERROR_ID, updateRequest.getName());
-              return getExceptionFuture(HTTP_FORBIDDEN_ERROR);
-            })
-        .when(batchingService)
-        .indexItem(any());
+
     try {
       indexingService
           .indexItemAndContent(item, content, null, ContentFormat.TEXT, RequestMode.SYNCHRONOUS)
@@ -832,14 +784,13 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testUpdateNullItem() throws IOException {
+  public void indexItem_nullItem_throwsException() throws IOException {
     thrown.expect(IllegalArgumentException.class);
     this.indexingService.indexItem(null, RequestMode.SYNCHRONOUS);
-    verifyNoMoreInteractions(quotaServer);
   }
 
   @Test
-  public void testUpdateNullItemWithContent() throws IOException {
+  public void indexItemAndContent_nullItem_throwsException() throws IOException {
     ByteArrayContent content = ByteArrayContent.fromString("text/plain", "Hello World.");
     thrown.expect(IllegalArgumentException.class);
     this.indexingService.indexItemAndContent(
@@ -847,14 +798,14 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testUpdateNullItemId() throws IOException {
+  public void indexItem_nullItemId_thowsException() throws IOException {
     Item item = new Item();
     thrown.expect(IllegalArgumentException.class);
     this.indexingService.indexItem(item, RequestMode.SYNCHRONOUS);
   }
 
   @Test
-  public void testUpdateNullItemIdWithContent() throws IOException {
+  public void indexItemAndContent_nullItemId_throwsException() throws IOException {
     Item item = new Item();
     ByteArrayContent content = ByteArrayContent.fromString("text/plain", "Hello World.");
     thrown.expect(IllegalArgumentException.class);
@@ -863,7 +814,7 @@ public class IndexingServiceTest {
   }
 
   @Test
-  public void testUpdateItemWithNullContent() throws IOException {
+  public void indexItemAndContent_nullContent_throwsException() throws IOException {
     Item item = new Item().setName(GOOD_ID);
     thrown.expect(NullPointerException.class);
     this.indexingService.indexItemAndContent(
@@ -1068,48 +1019,45 @@ public class IndexingServiceTest {
 
   /* push */
   @Test
-  public void pushItem_succeeds() throws IOException, InterruptedException {
-    ArgumentCaptor<Items.Push> pushCaptor = ArgumentCaptor.forClass(Items.Push.class);
-    SettableFuture<Item> expected = SettableFuture.create();
-    expected.set(new Item());
-    when(batchingService.pushItem(pushCaptor.capture())).thenReturn(expected);
+  public void pushItem_returnsBatchingServiceResponse() throws IOException, InterruptedException {
+    ListenableFuture<Item> expected = Futures.immediateFuture(new Item());
+    when(batchingService.pushItem(any())).thenReturn(expected);
 
     ListenableFuture<Item> result = this.indexingService.push("myname", new PushItem());
 
     verify(quotaServer).acquire(Operations.DEFAULT);
+    verify(batchingService).pushItem(pushCaptor.capture());
     assertThat(pushCaptor.getValue().getName(), endsWith("/myname"));
     assertThat(result, sameInstance(expected));
   }
 
   @Test
   public void pushItem_escapesResourceName() throws IOException, InterruptedException {
-    ArgumentCaptor<Items.Push> pushCaptor = ArgumentCaptor.forClass(Items.Push.class);
-    SettableFuture<Item> expected = SettableFuture.create();
-    expected.set(new Item());
-    when(batchingService.pushItem(pushCaptor.capture())).thenReturn(expected);
-
-    ListenableFuture<Item> result = this.indexingService.push("a+b/c", new PushItem());
+    indexingService.push("a+b/c", new PushItem());
 
     verify(quotaServer).acquire(Operations.DEFAULT);
+    verify(batchingService).pushItem(pushCaptor.capture());
     assertThat(pushCaptor.getValue().getName(), endsWith("/a+b%2Fc"));
-    assertThat(result, sameInstance(expected));
+  }
+
+  @Test
+  public void pushItem_createsPushItemRequest() throws IOException, InterruptedException {
+    indexingService.push("myname", new PushItem());
+
+    verify(quotaServer).acquire(Operations.DEFAULT);
+    verify(batchingService).pushItem(pushCaptor.capture());
+    assertEquals(
+        new PushItemRequest()
+            .setItem(new PushItem())
+            .setConnectorName("datasources/source/connectors/unitTest")
+            .setDebugOptions(new DebugOptions().setEnableDebugging(false)),
+        pushCaptor.getValue().getJsonContent());
   }
 
   @Test
   public void pushItem_apiError_throwsException() throws IOException, InterruptedException {
-    doAnswer(
-            invocation -> {
-              Items.Push pushRequest = invocation.getArgument(0);
-              assertEquals(
-                  new PushItemRequest()
-                      .setItem(new PushItem())
-                      .setConnectorName("datasources/source/connectors/unitTest")
-                      .setDebugOptions(new DebugOptions().setEnableDebugging(false)),
-                  pushRequest.getJsonContent());
-              return getExceptionFuture(HTTP_FORBIDDEN_ERROR);
-            })
-        .when(batchingService)
-        .pushItem(any());
+    when(batchingService.pushItem(any())).thenReturn(getExceptionFuture(HTTP_FORBIDDEN_ERROR));
+
     try {
       this.indexingService.push(BAD_ID, new PushItem()).get();
       fail("Should have thrown HTTP_FORBIDDEN exception.");
@@ -1133,12 +1081,8 @@ public class IndexingServiceTest {
     }
     String name = builder.toString();
 
-    ArgumentCaptor<Items.Push> pushCaptor = ArgumentCaptor.forClass(Items.Push.class);
-    SettableFuture<Item> pushResult = SettableFuture.create();
-    pushResult.set(new Item());
-    when(batchingService.pushItem(pushCaptor.capture())).thenReturn(pushResult);
-
-    ListenableFuture<Item> result = indexingService.push(name, new PushItem());
+    indexingService.push(name, new PushItem());
+    verify(batchingService).pushItem(pushCaptor.capture());
     String escapedName = pushCaptor.getValue().getName();
     transport.addPollItemReqResp(SOURCE_ID,
         new PollItemsResponse()
@@ -1154,27 +1098,33 @@ public class IndexingServiceTest {
 
   /* unreserve */
   @Test
-  public void testUnreserveItem() throws IOException {
-    this.transport.addUnreserveItemsReqResp(SOURCE_ID, OPERATION_DONE);
-    this.indexingService.unreserve("queueName");
+  public void unreserve_returnsBatchingServiceResponse() throws Exception {
+    ListenableFuture<Operation> expected = Futures.immediateFuture(new Operation());
+    when(batchingService.unreserveItem(any())).thenReturn(expected);
+
+    ListenableFuture<Operation> result = indexingService.unreserve("queueName");
+
     verify(quotaServer).acquire(Operations.DEFAULT);
+    assertThat(result, sameInstance(expected));
   }
 
   @Test
-  public void testUnreserveItemError() throws IOException, InterruptedException {
-    doAnswer(
-            invocation -> {
-              Items.Unreserve unreserveRequest = invocation.getArgument(0);
-              assertEquals(
-                  new UnreserveItemsRequest()
-                      .setQueue("queueName")
-                      .setConnectorName("datasources/source/connectors/unitTest")
-                      .setDebugOptions(new DebugOptions().setEnableDebugging(false)),
-                  unreserveRequest.getJsonContent());
-              return getExceptionFuture(HTTP_FORBIDDEN_ERROR);
-            })
-        .when(batchingService)
-        .unreserveItem(any());
+  public void unreserve_createsUnreserveItemRequest() throws IOException, InterruptedException {
+    indexingService.unreserve("queueName");
+
+    verify(batchingService).unreserveItem(unreserveCaptor.capture());
+    assertEquals(
+        new UnreserveItemsRequest()
+            .setQueue("queueName")
+            .setConnectorName("datasources/source/connectors/unitTest")
+            .setDebugOptions(new DebugOptions().setEnableDebugging(false)),
+        unreserveCaptor.getValue().getJsonContent());
+  }
+
+  @Test
+  public void unreserve_apiError_throwsException() throws Exception {
+    when(batchingService.unreserveItem(any())).thenReturn(getExceptionFuture(HTTP_FORBIDDEN_ERROR));
+
     try {
       this.indexingService.unreserve("queueName").get();
       fail("Should have thrown HTTP_FORBIDDEN exception.");
