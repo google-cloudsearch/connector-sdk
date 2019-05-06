@@ -119,6 +119,11 @@
     <!-- Avoid adding dependencies that override SDK dependencies (e.g., something that overrides
          the guava version defined in the parent POM), even if their scope is "test" as that can
          render the test invalid. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.8.0</version>
+    </dependency>
     <!-- Google libraries. -->
     <dependency>
       <groupId>com.google.enterprise.cloudsearch</groupId>
