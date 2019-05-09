@@ -23,11 +23,15 @@ import static org.junit.Assert.assertTrue;
 
 import com.google.enterprise.cloudsearch.sdk.StatsManager.OperationStats;
 import com.google.enterprise.cloudsearch.sdk.StatsManager.OperationStats.Event;
+import com.google.enterprise.cloudsearch.sdk.StatsManager.ResetStatsRule;
 import java.util.concurrent.TimeUnit;
+import org.junit.Rule;
 import org.junit.Test;
 
 /** Unit test methods for {@link StatsManager}. */
 public class StatsManagerTest {
+
+  @Rule public ResetStatsRule resetStats = new ResetStatsRule();
 
   /** Test method for {@link com.google.enterprise.cloudsearch.sdk.StatsManager#getInstance()}. */
   @Test
@@ -68,63 +72,75 @@ public class StatsManagerTest {
     assertTrue(service.isRunning());
   }
 
-  /** Unit test methods for {@link OperationStats}. */
-  public static class OperationStatsTest {
+  @Test
+  public void testEvent() {
+    StatsManager.OperationStats component = StatsManager.getComponent("testComponent1");
+    Event event = component.event(TestEnum.VALUE1);
+    assertNotNull(event);
+  }
 
-    @Test
-    public void testEvent() {
-      StatsManager.OperationStats component = StatsManager.getComponent("testComponent1");
-      Event event = component.event(TestEnum.VALUE1);
-      assertNotNull(event);
-    }
+  @Test
+  public void testEvent2() {
+    StatsManager.OperationStats component = StatsManager.getComponent("testComponent2");
+    Event event = component.event("event");
+    assertNotNull(event);
+  }
 
-    @Test
-    public void testEvent2() {
-      StatsManager.OperationStats component = StatsManager.getComponent("testComponent2");
-      Event event = component.event("event");
-      assertNotNull(event);
-    }
+  @Test
+  public void testRegister() {
+    StatsManager.OperationStats component = StatsManager.getComponent("testComponent3");
+    int before = component.getRegisteredCount("operation");
+    component.register("operation");
+    int after = component.getRegisteredCount("operation");
+    assertEquals(1, after - before);
+  }
 
-    @Test
-    public void testRegister() {
-      StatsManager.OperationStats component = StatsManager.getComponent("testComponent3");
-      int before = component.getRegisteredCount("operation");
-      component.register("operation");
-      int after = component.getRegisteredCount("operation");
-      assertEquals(1, after - before);
-    }
+  @Test
+  public void testSuccessCount() {
+    StatsManager.OperationStats component = StatsManager.getComponent("testComponent5");
+    int before = component.getSuccessCount("operation");
+    component.event("operation").start().success();
+    int after = component.getSuccessCount("operation");
+    assertEquals(1, after - before);
+  }
 
-    @Test
-    public void testSuccessCount() {
-      StatsManager.OperationStats component = StatsManager.getComponent("testComponent5");
-      int before = component.getSuccessCount("operation");
-      component.event("operation").start().success();
-      int after = component.getSuccessCount("operation");
-      assertEquals(1, after - before);
-    }
+  @Test
+  public void testFailureCount() {
+    StatsManager.OperationStats component = StatsManager.getComponent("testComponent5");
+    int before = component.getFailureCount("operation");
+    component.event("operation").start().failure();
+    int after = component.getFailureCount("operation");
+    assertEquals(1, after - before);
+  }
 
-    @Test
-    public void testFailureCount() {
-      StatsManager.OperationStats component = StatsManager.getComponent("testComponent5");
-      int before = component.getFailureCount("operation");
-      component.event("operation").start().failure();
-      int after = component.getFailureCount("operation");
-      assertEquals(1, after - before);
-    }
+  @Test
+  public void testLogResult() {
+    StatsManager.OperationStats component = StatsManager.getComponent("testComponent4");
+    int beforeOne = component.getLogResultCounter("operation", "one");
+    int beforeTwo = component.getLogResultCounter("operation", "two");
+    component.logResult("operation", "one");
+    component.logResult("operation", "two");
+    component.logResult("operation", "two");
+    int afterOne = component.getLogResultCounter("operation", "one");
+    int afterTwo = component.getLogResultCounter("operation", "two");
+    assertEquals(1, afterOne - beforeOne);
+    assertEquals(2, afterTwo - beforeTwo);
+  }
 
-    @Test
-    public void testLogResult() {
-      StatsManager.OperationStats component = StatsManager.getComponent("testComponent4");
-      int beforeOne = component.getLogResultCounter("operation", "one");
-      int beforeTwo = component.getLogResultCounter("operation", "two");
-      component.logResult("operation", "one");
-      component.logResult("operation", "two");
-      component.logResult("operation", "two");
-      int afterOne = component.getLogResultCounter("operation", "one");
-      int afterTwo = component.getLogResultCounter("operation", "two");
-      assertEquals(1, afterOne - beforeOne);
-      assertEquals(2, afterTwo - beforeTwo);
-    }
+  @Test
+  public void event_canFailEventWithoutStarting() {
+    OperationStats stats = StatsManager.getComponent("StatsManagerTest");
+    Event event = stats.event("operation");
+    event.failure();
+    assertEquals(1, stats.getFailureCount("operation"));
+  }
+
+  @Test
+  public void event_canPassEventWithoutStarting() {
+    OperationStats stats = StatsManager.getComponent("StatsManagerTest");
+    Event event = stats.event("operation");
+    event.success();
+    assertEquals(1, stats.getSuccessCount("operation"));
   }
 
   @Test
