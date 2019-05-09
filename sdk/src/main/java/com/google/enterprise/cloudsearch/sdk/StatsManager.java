@@ -398,7 +398,9 @@ public class StatsManager {
 
       @Override
       public void end(boolean success) {
-        watch.stop();
+        if (watch.isRunning()) {
+          watch.stop();
+        }
         if (success) {
           OperationStats.this.successCounter.add(op);
           Multiset<Long> latency =
@@ -420,6 +422,9 @@ public class StatsManager {
   }
 
   private static synchronized void resetStatsManager() {
+    // Not clearing out or reinitializing stats map here. There may have been static
+    // references initialized for OperationStats. We are just clearing out values recorded under
+    // OperationStats.
     for (ConcurrentMap.Entry<String, OperationStats> entry : getInstance().stats.entrySet()) {
       entry.getValue().clear();
     }
