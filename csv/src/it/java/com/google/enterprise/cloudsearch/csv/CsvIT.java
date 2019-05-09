@@ -140,7 +140,6 @@ public class CsvIT {
     String[] authInfo = System.getProperty(AUTH_INFO_PROPERTY_NAME).split(",");
     searchHelper = SearchTestUtils.getSearchHelper(authInfo, searchApplicationId, rootUrl);
     testUser = authInfo[0];
-    StructuredDataHelper.verifyMockContentDatasourceSchema(v1Client.getSchema());
   }
 
   @Test
