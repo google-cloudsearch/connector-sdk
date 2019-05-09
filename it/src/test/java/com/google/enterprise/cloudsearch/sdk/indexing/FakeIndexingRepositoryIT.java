@@ -91,7 +91,6 @@ public class FakeIndexingRepositoryIT {
     validateInputParams();
     v1Client = new CloudSearchService(keyFilePath, indexingSourceId, rootUrl);
     testUtils = new TestUtils(v1Client);
-    StructuredDataHelper.verifyMockContentDatasourceSchema(v1Client.getSchema());
     String searchApplicationId = System.getProperty(APPLICATION_ID_PROPERTY_NAME);
     String[] authInfoUser1 = System.getProperty(AUTH_INFO_USER1_PROPERTY_NAME).split(",");
     String[] authInfoUser2 = System.getProperty(AUTH_INFO_USER2_PROPERTY_NAME).split(",");
