@@ -260,16 +260,50 @@ public class FakeIndexingRepositoryIT {
   }
 
   @Test
-  public void defaultAcl_verifyServing() throws IOException, InterruptedException {
-    String itemName = "DefaultAcl_" + getRandomId();
+  public void defaultAcl_modeFallback_itemAcl_verifyServing()
+      throws IOException, InterruptedException {
+    String itemName = "FallbackAcl_" + getRandomId();
     String itemId = Util.getItemId(indexingSourceId, itemName);
     Properties config = new Properties();
-    config.setProperty(
-        "defaultAcl.readers.users", "google:" + testUser1);
+    config.setProperty("defaultAcl.readers.users", "google:" + testUser1);
     config.setProperty("defaultAcl.public", "false");
     config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
     config.setProperty("defaultAcl.name", "mocksdk_defaultAcl_" + getRandomId());
-    // Don't set an ACL on the item; fallback mode will use default ACL
+    Acl acl = new Acl.Builder()
+        .setReaders(Collections
+            .singletonList(Acl.getGoogleUserPrincipal(testUser2)))
+        .build();
+    MockItem item = new MockItem.Builder(itemId)
+        .setTitle(itemName)
+        .setMimeType("HTML")
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(acl)
+        .build();
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(Collections.singletonList(item))
+        .build();
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
+      testUtils.waitUntilEqual(itemId, item.getItem());
+      searchUtilUser2.waitUntilItemServed(itemName, itemName);
+      searchUtilUser1.waitUntilItemNotServed(itemName, itemName);
+    } finally {
+      v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
+    }
+  }
+
+  @Test
+  public void defaultAcl_modeFallback_noItemAcl_verifyServing()
+      throws IOException, InterruptedException {
+    String itemName = "FallbackAcl_" + getRandomId();
+    String itemId = Util.getItemId(indexingSourceId, itemName);
+    Properties config = new Properties();
+    config.setProperty("defaultAcl.readers.users", "google:" + testUser1);
+    config.setProperty("defaultAcl.public", "false");
+    config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
+    config.setProperty("defaultAcl.name", "mocksdk_defaultAcl_" + getRandomId());
+    // Don't set an ACL on the item; fallback mode will use the default ACL
     MockItem item = new MockItem.Builder(itemId)
         .setTitle(itemName)
         .setMimeType("HTML")
@@ -293,8 +327,7 @@ public class FakeIndexingRepositoryIT {
     String itemName = "AppendAcl_" + getRandomId();
     String itemId = Util.getItemId(indexingSourceId, itemName);
     Properties config = new Properties();
-    config.setProperty(
-        "defaultAcl.readers.users", "google:" + testUser2);
+    config.setProperty("defaultAcl.readers.users", "google:" + testUser2);
     config.setProperty("defaultAcl.public", "false");
     config.setProperty("defaultAcl.mode", DefaultAclMode.APPEND.toString());
     config.setProperty("defaultAcl.name", "mocksdk_appendAcl_" + getRandomId());
@@ -327,8 +360,7 @@ public class FakeIndexingRepositoryIT {
     String itemName = "OverrideAcl_" + getRandomId();
     String itemId = Util.getItemId(indexingSourceId, itemName);
     Properties config = new Properties();
-    config.setProperty(
-        "defaultAcl.readers.users", "google:" + testUser2);
+    config.setProperty("defaultAcl.readers.users", "google:" + testUser2);
     config.setProperty("defaultAcl.public", "false");
     config.setProperty("defaultAcl.mode", DefaultAclMode.OVERRIDE.toString());
     config.setProperty("defaultAcl.name", "mocksdk_overrideAcl_" + getRandomId());
@@ -351,6 +383,62 @@ public class FakeIndexingRepositoryIT {
       testUtils.waitUntilEqual(itemId, item.getItem());
       searchUtilUser2.waitUntilItemServed(itemName, itemName);
       searchUtilUser1.waitUntilItemNotServed(itemName, itemName);
+    } finally {
+      v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
+    }
+  }
+
+  @Test
+  public void defaultAcl_modeNone_itemAcl_verifyServing() throws IOException, InterruptedException {
+    String itemName = "DefaultAclNone_" + getRandomId();
+    String itemId = Util.getItemId(indexingSourceId, itemName);
+    Properties config = new Properties();
+    config.setProperty("defaultAcl.mode", DefaultAclMode.NONE.toString());
+    Acl acl = new Acl.Builder()
+        .setReaders(Collections
+            .singletonList(Acl.getGoogleUserPrincipal(testUser1)))
+        .build();
+    MockItem item = new MockItem.Builder(itemId)
+        .setTitle(itemName)
+        .setMimeType("HTML")
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(acl)
+        .build();
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(Collections.singletonList(item))
+        .build();
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
+      testUtils.waitUntilEqual(itemId, item.getItem());
+      searchUtilUser1.waitUntilItemServed(itemName, itemName);
+    } finally {
+      v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
+    }
+  }
+
+  @Test
+  public void defaultAcl_modeNone_noItemAcl_itemNotAdded()
+      throws IOException, InterruptedException {
+    String itemName = "DefaultAclNone_" + getRandomId();
+    String itemId = Util.getItemId(indexingSourceId, itemName);
+    Properties config = new Properties();
+    config.setProperty("defaultAcl.mode", DefaultAclMode.NONE.toString());
+    config.setProperty("traverse.exceptionHandler", "1"); // Lower number of retry attemps
+    MockItem item = new MockItem.Builder(itemId)
+        .setTitle(itemName)
+        .setMimeType("HTML")
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .build();
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(Collections.singletonList(item))
+        .build();
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
+      // Internally, the index request returns "400 Missing Acl in Request.", but we don't
+      // have access to that error at this level.
+      testUtils.waitUntilDeleted(itemId); // Item should not have been added
     } finally {
       v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
     }
