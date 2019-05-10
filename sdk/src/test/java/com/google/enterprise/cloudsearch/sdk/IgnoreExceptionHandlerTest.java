@@ -37,10 +37,10 @@ public class IgnoreExceptionHandlerTest {
 
   private Object[] handleExceptionValues() {
     return new Object[][] {
-      { null, new Integer(0) },
-      { null, new Integer(3) },
-      { new Exception(), new Integer(0) },
-      { new Exception(), new Integer(3) }
+      { null, Integer.valueOf(0) },
+      { null, Integer.valueOf(3) },
+      { new Exception(), Integer.valueOf(0) },
+      { new Exception(), Integer.valueOf(3) }
     };
   }
 }
