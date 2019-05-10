@@ -286,7 +286,7 @@ public class CSVRepositoryTest {
     config.put(IndexingItemBuilder.UPDATE_TIME_FIELD, "modified");
     config.put(IndexingItemBuilder.CREATE_TIME_FIELD, "created");
     config.put(IndexingItemBuilder.CONTENT_LANGUAGE_VALUE, "english");
-    config.put(IndexingItemBuilder.OBJECT_TYPE, "String");
+    config.put(IndexingItemBuilder.OBJECT_TYPE_VALUE, "String");
     setupConfig.initConfig(config);
 
     // initialize structured data
@@ -351,7 +351,7 @@ public class CSVRepositoryTest {
     config.put(IndexingItemBuilder.TITLE_FIELD, "term");
     config.put(IndexingItemBuilder.UPDATE_TIME_FIELD, "modified");
     config.put(IndexingItemBuilder.CREATE_TIME_FIELD, "created");
-    config.put(IndexingItemBuilder.OBJECT_TYPE, "Object Type");
+    config.put(IndexingItemBuilder.OBJECT_TYPE_VALUE, "Object Type");
     setupConfig.initConfig(config);
 
     // initialize structured data
@@ -416,7 +416,7 @@ public class CSVRepositoryTest {
     config.put(IndexingItemBuilder.TITLE_FIELD, "term");
     config.put(IndexingItemBuilder.UPDATE_TIME_FIELD, "modified");
     config.put(IndexingItemBuilder.CREATE_TIME_FIELD, "created");
-    config.put(IndexingItemBuilder.OBJECT_TYPE, "Object Type");
+    config.put(IndexingItemBuilder.OBJECT_TYPE_VALUE, "Object Type");
     setupConfig.initConfig(config);
 
     // initialize structured data
@@ -477,7 +477,7 @@ public class CSVRepositoryTest {
     config.put(CONTENT_HIGH, "term,definition");
     config.put(CONTENT_LOW, "author");
     config.put(IndexingItemBuilder.TITLE_FIELD, "term");
-    config.put(IndexingItemBuilder.OBJECT_TYPE, "Object Type");
+    config.put(IndexingItemBuilder.OBJECT_TYPE_VALUE, "Object Type");
     config.put(CSVFileManager.MULTIVALUE_COLUMNS, "updated");
     setupConfig.initConfig(config);
 

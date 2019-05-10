@@ -45,7 +45,6 @@ import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRul
 import com.google.enterprise.cloudsearch.sdk.identity.IdentityApplication.ApplicationHelper;
 import java.io.File;
 import java.io.IOException;
-import java.security.GeneralSecurityException;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -187,7 +186,7 @@ public class IdentityApplicationTest {
 
   @Test
   public void startShouldFailWithStartupExceptionWhenContextBuildException() throws Exception {
-    doThrow(GeneralSecurityException.class).when(mockContextBuilder).build();
+    doThrow(RuntimeException.class).when(mockContextBuilder).build();
     IdentityApplication subject =
         new IdentityApplication.Builder(mockConnector, new String[] {})
             .setIdentityService(mockIdentityService)

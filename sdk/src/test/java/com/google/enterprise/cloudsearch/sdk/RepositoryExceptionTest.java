@@ -66,6 +66,6 @@ public class RepositoryExceptionTest {
         .setErrorCode(400)
         .build();
     RepositoryError error = exception.getRepositoryError();
-    assertEquals(new Integer(400), error.getHttpStatusCode());
+    assertEquals(Integer.valueOf(400), error.getHttpStatusCode());
   }
 }

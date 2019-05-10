@@ -50,7 +50,6 @@ import com.google.enterprise.cloudsearch.sdk.indexing.IndexingApplication.Applic
 import com.google.enterprise.cloudsearch.sdk.indexing.StructuredData.ResetStructuredDataRule;
 import java.io.File;
 import java.io.IOException;
-import java.security.GeneralSecurityException;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
@@ -214,7 +213,7 @@ public class IndexingApplicationTest {
 
   @Test
   public void startShouldFailWithStartupExceptionWhenContextBuildException() throws Exception {
-    doThrow(GeneralSecurityException.class).when(mockContextBuilder).build();
+    doThrow(RuntimeException.class).when(mockContextBuilder).build();
     IndexingApplication subject =
         new IndexingApplication.Builder(mockConnector, new String[] {})
             .setIndexingService(mockIndexingService)

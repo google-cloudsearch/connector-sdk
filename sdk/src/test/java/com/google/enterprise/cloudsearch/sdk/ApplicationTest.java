@@ -38,7 +38,6 @@ import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRul
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRule;
 import java.io.File;
 import java.io.IOException;
-import java.security.GeneralSecurityException;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -163,7 +162,7 @@ public class ApplicationTest {
 
   @Test
   public void startShouldFailWithStartupExceptionWhenContextBuildException() throws Exception {
-    doThrow(GeneralSecurityException.class).when(mockContextBuilder).build();
+    doThrow(RuntimeException.class).when(mockContextBuilder).build();
     Application subject =
         new Application.Builder(mockConnector, new String[] {})
             .setHelper(mockHelper)
