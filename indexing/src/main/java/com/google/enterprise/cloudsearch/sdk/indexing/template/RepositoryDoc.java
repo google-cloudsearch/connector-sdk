@@ -30,14 +30,12 @@ import com.google.api.services.cloudsearch.v1.model.PushItem;
 import com.google.api.services.cloudsearch.v1.model.RepositoryError;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.AsyncFunction;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.*;
 import com.google.enterprise.cloudsearch.sdk.indexing.Acl;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService.ContentFormat;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService.RequestMode;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -88,6 +86,7 @@ public class RepositoryDoc implements ApiOperation {
   private final Map<String, PushItem> childIds;
   private final Map<String, Acl> fragments;
   private final RequestMode requestMode;
+  private final FutureCallback<GenericJson> callback;
 
   private RepositoryDoc(Builder builder) {
     this.item = builder.item;
@@ -97,6 +96,7 @@ public class RepositoryDoc implements ApiOperation {
     this.childIds = builder.childIds;
     this.fragments = builder.fragments;
     this.requestMode = builder.requestMode;
+    this.callback = builder.callback;
   }
 
   public static class Builder {
@@ -107,6 +107,7 @@ public class RepositoryDoc implements ApiOperation {
     Map<String, PushItem> childIds = new HashMap<>();
     Map<String, Acl> fragments;
     RequestMode requestMode = RequestMode.UNSPECIFIED;
+    FutureCallback<GenericJson> callback;
 
     /** Creates an instance of {@link RepositoryDoc.Builder} */
     public Builder() {}
@@ -202,6 +203,16 @@ public class RepositoryDoc implements ApiOperation {
       return this;
     }
 
+    /**
+     * Sets {@link FutureCallback<GenericJson>} to be executed after RepositoryDoc execution is finished.
+     *
+     * @param callback to be executed after RepositoryDoc execution is finished.
+     */
+    public Builder setCallback(FutureCallback<GenericJson> callback) {
+      this.callback = callback;
+      return this;
+    }
+
     /** Builds an instance of {@link RepositoryDoc} */
     public RepositoryDoc build() {
       checkNotNull(item);
@@ -276,6 +287,15 @@ public class RepositoryDoc implements ApiOperation {
   }
 
   /**
+   * Gets {@link FutureCallback<GenericJson>} to be executed after RepositoryDoc execution is finished.
+   *
+   * @return {@link FutureCallback<GenericJson>} to be executed after RepositoryDoc execution is finished.
+   */
+  public FutureCallback<GenericJson> getCallback() {
+    return callback;
+  }
+
+  /**
    * Performs the indexing service request to index the document.
    *
    * <p>In addition to updating the {@link Item}, the children (if any) are pushed and ACL fragments
@@ -299,8 +319,7 @@ public class RepositoryDoc implements ApiOperation {
             ? service.indexItem(item, requestMode)
             : service.indexItemAndContent(item, content, contentHash, contentFormat, requestMode);
 
-    futures.add(
-        Futures.catchingAsync(
+    ListenableFuture<GenericJson> future = Futures.catchingAsync(
             operation,
             IOException.class,
             /**
@@ -308,25 +327,32 @@ public class RepositoryDoc implements ApiOperation {
              * future is always returned so that this operation is not treated as if it succeeded.
              */
             (AsyncFunction<IOException, Item>)
-                ex -> {
-                  logger.log(Level.WARNING, "Error indexing the item " + item, ex);
-                  Optional<RepositoryError> error = getRepositoryErrorForResponseException(ex);
-                  if (!error.isPresent()) {
-                    return Futures.immediateFailedFuture(ex);
-                  }
-                  logger.log(Level.INFO, "Pushing this failed item to queue " + item);
-                  return Futures.transformAsync(
-                      service.push(
-                          item.getName(),
-                          new PushItem()
-                              .setQueue(item.getQueue())
-                              .setType("REPOSITORY_ERROR")
-                              .setRepositoryError(error.get())
-                              .encodePayload(item.decodePayload())),
-                      input -> Futures.<Item>immediateFailedFuture(ex),
-                      MoreExecutors.directExecutor());
-                },
-            MoreExecutors.directExecutor()));
+                    ex -> {
+                      logger.log(Level.WARNING, "Error indexing the item " + item, ex);
+                      Optional<RepositoryError> error = getRepositoryErrorForResponseException(ex);
+                      if (!error.isPresent()) {
+                        return Futures.immediateFailedFuture(ex);
+                      }
+                      logger.log(Level.INFO, "Pushing this failed item to queue " + item);
+                      return Futures.transformAsync(
+                              service.push(
+                                      item.getName(),
+                                      new PushItem()
+                                              .setQueue(item.getQueue())
+                                              .setType("REPOSITORY_ERROR")
+                                              .setRepositoryError(error.get())
+                                              .encodePayload(item.decodePayload())),
+                              input -> Futures.<Item>immediateFailedFuture(ex),
+                              MoreExecutors.directExecutor());
+                    },
+            MoreExecutors.directExecutor());
+
+    if(callback != null) {
+      Futures.addCallback(future, callback, MoreExecutors.directExecutor());
+    }
+
+    futures.add(future);
+
 
     for (Map.Entry<String, PushItem> entry : childIds.entrySet()) {
       futures.add(service.push(entry.getKey(), entry.getValue()));

@@ -43,6 +43,7 @@ import com.google.api.services.cloudsearch.v1.model.Operation;
 import com.google.api.services.cloudsearch.v1.model.PushItem;
 import com.google.api.services.cloudsearch.v1.model.RepositoryError;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.enterprise.cloudsearch.sdk.indexing.Acl;
@@ -53,6 +54,7 @@ import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService.RequestMod
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.junit.Rule;
@@ -63,6 +65,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+
+import javax.annotation.Nullable;
 
 /** Tests for {@link RepositoryDoc}. */
 @RunWith(MockitoJUnitRunner.class)
@@ -94,6 +98,38 @@ public class RepositoryDocTest {
     InOrder inOrder = inOrder(mockIndexingService);
     inOrder.verify(mockIndexingService).indexItem(item, RequestMode.UNSPECIFIED);
     assertEquals("id1", doc.getItem().getName());
+  }
+
+  @Test
+  public void testCallback() throws IOException, InterruptedException {
+    Item item = new Item().setName("id1").setAcl(getCustomerAcl());
+    final HashMap callbackResult = new HashMap();
+    RepositoryDoc doc = new RepositoryDoc.Builder()
+            .setItem(item)
+            .setCallback(new FutureCallback<GenericJson>() {
+              @Override
+              public void onSuccess(@Nullable GenericJson result) {
+                callbackResult.put("a", "b");
+              }
+
+              @Override
+              public void onFailure(Throwable t) {
+                callbackResult.put("a", "b");
+              }
+            })
+            .build();
+    SettableFuture<Operation> updateFuture = SettableFuture.create();
+    doAnswer(
+            invocation -> {
+              updateFuture.set(new Operation());
+              return updateFuture;
+            })
+            .when(mockIndexingService)
+            .indexItem(item, RequestMode.UNSPECIFIED);
+    doc.execute(mockIndexingService);
+    InOrder inOrder = inOrder(mockIndexingService);
+    inOrder.verify(mockIndexingService).indexItem(item, RequestMode.UNSPECIFIED);
+    assertEquals("b", callbackResult.get("a"));
   }
 
   @Test(expected = IOException.class)
