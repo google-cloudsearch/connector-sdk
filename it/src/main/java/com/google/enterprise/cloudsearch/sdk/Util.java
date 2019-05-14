@@ -16,12 +16,18 @@
 
 package com.google.enterprise.cloudsearch.sdk;
 
+import com.google.common.collect.ImmutableList;
+import com.google.enterprise.cloudsearch.sdk.indexing.Acl;
 import java.util.Random;
 
 /**
  * Common utility methods for integration tests.
  */
 public class Util {
+  public static final Acl PUBLIC_ACL = new Acl.Builder()
+      .setReaders(ImmutableList.of(Acl.getCustomerPrincipal()))
+      .build();
+
   private static final Random RANDOM_ID = new Random();
 
   public static String getRandomId() {
