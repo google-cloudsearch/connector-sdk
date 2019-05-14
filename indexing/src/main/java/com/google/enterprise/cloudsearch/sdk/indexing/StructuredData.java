@@ -355,17 +355,17 @@ public class StructuredData {
       if (nonNullValues.isEmpty()) {
         return null;
       }
-        if (!isRepeated) {
-          return propertyBuilder.getNamedProperty(
-              propertyName, Collections.singletonList(valueConverter.convert(nonNullValues.get(0))));
-        } else {
-          return propertyBuilder.getNamedProperty(
-              propertyName,
-              nonNullValues
-                  .stream()
-                  .map(v -> valueConverter.convert(v))
-                  .collect(Collectors.toList()));
-        }
+      if (!isRepeated) {
+        return propertyBuilder.getNamedProperty(
+            propertyName, Collections.singletonList(valueConverter.convert(nonNullValues.get(0))));
+      } else {
+        return propertyBuilder.getNamedProperty(
+            propertyName,
+            nonNullValues
+                .stream()
+                .map(v -> valueConverter.convert(v))
+                .collect(Collectors.toList()));
+      }
     }
   }
 
