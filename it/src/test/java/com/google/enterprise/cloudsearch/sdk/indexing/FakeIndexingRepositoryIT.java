@@ -18,6 +18,7 @@ package com.google.enterprise.cloudsearch.sdk.indexing;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.SERVICE_KEY_PROPERTY_NAME;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.qualifyTestProperty;
 import static com.google.enterprise.cloudsearch.sdk.Util.getRandomId;
+import static com.google.enterprise.cloudsearch.sdk.Util.PUBLIC_ACL;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -158,6 +159,7 @@ public class FakeIndexingRepositoryIT {
         .setMimeType("HTML")
         .setContentLanguage("en-us")
         .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
         .build();
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(item))
@@ -175,12 +177,14 @@ public class FakeIndexingRepositoryIT {
         .setMimeType("pdf")
         .setContentLanguage("en-fr")
         .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
         .build();
     MockItem itemHtm = new MockItem.Builder(htmItemId)
         .setTitle("Base Traversal Container")
         .setMimeType("HTML")
         .setContentLanguage("en-us")
         .setItemType(ItemType.CONTAINER_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
         .build();
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(itemPdf))
@@ -200,12 +204,14 @@ public class FakeIndexingRepositoryIT {
         .setMimeType("application/xslt")
         .setContentLanguage("en-us")
         .setItemType(ItemType.CONTAINER_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
         .build();
     MockItem itemXml = new MockItem.Builder(accessResourceItemId)
         .setTitle("Permissions")
         .setMimeType("application/xml")
         .setContentLanguage("en-fr")
         .setItemType(ItemType.CONTAINER_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
         .build();
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(itemXslt, itemXml))
@@ -219,6 +225,7 @@ public class FakeIndexingRepositoryIT {
           .setMimeType("application/xml")
           .setContentLanguage("en-us")
           .setItemType(ItemType.CONTAINER_ITEM.toString())
+          .setAcl(PUBLIC_ACL)
           .build();
       FakeIndexingRepository mockRepoIterate = new FakeIndexingRepository.Builder()
           .addPage(Collections.singletonList(updateItemXml))
@@ -253,6 +260,7 @@ public class FakeIndexingRepositoryIT {
     config.setProperty("defaultAcl.public", "false");
     config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
     config.setProperty("defaultAcl.name", "mocksdk_defaultAcl_" + getRandomId());
+    // Don't set an ACL on the item; fallback mode will use default ACL
     MockItem item = new MockItem.Builder(itemId)
         .setTitle(itemName)
         .setMimeType("HTML")
@@ -354,6 +362,7 @@ public class FakeIndexingRepositoryIT {
         .addValue("html", "h2")
         .addValue("html", "h3")
         .setObjectType(schemaObjectType)
+        .setAcl(PUBLIC_ACL)
         .build();
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(item))
@@ -381,6 +390,7 @@ public class FakeIndexingRepositoryIT {
         .addValue("date", dateValue1)
         .addValue("date", dateValue2)
         .setObjectType(schemaObjectType)
+        .setAcl(PUBLIC_ACL)
         .build();
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(item))
@@ -400,6 +410,7 @@ public class FakeIndexingRepositoryIT {
         .addValue("integer", 567L)
         .addValue("integer", 9456L)
         .setObjectType(schemaObjectType)
+        .setAcl(PUBLIC_ACL)
         .build();
 
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()

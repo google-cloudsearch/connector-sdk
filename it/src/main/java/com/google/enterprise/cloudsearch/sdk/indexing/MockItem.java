@@ -53,10 +53,6 @@ public class MockItem {
   private static final String UPDATE_TIME = "updateTime";
   private static final String ACL = "acl";
 
-  private static final Acl DEFAULT_ACL = new Acl.Builder()
-      .setReaders(ImmutableList.of(Acl.getCustomerPrincipal()))
-      .build();
-
   private final String name;
   private final Multimap<String, Object> values;
 
@@ -66,7 +62,6 @@ public class MockItem {
   }
 
   public Item getItem() {
-    Acl acl = MockItem.<Acl>getSingleValue(values, ACL).orElse(DEFAULT_ACL);
     Item item = new IndexingItemBuilder(name)
         .setValues(values)
         .setTitle(FieldOrValue.withField(TITLE))
@@ -82,7 +77,7 @@ public class MockItem {
         .setQueue(getSingleStringValue(values, QUEUE))
         .setVersion(getByteArrayValue(values, VERSION))
         .setPayload(getByteArrayValue(values, PAYLOAD))
-        .setAcl(acl)
+        .setAcl(MockItem.<Acl>getSingleValue(values, ACL).orElse(null))
         .build();
     return item;
   }
