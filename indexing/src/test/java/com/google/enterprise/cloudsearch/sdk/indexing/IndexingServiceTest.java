@@ -149,10 +149,10 @@ public class IndexingServiceTest {
 
   @Before
   public void createService() throws IOException, GeneralSecurityException {
-    createService(false, false);
+    createService(false, false, null);
   }
 
-  private void createService(boolean enableDebugging, boolean allowUnknownGsuitePrincipals)
+  private void createService(boolean enableDebugging, boolean allowUnknownGsuitePrincipals, String defaultQueue)
       throws IOException, GeneralSecurityException {
     this.transport = new TestingHttpTransport("datasources/source/connectors/unitTest");
     JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
@@ -191,6 +191,7 @@ public class IndexingServiceTest {
             .setConnectorId("unitTest")
             .setEnableDebugging(enableDebugging)
             .setAllowUnknownGsuitePrincipals(allowUnknownGsuitePrincipals)
+            .setDefaultQueue(defaultQueue)
             .build();
     this.indexingService.startAsync().awaitRunning();
   }
@@ -564,7 +565,7 @@ public class IndexingServiceTest {
 
   @Test
   public void testUpdateItemDebugOptionsEnabled() throws Exception {
-    createService(/*debugging*/ true, /*allowUnknownGsuitePrincipals*/ false);
+    createService(/*debugging*/ true, /*allowUnknownGsuitePrincipals*/ false, /*defaultQueue*/ null);
     doAnswer(
             invocation -> {
               Items.Index updateRequest = invocation.getArgument(0);
@@ -582,7 +583,7 @@ public class IndexingServiceTest {
 
   @Test
   public void testUpdateItemAllowUnknownGsuitePrincipals() throws Exception {
-    createService(/*debugging*/ false, /*allowUnknownGsuitePrincipals*/ true);
+    createService(/*debugging*/ false, /*allowUnknownGsuitePrincipals*/ true, /*defaultQueue*/ null);
     doAnswer(
             invocation -> {
               Items.Index updateRequest = invocation.getArgument(0);
@@ -728,6 +729,19 @@ public class IndexingServiceTest {
             .setHash(hash)
             .setContentFormat("TEXT"),
         item.getContent());
+    verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
+  }
+
+  @Test
+  public void testUpdateItemWithDefaultQueue() throws GeneralSecurityException, IOException {
+    createService(/*debugging*/ false, /*allowUnknownGsuitePrincipals*/ false, /*defaultQueue*/ "specialqueue");
+    Item item = new Item().setName(GOOD_ID);
+    ByteArrayContent content = ByteArrayContent.fromString("text/plain", "");
+    this.indexingService.indexItemAndContent(
+            item, content, null, ContentFormat.TEXT, RequestMode.ASYNCHRONOUS);
+    assertEquals(
+            "specialqueue",
+            item.getQueue());
     verify(quotaServer, times(1)).acquire(Operations.DEFAULT);
   }
 
@@ -1042,6 +1056,17 @@ public class IndexingServiceTest {
   public void testPushItemNull() throws IOException {
     thrown.expect(IllegalArgumentException.class);
     this.indexingService.push(GOOD_ID, null);
+  }
+
+  @Test
+  public void testPushItemWithDefaultQueue() throws GeneralSecurityException, IOException {
+    createService(/*debugging*/ false, /*allowUnknownGsuitePrincipals*/ false, /*defaultQueue*/ "specialqueue");
+    this.transport.addPushItemReqResp(GOOD_ID, SOURCE_ID, new Item());
+    PushItem pushItem = new PushItem();
+    this.indexingService.push(GOOD_ID, pushItem);
+    assertEquals(
+            "specialqueue",
+            pushItem.getQueue());
   }
 
   /* unreserve */

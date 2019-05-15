@@ -119,6 +119,8 @@ import javax.annotation.Nullable;
  *       separate upload.
  *   <li>{@value #INDEXING_SERVICE_REQUEST_MODE} - Specifies the default request mode for index and
  *       delete item requests
+ *   <li>{@value #INDEXING_SERVICE_DEFAULT_QUEUE} - Specifies the default queue for index and
+ *       push item requests
  * </ul>
  */
 public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements IndexingService {
@@ -130,6 +132,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   public static final String CONNECTOR_ID = "api.connectorId";
   public static final String UPLOAD_THRESHOLD_BYTES = "api.contentUploadThresholdBytes";
   public static final String INDEXING_SERVICE_REQUEST_MODE = "api.defaultRequestMode";
+  public static final String INDEXING_SERVICE_DEFAULT_QUEUE = "api.defaultQueue";
   public static final String REQUEST_CONNECT_TIMEOUT = "indexingService.connectTimeoutSeconds";
   public static final String REQUEST_READ_TIMEOUT = "indexingService.readTimeoutSeconds";
   public static final String ENABLE_API_DEBUGGING = "indexingService.enableDebugging";
@@ -165,6 +168,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   private final VersionProvider versionProvider;
   private final QuotaServer<Operations> quotaServer;
   private final RequestMode requestMode;
+  private final String defaultQueue;
   private final boolean enableApiDebugging;
   private final boolean allowUnknownGsuitePrincipals;
 
@@ -245,6 +249,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     this.versionProvider = builder.versionProvider;
     this.quotaServer = builder.quotaServer;
     this.requestMode = builder.requestMode;
+    this.defaultQueue = builder.defaultQueue;
     this.enableApiDebugging = builder.enableApiDebugging;
     this.allowUnknownGsuitePrincipals = builder.allowUnknownGsuitePrincipals;
   }
@@ -262,6 +267,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     private QuotaServer<Operations> quotaServer =
         new QuotaServer.Builder<>(Operations.class).build();
     private RequestMode requestMode = DEFAULT_REQUEST_MODE;
+    private String defaultQueue;
     private int contentUploadConnectTimeoutSeconds = DEFAULT_CONNECT_TIMEOUT_SECONDS;
     private int contentUploadReadTimeoutSeconds = DEFAULT_READ_TIMEOUT_SECONDS;
     private boolean enableApiDebugging;
@@ -289,6 +295,11 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
 
     public Builder setRequestMode(RequestMode requestMode) {
       this.requestMode = requestMode;
+      return this;
+    }
+
+    public Builder setDefaultQueue(String defaultQueue) {
+      this.defaultQueue = defaultQueue;
       return this;
     }
 
@@ -408,6 +419,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
       } catch (IllegalArgumentException e) {
         throw new InvalidConfigurationException("Unable to parse configured request mode", e);
       }
+      String defaultQueue = Configuration.getString(INDEXING_SERVICE_DEFAULT_QUEUE, "").get();
       int connectTimeoutSeconds =
           Configuration.getInteger(REQUEST_CONNECT_TIMEOUT, DEFAULT_CONNECT_TIMEOUT_SECONDS).get();
       Configuration.checkConfiguration(
@@ -440,6 +452,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
           .setBatchPolicy(BatchPolicy.fromConfiguration())
           .setRetryPolicy(RetryPolicy.fromConfiguration())
           .setRequestMode(requestModeConfigured)
+          .setDefaultQueue(defaultQueue)
           .setConnectorId(Configuration.getString("api.connectorId", defaultConnectorName).get())
           .setRequestTimeout(connectTimeoutSeconds, readTimeoutSeconds)
           .setContentUploadRequestTimeout(connectTimeoutSeconds, readTimeoutSeconds)
@@ -712,6 +725,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     if (item.decodeVersion() == null) {
       item.encodeVersion(versionProvider.getVersion());
     }
+    item.setQueue(getQueue(item.getQueue()));
     Index updateRequest =
         service
             .indexing()
@@ -916,6 +930,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
     checkArgument(!Strings.isNullOrEmpty(id), "id can not be null or empty");
     checkArgument(pushItem != null, "Push item cannot be null.");
     String resourceName = getItemResourceName(id);
+    pushItem.setQueue(getQueue(pushItem.getQueue()));
     Push request =
         this.service
             .indexing()
@@ -979,6 +994,10 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
 
   private String getRequestMode(RequestMode requestMode) {
     return requestMode == RequestMode.UNSPECIFIED ? this.requestMode.name() : requestMode.name();
+  }
+
+  private String getQueue(String queue) {
+    return queue == null ? this.defaultQueue : queue;
   }
 
   /**
