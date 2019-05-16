@@ -437,12 +437,14 @@ public class FakeIndexingRepositoryIT {
         .setContentLanguage("en-us")
         .setVersion("1")
         .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
         .build();
     MockItem changedItem = new MockItem.Builder(itemId)
         .setTitle("New Title in Incremental Changes Test")
         .setContentLanguage("en-us")
         .setVersion("2")
         .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
         .build();
 
     String[] args = setupConfiguration(getIncrementalChangesProperties());
@@ -473,6 +475,7 @@ public class FakeIndexingRepositoryIT {
         .setContentLanguage("en-us")
         .setVersion("1")
         .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
         .build();
     String itemId2 = getItemId("TestItem2");
     MockItem item2 = new MockItem.Builder(itemId2)
@@ -480,6 +483,7 @@ public class FakeIndexingRepositoryIT {
         .setContentLanguage("en-us")
         .setVersion("1")
         .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
         .build();
 
     String[] args = setupConfiguration(getIncrementalChangesProperties());
@@ -511,6 +515,7 @@ public class FakeIndexingRepositoryIT {
         .setContentLanguage("en-us")
         .setVersion("1")
         .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
         .build();
 
     String[] args = setupConfiguration(getIncrementalChangesProperties());
