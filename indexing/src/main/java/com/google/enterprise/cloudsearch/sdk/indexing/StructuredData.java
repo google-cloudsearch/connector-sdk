@@ -15,29 +15,11 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
-import static com.google.common.base.Preconditions.checkState;
-import static java.nio.charset.Charset.defaultCharset;
-
 import com.google.api.client.json.JsonObjectParser;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.DateTime;
-import com.google.api.services.cloudsearch.v1.model.DateValues;
-import com.google.api.services.cloudsearch.v1.model.DoubleValues;
-import com.google.api.services.cloudsearch.v1.model.EnumPropertyOptions;
-import com.google.api.services.cloudsearch.v1.model.EnumValuePair;
-import com.google.api.services.cloudsearch.v1.model.EnumValues;
-import com.google.api.services.cloudsearch.v1.model.HtmlValues;
-import com.google.api.services.cloudsearch.v1.model.IntegerValues;
-import com.google.api.services.cloudsearch.v1.model.NamedProperty;
-import com.google.api.services.cloudsearch.v1.model.ObjectDefinition;
-import com.google.api.services.cloudsearch.v1.model.ObjectValues;
-import com.google.api.services.cloudsearch.v1.model.PropertyDefinition;
-import com.google.api.services.cloudsearch.v1.model.Schema;
-import com.google.api.services.cloudsearch.v1.model.StructuredDataObject;
-import com.google.api.services.cloudsearch.v1.model.TextValues;
-import com.google.api.services.cloudsearch.v1.model.TimestampValues;
+import com.google.api.services.cloudsearch.v1.model.*;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Converter;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -47,6 +29,10 @@ import com.google.enterprise.cloudsearch.sdk.Application;
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import com.google.enterprise.cloudsearch.sdk.StartupException;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
+import org.junit.rules.TestRule;
+import org.junit.runner.Description;
+import org.junit.runners.model.Statement;
+
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
@@ -63,26 +49,15 @@ import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.time.temporal.TemporalAccessor;
 import java.time.temporal.TemporalQueries;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-import org.junit.rules.TestRule;
-import org.junit.runner.Description;
-import org.junit.runners.model.Statement;
+
+import static com.google.common.base.Preconditions.*;
+import static java.nio.charset.Charset.defaultCharset;
 
 /**
  * Helper utility to generate a {@link StructuredDataObject}.
@@ -132,6 +107,7 @@ public class StructuredData {
 
   private static final AtomicBoolean initialized = new AtomicBoolean();
   private static final List<DateTimeParser> dateTimeParsers = new ArrayList<>();
+
   private static final AtomicBoolean ignoreConversionErrors = new AtomicBoolean();
 
   /** A map from object definition names to instances of this class. */
@@ -268,6 +244,15 @@ public class StructuredData {
   public static boolean hasObjectDefinition(String objectType) {
     checkState(isInitialized(), "StructuredData not initialized");
     return structuredDataMapping.containsKey(objectType);
+  }
+
+  /**
+   * Same as setting structuredData.ignoreConversionErrors in configuration
+   * @param ignore
+   */
+  @VisibleForTesting
+  public static void setIgnoreConversionErrors(boolean ignore) {
+    ignoreConversionErrors.set(ignore);
   }
 
   /**
