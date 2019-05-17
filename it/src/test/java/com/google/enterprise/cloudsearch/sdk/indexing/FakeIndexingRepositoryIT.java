@@ -445,6 +445,56 @@ public class FakeIndexingRepositoryIT {
   }
 
   @Test
+  public void changedAcl_verifyServing() throws IOException, InterruptedException {
+    String itemName = "ChangedAcl_" + getRandomId();
+    String itemId = Util.getItemId(indexingSourceId, itemName);
+    Properties config = getIncrementalChangesProperties();
+    config.setProperty("defaultAcl.mode", DefaultAclMode.NONE.toString());
+    Acl acl1 = new Acl.Builder()
+        .setReaders(Collections.singletonList(Acl.getGoogleUserPrincipal(testUser1)))
+        .build();
+    Acl acl2 = new Acl.Builder()
+        .setReaders(Collections.singletonList(Acl.getGoogleUserPrincipal(testUser2)))
+        .build();
+    MockItem item1 = new MockItem.Builder(itemId)
+        .setTitle(itemName)
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(acl1)
+        .build();
+    MockItem item2 = new MockItem.Builder(itemId)
+        .setTitle(itemName)
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(acl2)
+        .build();
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(Collections.singletonList(item1))
+        .build();
+
+    String[] args = setupConfiguration(config);
+    IndexingApplication application =
+        new IndexingApplication.Builder(new FullTraversalConnector(mockRepo), args)
+        .build();
+    try {
+      application.start();
+      mockRepo.awaitGetAllDocs(WAIT_FOR_CONNECTOR_RUN_SECS , TimeUnit.SECONDS);
+      testUtils.waitUntilEqual(itemId, item1.getItem());
+      searchUtilUser1.waitUntilItemServed(itemName, itemName);
+      searchUtilUser2.waitUntilItemNotServed(itemName, itemName);
+
+      mockRepo.addChangedItem(item2);
+      mockRepo.awaitGetChanges(WAIT_FOR_CONNECTOR_RUN_SECS , TimeUnit.SECONDS);
+      testUtils.waitUntilEqual(itemId, item2.getItem());
+      searchUtilUser1.waitUntilItemNotServed(itemName, itemName);
+      searchUtilUser2.waitUntilItemServed(itemName, itemName);
+    } finally {
+      v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
+      application.shutdown("test ended");
+    }
+  }
+
+  @Test
   public void structuredDataBasicDataTypeTest() throws InterruptedException, IOException {
     String itemId = getItemId("BasePropertyTest");
     String schemaObjectType = "myMockDataObject";
