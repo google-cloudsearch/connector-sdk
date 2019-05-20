@@ -29,6 +29,7 @@ import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRul
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRule;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -302,6 +303,51 @@ public class ConnectorSchedulerTest {
   }
 
   @Test
+  public void traverseIntervalSecs_traverseOnStartTrue_succeeds() throws Exception {
+    int traverseIntervalSecs = 2;
+    int latchWaitSecs = 6;
+    Map<String, String> config = new HashMap<>();
+    config.put(Application.TRAVERSE_INTERVAL_SECONDS, String.valueOf(traverseIntervalSecs));
+    config.put(Application.TRAVERSE_ON_START, "true");
+    config.put(Application.RUN_ONCE, "false");
+
+    setupConfig(config);
+    NothingConnector connector = new NothingConnector(2);
+    ConnectorScheduler<ConnectorContext> traverser =
+        new ConnectorScheduler.Builder()
+            .setConnector(connector)
+            .setContext(getContextWithExceptionHandler(-1))
+            .build();
+    traverser.start();
+    assertTrue(connector.latch.await(latchWaitSecs, TimeUnit.SECONDS));
+    traverser.stop();
+  }
+
+  @Test
+  public void traverseIntervalSecs_traverseOnStartFalse_waitsToStart() throws Exception {
+    int traverseIntervalSecs = 4;
+    int latchWaitSecs = 2;
+    Map<String, String> config = new HashMap<>();
+    config.put(Application.TRAVERSE_INTERVAL_SECONDS, String.valueOf(traverseIntervalSecs));
+    config.put(Application.TRAVERSE_ON_START, "false");
+    config.put(Application.RUN_ONCE, "false");
+
+    setupConfig(config);
+    NothingConnector connector = new NothingConnector(2);
+    ConnectorScheduler<ConnectorContext> traverser =
+        new ConnectorScheduler.Builder()
+            .setConnector(connector)
+            .setContext(getContextWithExceptionHandler(-1))
+            .build();
+    traverser.start();
+    // Latch await times out before traverse is called the first time.
+    assertEquals(false, connector.latch.await(latchWaitSecs, TimeUnit.SECONDS));
+    // Traverse called (at least) twice.
+    assertEquals(true, connector.latch.await(traverseIntervalSecs * 2, TimeUnit.SECONDS));
+    traverser.stop();
+  }
+
+  @Test
   public void testIncrementalTraversal() throws Exception {
     final CountDownLatch latch = new CountDownLatch(1);
     IncrementalConnector incremental =
@@ -379,6 +425,34 @@ public class ConnectorSchedulerTest {
         StatsManager.getInstance()
             .getComponent("IncrementalTraverser")
             .getSuccessCount("complete"));
+  }
+
+  @Test
+  public void connectorSchedule_configDefaults_valuesSet() {
+    setupConfig(Collections.emptyMap());
+    ConnectorScheduler.ConnectorSchedule schedule = new ConnectorScheduler.ConnectorSchedule();
+    assertEquals(86400, schedule.getTraversalIntervalSeconds());
+    assertEquals(300, schedule.getIncrementalTraversalIntervalSeconds());
+    assertEquals(10, schedule.getPollQueueIntervalSecs());
+    assertEquals(true, schedule.isPerformTraversalOnStart());
+    assertEquals(false, schedule.isRunOnce());
+  }
+
+  @Test
+  public void connectorSchedule_configProperties_valuesSet() {
+    Map<String, String> config = new HashMap<>();
+    config.put(Application.TRAVERSE_INTERVAL_SECONDS, "42");
+    config.put(Application.INCREMENTAL_INTERVAL_SECONDS, "11");
+    config.put(Application.POLL_INTERVAL_SECONDS, "22");
+    config.put(Application.TRAVERSE_ON_START, "false");
+    config.put(Application.RUN_ONCE, "true");
+    setupConfig(config);
+    ConnectorScheduler.ConnectorSchedule schedule = new ConnectorScheduler.ConnectorSchedule();
+    assertEquals(42, schedule.getTraversalIntervalSeconds());
+    assertEquals(11, schedule.getIncrementalTraversalIntervalSeconds());
+    assertEquals(22, schedule.getPollQueueIntervalSecs());
+    assertEquals(false, schedule.isPerformTraversalOnStart());
+    assertEquals(true, schedule.isRunOnce());
   }
 
   private void setupConfig(Map<String, String> configuration) {
