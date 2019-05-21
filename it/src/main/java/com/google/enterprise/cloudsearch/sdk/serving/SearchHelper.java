@@ -6,6 +6,7 @@ import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
 import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.HttpRequestInitializer;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
@@ -15,6 +16,8 @@ import com.google.api.services.cloudsearch.v1.model.RequestOptions;
 import com.google.api.services.cloudsearch.v1.model.SearchRequest;
 import com.google.api.services.cloudsearch.v1.model.SearchResponse;
 import com.google.api.services.cloudsearch.v1.model.SearchResult;
+import com.google.enterprise.cloudsearch.sdk.BaseApiService.RetryRequestInitializer;
+import com.google.enterprise.cloudsearch.sdk.RetryPolicy;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -49,6 +52,8 @@ public class SearchHelper {
   private static final Set<String> API_SCOPES =
       Collections.singleton("https://www.googleapis.com/auth/cloud_search");
   private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
+  private static final RetryRequestInitializer RETRY_REQUEST_INITIALIZER =
+      new RetryRequestInitializer(new RetryPolicy.Builder().build());
 
   private final CloudSearch cloudSearch;
   private final String searchApplicationId;
@@ -66,8 +71,13 @@ public class SearchHelper {
       throws GeneralSecurityException, IOException {
     HttpTransport transport = GoogleNetHttpTransport.newTrustedTransport();
     Credential credential = createCredentials(transport, searchAuthInfo);
-    CloudSearch.Builder builder = new CloudSearch.Builder(transport, JSON_FACTORY, credential)
-        .setApplicationName(SEARCH_APPLICATION_NAME);
+
+    CloudSearch.Builder builder =
+        new CloudSearch.Builder(
+                transport,
+                JSON_FACTORY,
+                createChainedHttpRequestInitializer(credential, RETRY_REQUEST_INITIALIZER))
+            .setApplicationName(SEARCH_APPLICATION_NAME);
     rootUrl.ifPresent(r -> builder.setRootUrl(r));
     return new SearchHelper(builder.build(), searchApplicationId);
   }
@@ -97,6 +107,17 @@ public class SearchHelper {
             .setDataStoreFactory(new FileDataStoreFactory(searchAuthInfo.getCredentialsDirectory()))
             .build();
     return flow.loadCredential(searchAuthInfo.getUserEmail());
+  }
+
+  private static HttpRequestInitializer createChainedHttpRequestInitializer(
+      HttpRequestInitializer... initializers) {
+    return request -> {
+      for (HttpRequestInitializer initializer : initializers) {
+        if (initializer != null) {
+          initializer.initialize(request);
+        }
+      }
+    };
   }
 
   public static void main(String args[]) throws GeneralSecurityException, IOException {
