@@ -428,6 +428,75 @@ public class ConnectorSchedulerTest {
   }
 
   @Test
+  public void incrementalTraversalIntervalSecs_traverseOnStartFalse_calledImmediately()
+      throws Exception {
+    final CountDownLatch latch = new CountDownLatch(1);
+    IncrementalConnector incremental =
+        new IncrementalConnector() {
+
+          @Override
+          public void traverse() throws IOException, InterruptedException {
+          }
+
+          @Override
+          public void handleIncrementalChanges() throws IOException, InterruptedException {
+            latch.countDown();
+          }
+        };
+    int incrementalTraversalIntervalSecs = 10;
+    int latchWaitSecs = 2;
+    Map<String, String> config = new HashMap<>();
+    config.put(Application.INCREMENTAL_INTERVAL_SECONDS,
+        String.valueOf(incrementalTraversalIntervalSecs));
+    config.put(Application.TRAVERSE_ON_START, "false");
+    config.put(Application.RUN_ONCE, "false");
+    setupConfig(config);
+    ConnectorScheduler<ConnectorContext> traverser =
+        new ConnectorScheduler.Builder()
+            .setConnector(incremental)
+            .setContext(getContextWithExceptionHandler(-1))
+            .build();
+    traverser.start();
+    assertEquals(true, latch.await(latchWaitSecs, TimeUnit.SECONDS));
+    traverser.stop();
+  }
+
+  @Test
+  public void incrementalTraversalIntervalSecs_traverseOnStartTrue_waitsToStart()
+      throws Exception {
+    final CountDownLatch latch = new CountDownLatch(2);
+    IncrementalConnector incremental =
+        new IncrementalConnector() {
+
+          @Override
+          public void traverse() throws IOException, InterruptedException {
+          }
+
+          @Override
+          public void handleIncrementalChanges() throws IOException, InterruptedException {
+            latch.countDown();
+          }
+        };
+    int incrementalTraversalIntervalSecs = 4;
+    int latchWaitSecs = 2;
+    Map<String, String> config = new HashMap<>();
+    config.put(Application.INCREMENTAL_INTERVAL_SECONDS,
+        String.valueOf(incrementalTraversalIntervalSecs));
+    config.put(Application.TRAVERSE_ON_START, "true");
+    config.put(Application.RUN_ONCE, "false");
+    setupConfig(config);
+    ConnectorScheduler<ConnectorContext> traverser =
+        new ConnectorScheduler.Builder()
+            .setConnector(incremental)
+            .setContext(getContextWithExceptionHandler(-1))
+            .build();
+    traverser.start();
+    assertEquals(false, latch.await(latchWaitSecs, TimeUnit.SECONDS));
+    assertEquals(true, latch.await(incrementalTraversalIntervalSecs * 2, TimeUnit.SECONDS));
+    traverser.stop();
+  }
+
+  @Test
   public void connectorSchedule_configDefaults_valuesSet() {
     setupConfig(Collections.emptyMap());
     ConnectorScheduler.ConnectorSchedule schedule = new ConnectorScheduler.ConnectorSchedule();
