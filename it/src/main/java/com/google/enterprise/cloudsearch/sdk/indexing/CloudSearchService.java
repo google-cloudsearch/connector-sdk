@@ -36,6 +36,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -127,14 +128,24 @@ public class CloudSearchService {
    * Gets all items available in data source.
    */
   public List<Item> listItems() throws IOException {
-    ListItemsResponse response = service
-        .indexing()
-        .datasources()
-        .items()
-        .list("datasources/" + indexingSourceId)
-        .execute();
-    List<Item> dataItem = response.getItems();
-    return dataItem;
+    ArrayList<Item> items = new ArrayList<>();
+    String nextPageToken = null;
+    do {
+      logger.log(Level.FINE, "Fetching items for page token {0}...", nextPageToken);
+      ListItemsResponse response = service
+          .indexing()
+          .datasources()
+          .items()
+          .list("datasources/" + indexingSourceId)
+          .setPageToken(nextPageToken)
+          .execute();
+      List<Item> pageItems = response.getItems();
+      if (pageItems != null) {
+        items.addAll(pageItems);
+      }
+      nextPageToken = response.getNextPageToken();
+    } while (nextPageToken != null);
+    return items;
   }
 
   public Operation deleteItem(String itemName, String version) throws IOException {
