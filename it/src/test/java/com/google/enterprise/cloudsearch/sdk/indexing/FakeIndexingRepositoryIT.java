@@ -17,8 +17,8 @@ package com.google.enterprise.cloudsearch.sdk.indexing;
 
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.SERVICE_KEY_PROPERTY_NAME;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.qualifyTestProperty;
-import static com.google.enterprise.cloudsearch.sdk.Util.getRandomId;
 import static com.google.enterprise.cloudsearch.sdk.Util.PUBLIC_ACL;
+import static com.google.enterprise.cloudsearch.sdk.Util.getRandomId;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -27,6 +27,7 @@ import static org.junit.Assert.assertTrue;
 import com.google.api.services.cloudsearch.v1.model.Date;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableList;
 import com.google.enterprise.cloudsearch.sdk.Util;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.DefaultAcl.DefaultAclMode;
@@ -72,6 +73,10 @@ public class FakeIndexingRepositoryIT {
       qualifyTestProperty("authInfoUser1");
   private static final String AUTH_INFO_USER2_PROPERTY_NAME =
       qualifyTestProperty("authInfoUser2");
+  private static final String AUTH_INFO_USER3_PROPERTY_NAME = qualifyTestProperty("authInfoUser3");
+  private static final String TEST_GROUP_PREFIX_PROPERTY_NAME = qualifyTestProperty("groupPrefix");
+  private static final String TEST_DOMAIN_PROPERTY_NAME = qualifyTestProperty("domain");
+
   private static final int WAIT_FOR_CONNECTOR_RUN_SECS = 60;
   private static String keyFilePath;
   private static String indexingSourceId;
@@ -80,8 +85,11 @@ public class FakeIndexingRepositoryIT {
   private static TestUtils testUtils;
   private static SearchTestUtils searchUtilUser1;
   private static SearchTestUtils searchUtilUser2;
+  private static SearchTestUtils searchUtilGroupMember;
   private static String testUser1;
   private static String testUser2;
+  private static String testUserGroupMember;
+  private static String testGroup;
 
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public TemporaryFolder configFolder = new TemporaryFolder();
@@ -95,15 +103,26 @@ public class FakeIndexingRepositoryIT {
     String searchApplicationId = System.getProperty(APPLICATION_ID_PROPERTY_NAME);
     String[] authInfoUser1 = System.getProperty(AUTH_INFO_USER1_PROPERTY_NAME).split(",");
     String[] authInfoUser2 = System.getProperty(AUTH_INFO_USER2_PROPERTY_NAME).split(",");
+
     SearchHelper searchHelperUser1 =
         SearchTestUtils.getSearchHelper(authInfoUser1, searchApplicationId, rootUrl);
     SearchHelper searchHelperUser2 =
         SearchTestUtils.getSearchHelper(authInfoUser2, searchApplicationId, rootUrl);
+
     testUser1 = authInfoUser1[0];
     testUser2 = authInfoUser2[0];
     assertNotEquals(testUser1, testUser2);
     searchUtilUser1 = new SearchTestUtils(searchHelperUser1);
     searchUtilUser2 = new SearchTestUtils(searchHelperUser2);
+
+    String[] authInfoGroupMember = System.getProperty(AUTH_INFO_USER3_PROPERTY_NAME).split(",");
+    testUserGroupMember = authInfoGroupMember[0];
+    String domain = System.getProperty(TEST_DOMAIN_PROPERTY_NAME);
+    String groupPrefix = System.getProperty(TEST_GROUP_PREFIX_PROPERTY_NAME, "group-connectors3");
+    testGroup = String.format("%s@%s", groupPrefix, domain);
+    SearchHelper searchHelperGroupMember =
+        SearchTestUtils.getSearchHelper(authInfoGroupMember, searchApplicationId, rootUrl);
+    searchUtilGroupMember = new SearchTestUtils(searchHelperGroupMember);
   }
 
   private static void validateInputParams() throws Exception {
@@ -269,10 +288,12 @@ public class FakeIndexingRepositoryIT {
     config.setProperty("defaultAcl.public", "false");
     config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
     config.setProperty("defaultAcl.name", "mocksdk_defaultAcl_" + getRandomId());
-    Acl acl = new Acl.Builder()
-        .setReaders(Collections
-            .singletonList(Acl.getGoogleUserPrincipal(testUser2)))
-        .build();
+    Acl acl =
+        new Acl.Builder()
+            .setReaders(
+                ImmutableList.of(
+                    Acl.getGoogleUserPrincipal(testUser2), Acl.getGoogleGroupPrincipal(testGroup)))
+            .build();
     MockItem item = new MockItem.Builder(itemId)
         .setTitle(itemName)
         .setMimeType("HTML")
@@ -287,6 +308,8 @@ public class FakeIndexingRepositoryIT {
       runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
       testUtils.waitUntilEqual(itemId, item.getItem());
       searchUtilUser2.waitUntilItemServed(itemName, itemName);
+      // Via group membership
+      searchUtilGroupMember.waitUntilItemServed(itemName, itemName);
       searchUtilUser1.waitUntilItemNotServed(itemName, itemName);
     } finally {
       v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
@@ -300,6 +323,7 @@ public class FakeIndexingRepositoryIT {
     String itemId = Util.getItemId(indexingSourceId, itemName);
     Properties config = new Properties();
     config.setProperty("defaultAcl.readers.users", "google:" + testUser1);
+    config.setProperty("defaultAcl.readers.groups", "google:" + testGroup);
     config.setProperty("defaultAcl.public", "false");
     config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
     config.setProperty("defaultAcl.name", "mocksdk_defaultAcl_" + getRandomId());
@@ -317,6 +341,42 @@ public class FakeIndexingRepositoryIT {
       runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
       testUtils.waitUntilEqual(itemId, item.getItem());
       searchUtilUser1.waitUntilItemServed(itemName, itemName);
+      searchUtilGroupMember.waitUntilItemServed(itemName, itemName);
+    } finally {
+      v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
+    }
+  }
+
+  @Test
+  public void defaultAcl_modeFallback_noItemAcl_deniedGroup_verifyServing()
+      throws IOException, InterruptedException {
+    String itemName = "FallbackAcl_" + getRandomId();
+    String itemId = Util.getItemId(indexingSourceId, itemName);
+    Properties config = new Properties();
+    config.setProperty(
+        "defaultAcl.readers.users",
+        String.format("google:%s,google:%s", testUser1, testUserGroupMember));
+    config.setProperty("defaultAcl.denied.groups", "google:" + testGroup);
+    config.setProperty("defaultAcl.public", "false");
+    config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
+    config.setProperty("defaultAcl.name", "mocksdk_defaultAcl_" + getRandomId());
+    // Don't set an ACL on the item; fallback mode will use the default ACL
+    MockItem item =
+        new MockItem.Builder(itemId)
+            .setTitle(itemName)
+            .setMimeType("HTML")
+            .setContentLanguage("en-us")
+            .setItemType(ItemType.CONTENT_ITEM.toString())
+            .build();
+    FakeIndexingRepository mockRepo =
+        new FakeIndexingRepository.Builder().addPage(Collections.singletonList(item)).build();
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
+      testUtils.waitUntilEqual(itemId, item.getItem());
+      searchUtilUser1.waitUntilItemServed(itemName, itemName);
+      // While group member is added as reader, group is denied. Effective ACL for member should be
+      // denied.
+      searchUtilGroupMember.waitUntilItemNotServed(itemName, itemName);
     } finally {
       v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
     }
