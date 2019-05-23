@@ -383,6 +383,40 @@ public class FakeIndexingRepositoryIT {
   }
 
   @Test
+  public void defaultAcl_modeFallback_noItemAcl_deniedUser_verifyServing()
+      throws IOException, InterruptedException {
+    String itemName = "FallbackAcl_" + getRandomId();
+    String itemId = Util.getItemId(indexingSourceId, itemName);
+    Properties config = new Properties();
+    config.setProperty("defaultAcl.readers.users", String.format("google:%s", testUser1));
+    config.setProperty("defaultAcl.readers.group", String.format("google:%s", testGroup));
+    config.setProperty("defaultAcl.denied.users", String.format("google:%s", testUserGroupMember));
+    config.setProperty("defaultAcl.public", "false");
+    config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
+    config.setProperty("defaultAcl.name", "mocksdk_defaultAcl_" + getRandomId());
+    // Don't set an ACL on the item; fallback mode will use the default ACL
+    MockItem item =
+        new MockItem.Builder(itemId)
+            .setTitle(itemName)
+            .setMimeType("HTML")
+            .setContentLanguage("en-us")
+            .setItemType(ItemType.CONTENT_ITEM.toString())
+            .build();
+    FakeIndexingRepository mockRepo =
+        new FakeIndexingRepository.Builder().addPage(Collections.singletonList(item)).build();
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(config));
+      testUtils.waitUntilEqual(itemId, item.getItem());
+      searchUtilUser1.waitUntilItemServed(itemName, itemName);
+      // While group is added as a reader, member is denied. Effective ACL for member should be
+      // denied.
+      searchUtilGroupMember.waitUntilItemNotServed(itemName, itemName);
+    } finally {
+      v1Client.deleteItemsIfExist(Collections.singletonList(itemId));
+    }
+  }
+
+  @Test
   public void defaultAcl_modeAppend_verifyServing() throws IOException, InterruptedException {
     String itemName = "AppendAcl_" + getRandomId();
     String itemId = Util.getItemId(indexingSourceId, itemName);
