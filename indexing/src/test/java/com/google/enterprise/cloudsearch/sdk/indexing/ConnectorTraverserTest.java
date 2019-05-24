@@ -552,6 +552,52 @@ public class ConnectorTraverserTest {
     transport.validate();
   }
 
+  @Test
+  public void pollQueueIntervalSecs_succeeds() throws Exception {
+    setupConfig(ImmutableMap.of(
+            "schedule.pollQueueIntervalSecs", "3"
+          ));
+    ItemRetrieverConnector connector =
+        new ItemRetrieverConnector() {
+
+          @Override
+          public void process(Item entry) throws IOException, InterruptedException {
+          }
+
+          @Override
+          public void init(IndexingConnectorContext context) throws Exception {
+          }
+        };
+    final CountDownLatch countDown = new CountDownLatch(2);
+    doAnswer(
+        invocation -> {
+          // We can't hook into ParallelProcessingTraverserWorker's poll method, which is
+          // what's being scheduled using pollQueueIntervalSecs, but it mainly just calls
+          // IndexingService.poll, so use this to count invocations.
+          countDown.countDown();
+          // If we return nothing, ParallelProcessingTraverserWorker's poll method will
+          // return and wait to be called again when scheduled. Otherwise,
+          // IndexingService.poll is called repeatedly until the worker accumulates 1000
+          // items.
+          return Collections.emptyList();
+        })
+        .when(mockIndexingService)
+        .poll(any());
+
+    IndexingConnectorContext context = getContextWithExceptionHandler(-1);
+    context.registerTraverser(
+        new TraverserConfiguration.Builder().itemRetriever(connector).build());
+    connector.init(context);
+    ConnectorTraverser traverser = new ConnectorTraverser.Builder()
+        .setConnector(connector)
+        .setContext(context)
+        .build();
+    traverser.start();
+    // Run once at start and then again 3 seconds later
+    assertEquals(true, countDown.await(4, TimeUnit.SECONDS));
+    traverser.stop();
+  }
+
   private IndexingService buildIndexingService(IndexingServiceTransport transport) {
     try {
       when(batchingService.state()).thenReturn(State.NEW);
