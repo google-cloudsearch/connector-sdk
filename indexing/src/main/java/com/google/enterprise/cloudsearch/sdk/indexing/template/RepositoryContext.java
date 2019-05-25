@@ -48,11 +48,12 @@ public class RepositoryContext {
   }
 
   /**
-   * @Deprecated, use {@link #postApiOperationAsync(ApiOperation)} instead. Posts an {@link
-   * AsyncApiOperation} from the {@link Repository}.
+   * Posts an {@link AsyncApiOperation} from the {@link Repository}.
    *
    * <p>This is the call back method for data repository document modification detection. Sample
    * usage is detailed in the {@link AsyncApiOperation} documentation.
+   *
+   * @deprecated Use {@link #postApiOperationAsync(ApiOperation)}
    */
   @Deprecated()
   public void postAsyncOperation(AsyncApiOperation operation) {
@@ -66,7 +67,7 @@ public class RepositoryContext {
    * <p>Sample usage:
    * <pre><code>
    * public MyRepository implements Repository {
-   *  {@literal @}Override
+   *   {@literal @}Override
    *   public void init(RepositoryContext context) {
    *     this.context = context;
    *   }
@@ -77,12 +78,12 @@ public class RepositoryContext {
    *     Futures.addCallback(
    *         this.context.postApiOperationAsync(operation),
    *         new FutureCallback&lt;List&lt;GenericJson&gt;&gt;() {
-   *           @Override
+   *           {@literal @}Override
    *           public void onSuccess(@Nullable List&lt;GenericJson&gt; result) {
    *             // Acking logic.
    *           }
    *
-   *           @Override
+   *           {@literal @}Override
    *           public void onFailure(Throwable t) {
    *             // Error handling.
    *           }

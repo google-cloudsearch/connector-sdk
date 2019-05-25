@@ -402,7 +402,7 @@ public class IndexingItemBuilder {
    * Sets the {@code searchQualityMetadata} field value for the {@code ItemMetadata}.
    * <p>
    * Using this setter will override any value previously set using {@link
-   * #setSearchQualityMetadataQuality(FieldOrValue<Double>)}.
+   * #setSearchQualityMetadataQuality(FieldOrValue)}.
    *
    * @param searchQuality the {@code SearchQualityMetadata} instance
    * @return this instance
