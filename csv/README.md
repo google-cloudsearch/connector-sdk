@@ -15,7 +15,7 @@ delimited text file that uses a comma to separate values.
 
    b. Checkout the desired version of the SDK:
       ```
-      git checkout tags/v1-0.0.3
+      git checkout tags/v1-0.0.5
       ```
 
    c. Install the SDK components:
@@ -26,7 +26,7 @@ delimited text file that uses a comma to separate values.
 2. Run the connector
    ```
    java \
-      -jar csv/target/google-cloudsearch-csv-connector-v1-0.0.3.jar \
+      -jar csv/target/google-cloudsearch-csv-connector-v1-0.0.5.jar \
       -Dconfig=my.config
    ```
 
