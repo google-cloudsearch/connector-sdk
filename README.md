@@ -28,7 +28,7 @@ Building the Google Cloud Search Connector SDK requires the following developmen
 
 2. Checkout the desired version of the SDK:
    ```
-   git checkout tags/v1-0.0.3
+   git checkout tags/v1-0.0.5
    ```
 
 3. Install the SDK components:
