@@ -102,6 +102,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.StreamSupport;
+import junitparams.JUnitParamsRunner;
+import junitparams.Parameters;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -112,14 +114,16 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 /** Unit test methods for {@link IndexingServiceImpl}. TODO(tvartak) : Use mockito for all tests */
-@RunWith(MockitoJUnitRunner.class)
+@RunWith(JUnitParamsRunner.class)
 public class IndexingServiceTest {
 
   private static final String ITEMS_RESOURCE_PREFIX = "datasources/source/items/";
 
+  @Rule public MockitoRule rule = MockitoJUnit.rule();
   @Rule public ExpectedException thrown = ExpectedException.none();
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public SetupConfigRule setupConfig = SetupConfigRule.uninitialized();
@@ -291,6 +295,55 @@ public class IndexingServiceTest {
         .setQuotaServer(null)
         .setBatchPolicy(new BatchPolicy.Builder().build())
         .build();
+  }
+
+  @Test
+  @Parameters({"SYNCHRONOUS", "ASYNCHRONOUS"})
+  public void fromConfiguration_apiDefaultRequestMode_isSet(String testRequestMode)
+      throws Exception {
+    JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
+    CredentialFactory credentialFactory =
+        scopes ->
+            new MockGoogleCredential.Builder()
+                .setTransport(transport)
+                .setJsonFactory(jsonFactory)
+                .build();
+    Properties config = new Properties();
+    config.put(IndexingServiceImpl.SOURCE_ID, "sourceId");
+    config.put(IndexingServiceImpl.IDENTITY_SOURCE_ID, "identitySourceId");
+    File serviceAcctFile = temporaryFolder.newFile("serviceaccount.json");
+    config.put(
+        LocalFileCredentialFactory.SERVICE_ACCOUNT_KEY_FILE_CONFIG,
+        serviceAcctFile.getAbsolutePath());
+    config.put(IndexingServiceImpl.INDEXING_SERVICE_REQUEST_MODE, testRequestMode);
+    setupConfig.initConfig(config);
+    ListenableFuture<Operation> expected = Futures.immediateFuture(new Operation());
+    when(batchingService.indexItem(any())).thenReturn(expected);
+
+    IndexingServiceImpl.Builder indexingServiceBuilder =
+        IndexingServiceImpl.Builder.fromConfiguration(Optional.empty(), "unitTest");
+    this.indexingService = indexingServiceBuilder
+        .setTransport(transport)
+        .setCredentialFactory(credentialFactory)
+        .setService(cloudSearch)
+        .setBatchingIndexingService(batchingService)
+        .setContentUploadService(contentUploadService)
+        .setContentUploadThreshold(CONTENT_UPLOAD_THRESHOLD)
+        .setServiceManagerHelper(serviceManagerHelper)
+        .setQuotaServer(quotaServer)
+        .build();
+    this.indexingService.startAsync().awaitRunning();
+
+    indexingService.deleteItem(GOOD_ID, "abc".getBytes(UTF_8), RequestMode.UNSPECIFIED);
+    verify(batchingService).deleteItem(deleteCaptor.capture());
+    Items.Delete deleteRequest = deleteCaptor.getValue();
+    assertEquals(testRequestMode, deleteRequest.getMode());
+
+    indexingService.indexItem(new Item().setName(GOOD_ID), RequestMode.UNSPECIFIED);
+    verify(batchingService).indexItem(indexCaptor.capture());
+    Items.Index updateRequest = indexCaptor.getValue();
+    IndexItemRequest indexItemRequest = (IndexItemRequest) updateRequest.getJsonContent();
+    assertEquals(testRequestMode, indexItemRequest.getMode());
   }
 
   /*
