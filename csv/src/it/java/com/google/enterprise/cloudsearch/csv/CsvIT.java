@@ -403,6 +403,47 @@ public class CsvIT {
     }
   }
 
+  @Test
+  // This sets the default request mode to asynchronous and verifies that indexing
+  // succeeded, but it doesn't have a way to check that the requests are actually
+  // constructed and sent with the asynchronous mode.
+  public void defaultRequestMode_asynchronous_succeeds() throws IOException, InterruptedException {
+    Properties config = new Properties();
+    String mockItemId1 = getItemId(indexingSourceId, "1");
+    File csvFile = csvFileFolder.newFile("testMode.csv");
+    try {
+      createFile(csvFile, TEST_CSV_SINGLE);
+      config.setProperty("csv.filePath", csvFile.getAbsolutePath());
+      config.setProperty("csv.skipHeaderRecord", "true");
+      config.setProperty("csv.csvColumns", "emp, empName, Org");
+      config.setProperty("csv.uniqueKeyColumns", "emp");
+      config.setProperty("url.columns", "empName");
+      config.setProperty("url.format", "https://www.example.com/viewURL={0}");
+      config.setProperty("contentTemplate.csv.title", "CSV-Connector-Testing");
+      config.setProperty("itemMetadata.title.field", "empName");
+      config.setProperty("connector.runOnce", "true");
+      config.setProperty("defaultAcl.public", "true");
+      config.setProperty("api.defaultRequestMode", "ASYNCHRONOUS");
+      IndexingApplication csvConnector =
+          runCsvConnector(setupPropertiesConfigAndRunConnector(config));
+      csvConnector.awaitTerminated();
+      MockItem expectedItem1 = new MockItem.Builder(mockItemId1)
+          .setTitle("GoogleCloudSearch1")
+          .setContentLanguage("en")
+          .setItemType(ItemType.CONTENT_ITEM.toString())
+          .setSourceRepositoryUrl("https://www.example.com/viewURL=GoogleCloudSearch1")
+          .build();
+      logger.log(Level.INFO, "Verifying mock item 1 >> {0}...", expectedItem1);
+      util.waitUntilEqual(mockItemId1, expectedItem1.getItem());
+    } finally {
+      try {
+        csvFile.delete();
+      } finally {
+        v1Client.deleteItemsIfExist(Collections.singletonList(mockItemId1));
+      }
+    }
+  }
+
   private String[] setupPropertiesConfigAndRunConnector(Properties testSpecificConfig)
       throws IOException {
     logger.log(Level.FINE, "Setting up properties file.");
