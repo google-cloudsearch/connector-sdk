@@ -21,9 +21,9 @@ import static com.google.enterprise.cloudsearch.sdk.Util.getItemId;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.google.api.client.repackaged.com.google.common.base.Strings;
 import com.google.api.services.cloudsearch.v1.model.Date;
 import com.google.api.services.cloudsearch.v1.model.Item;
+import com.google.common.base.Strings;
 import com.google.enterprise.cloudsearch.csvconnector.CSVRepository;
 import com.google.enterprise.cloudsearch.sdk.Util;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
