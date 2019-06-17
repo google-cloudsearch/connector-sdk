@@ -15,9 +15,45 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.CoreMatchers.not;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.when;
+
 import com.google.api.client.util.DateTime;
+import com.google.api.services.cloudsearch.v1.model.BooleanPropertyOptions;
 import com.google.api.services.cloudsearch.v1.model.Date;
-import com.google.api.services.cloudsearch.v1.model.*;
+import com.google.api.services.cloudsearch.v1.model.DatePropertyOptions;
+import com.google.api.services.cloudsearch.v1.model.DateValues;
+import com.google.api.services.cloudsearch.v1.model.DoublePropertyOptions;
+import com.google.api.services.cloudsearch.v1.model.DoubleValues;
+import com.google.api.services.cloudsearch.v1.model.EnumPropertyOptions;
+import com.google.api.services.cloudsearch.v1.model.EnumValuePair;
+import com.google.api.services.cloudsearch.v1.model.EnumValues;
+import com.google.api.services.cloudsearch.v1.model.GSuitePrincipal;
+import com.google.api.services.cloudsearch.v1.model.HtmlPropertyOptions;
+import com.google.api.services.cloudsearch.v1.model.HtmlValues;
+import com.google.api.services.cloudsearch.v1.model.IntegerPropertyOptions;
+import com.google.api.services.cloudsearch.v1.model.IntegerValues;
+import com.google.api.services.cloudsearch.v1.model.NamedProperty;
+import com.google.api.services.cloudsearch.v1.model.ObjectDefinition;
+import com.google.api.services.cloudsearch.v1.model.ObjectPropertyOptions;
+import com.google.api.services.cloudsearch.v1.model.ObjectValues;
+import com.google.api.services.cloudsearch.v1.model.Principal;
+import com.google.api.services.cloudsearch.v1.model.PropertyDefinition;
+import com.google.api.services.cloudsearch.v1.model.Schema;
+import com.google.api.services.cloudsearch.v1.model.StructuredDataObject;
+import com.google.api.services.cloudsearch.v1.model.TextPropertyOptions;
+import com.google.api.services.cloudsearch.v1.model.TextValues;
+import com.google.api.services.cloudsearch.v1.model.TimestampPropertyOptions;
+import com.google.api.services.cloudsearch.v1.model.TimestampValues;
 import com.google.common.base.Converter;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Multimap;
@@ -27,6 +63,16 @@ import com.google.enterprise.cloudsearch.sdk.StartupException;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.StructuredData.ResetStructuredDataRule;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
+import java.util.TimeZone;
+import java.util.stream.Collectors;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ErrorCollector;
@@ -35,16 +81,6 @@ import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
-
-import java.io.File;
-import java.io.IOException;
-import java.util.*;
-import java.util.stream.Collectors;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.hamcrest.CoreMatchers.*;
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.when;
 
 /** Tests for {@link StructuredData}. */
 
@@ -765,14 +801,14 @@ public class StructuredDataTest {
     setupSchema();
     StructuredData.setIgnoreConversionErrors(true);
     StructuredDataObject expected =
-            new StructuredDataObject()
-                    .setProperties(
-                            Arrays.asList(
-                                    new NamedProperty()
-                                            .setName("dateProperty")
-                                            .setDateValues(new DateValues().setValues(
-                                                    Arrays.asList(new Date().setDay(1).setMonth(1).setYear(2019))))
-                            ));
+        new StructuredDataObject()
+            .setProperties(
+                Arrays.asList(
+                    new NamedProperty()
+                        .setName("dateProperty")
+                        .setDateValues(new DateValues().setValues(
+                            Arrays.asList(new Date().setDay(1).setMonth(1).setYear(2019))))
+                ));
 
     Multimap<String, Object> values = ArrayListMultimap.create();
     values.put("dateProperty", " - - ");
