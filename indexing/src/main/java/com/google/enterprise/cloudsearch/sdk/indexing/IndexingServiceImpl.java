@@ -997,7 +997,7 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   }
 
   private String getQueue(String queue) {
-    return queue == null ? this.defaultQueue : queue;
+    return (queue == null || queue.isEmpty()) ? this.defaultQueue : queue;
   }
 
   /**
