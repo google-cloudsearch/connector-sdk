@@ -38,6 +38,7 @@ import com.google.api.services.cloudsearch.v1.model.Schema;
 import com.google.api.services.cloudsearch.v1.model.StructuredDataObject;
 import com.google.api.services.cloudsearch.v1.model.TextValues;
 import com.google.api.services.cloudsearch.v1.model.TimestampValues;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Converter;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -117,6 +118,8 @@ public class StructuredData {
   public static final String DATETIME_PATTERNS = "structuredData.dateTimePatterns";
   public static final String LOCAL_SCHEMA = "structuredData.localSchema";
 
+  public static final String IGNORE_CONVERSION_ERRORS = "structuredData.ignoreConversionErrors";
+
   private static final String DATETIME_PATTERNS_DELIMITER = ";";
   private static final ImmutableList<DateTimeParser> DEFAULT_DATETIME_PARSERS =
       ImmutableList.of(
@@ -130,6 +133,8 @@ public class StructuredData {
 
   private static final AtomicBoolean initialized = new AtomicBoolean();
   private static final List<DateTimeParser> dateTimeParsers = new ArrayList<>();
+
+  private static final AtomicBoolean ignoreConversionErrors = new AtomicBoolean();
 
   /** A map from object definition names to instances of this class. */
   private static final Map<String, StructuredData> structuredDataMapping =
@@ -177,6 +182,8 @@ public class StructuredData {
     if (patternErrors != null) {
       throw patternErrors;
     }
+
+    ignoreConversionErrors.set(Configuration.getBoolean(IGNORE_CONVERSION_ERRORS, Boolean.FALSE).get());
 
     Schema schema;
     String localSchemaPath = Configuration.getString(LOCAL_SCHEMA, "").get();
@@ -263,6 +270,15 @@ public class StructuredData {
   public static boolean hasObjectDefinition(String objectType) {
     checkState(isInitialized(), "StructuredData not initialized");
     return structuredDataMapping.containsKey(objectType);
+  }
+
+  /**
+   * Same as setting structuredData.ignoreConversionErrors in configuration
+   * @param ignore
+   */
+  @VisibleForTesting
+  public static void setIgnoreConversionErrors(boolean ignore) {
+    ignoreConversionErrors.set(ignore);
   }
 
   /**
@@ -356,15 +372,40 @@ public class StructuredData {
         return null;
       }
       if (!isRepeated) {
-        return propertyBuilder.getNamedProperty(
-            propertyName, Collections.singletonList(valueConverter.convert(nonNullValues.get(0))));
+        try {
+          return propertyBuilder.getNamedProperty(
+              propertyName, Collections.singletonList(valueConverter.convert(nonNullValues.get(0))));
+        } catch (IllegalArgumentException e) {
+          if (ignoreConversionErrors.get()) {
+            logger.log(Level.FINEST, "Ignoring conversion error: {0}", e.getMessage());
+            return null;
+          }
+          throw e;
+        }
       } else {
+        List<T> nonNullConvertedValues = nonNullValues
+            .stream()
+            .map(v -> convert(valueConverter, v))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+        if (nonNullConvertedValues.isEmpty()) {
+          return null;
+        }
         return propertyBuilder.getNamedProperty(
             propertyName,
-            nonNullValues
-                .stream()
-                .map(v -> valueConverter.convert(v))
-                .collect(Collectors.toList()));
+            nonNullConvertedValues);
+      }
+    }
+
+    private T convert(Converter<Object, T> converter, Object v) {
+      try {
+        return converter.convert(v);
+      } catch (IllegalArgumentException e) {
+        if (ignoreConversionErrors.get()) {
+          logger.log(Level.FINEST, "Ignoring conversion error: {0}", e.getMessage());
+          return null;
+        }
+        throw e;
       }
     }
   }

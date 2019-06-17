@@ -796,6 +796,28 @@ public class StructuredDataTest {
     converter.convert("2018-08-08T15:48:17.000-07:00 and so on");
   }
 
+  @Test
+  public void testIgnoreConversionErrors() throws IOException {
+    setupSchema();
+    StructuredData.setIgnoreConversionErrors(true);
+    StructuredDataObject expected =
+        new StructuredDataObject()
+            .setProperties(
+                Arrays.asList(
+                    new NamedProperty()
+                        .setName("dateProperty")
+                        .setDateValues(new DateValues().setValues(
+                            Arrays.asList(new Date().setDay(1).setMonth(1).setYear(2019))))
+                ));
+
+    Multimap<String, Object> values = ArrayListMultimap.create();
+    values.put("dateProperty", " - - ");
+    values.put("dateProperty", "2019-01-01");
+    values.put("dateProperty", "bad-date");
+    assertEquals(expected, StructuredData.getStructuredData("myObject", values));
+  }
+
+
   private void setupSchema() {
     Schema schema = new Schema();
     schema.setObjectDefinitions(
