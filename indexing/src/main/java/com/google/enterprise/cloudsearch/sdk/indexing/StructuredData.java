@@ -15,10 +15,29 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
+import static java.nio.charset.Charset.defaultCharset;
+
 import com.google.api.client.json.JsonObjectParser;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.client.util.DateTime;
-import com.google.api.services.cloudsearch.v1.model.*;
+import com.google.api.services.cloudsearch.v1.model.DateValues;
+import com.google.api.services.cloudsearch.v1.model.DoubleValues;
+import com.google.api.services.cloudsearch.v1.model.EnumPropertyOptions;
+import com.google.api.services.cloudsearch.v1.model.EnumValuePair;
+import com.google.api.services.cloudsearch.v1.model.EnumValues;
+import com.google.api.services.cloudsearch.v1.model.HtmlValues;
+import com.google.api.services.cloudsearch.v1.model.IntegerValues;
+import com.google.api.services.cloudsearch.v1.model.NamedProperty;
+import com.google.api.services.cloudsearch.v1.model.ObjectDefinition;
+import com.google.api.services.cloudsearch.v1.model.ObjectValues;
+import com.google.api.services.cloudsearch.v1.model.PropertyDefinition;
+import com.google.api.services.cloudsearch.v1.model.Schema;
+import com.google.api.services.cloudsearch.v1.model.StructuredDataObject;
+import com.google.api.services.cloudsearch.v1.model.TextValues;
+import com.google.api.services.cloudsearch.v1.model.TimestampValues;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Converter;
 import com.google.common.base.Strings;
@@ -29,10 +48,6 @@ import com.google.enterprise.cloudsearch.sdk.Application;
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import com.google.enterprise.cloudsearch.sdk.StartupException;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
-import org.junit.rules.TestRule;
-import org.junit.runner.Description;
-import org.junit.runners.model.Statement;
-
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
@@ -49,15 +64,26 @@ import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.time.temporal.TemporalAccessor;
 import java.time.temporal.TemporalQueries;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-
-import static com.google.common.base.Preconditions.*;
-import static java.nio.charset.Charset.defaultCharset;
+import org.junit.rules.TestRule;
+import org.junit.runner.Description;
+import org.junit.runners.model.Statement;
 
 /**
  * Helper utility to generate a {@link StructuredDataObject}.
@@ -341,14 +367,14 @@ public class StructuredData {
 
     private NamedProperty getProperty(String propertyName, Collection<Object> values) {
       List<Object> nonNullValues =
-              values.stream().filter(Objects::nonNull).collect(Collectors.toList());
+          values.stream().filter(Objects::nonNull).collect(Collectors.toList());
       if (nonNullValues.isEmpty()) {
         return null;
       }
       if (!isRepeated) {
         try {
           return propertyBuilder.getNamedProperty(
-                  propertyName, Collections.singletonList(valueConverter.convert(nonNullValues.get(0))));
+              propertyName, Collections.singletonList(valueConverter.convert(nonNullValues.get(0))));
         } catch (IllegalArgumentException e) {
           if (ignoreConversionErrors.get()) {
             logger.log(Level.FINEST, "Ignoring conversion error: {0}", e.getMessage());
@@ -358,16 +384,16 @@ public class StructuredData {
         }
       } else {
         List<T> nonNullConvertedValues = nonNullValues
-                .stream()
-                .map(v -> convert(valueConverter, v))
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-        if(nonNullConvertedValues.isEmpty()) {
+            .stream()
+            .map(v -> convert(valueConverter, v))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toList());
+        if (nonNullConvertedValues.isEmpty()) {
           return null;
         }
         return propertyBuilder.getNamedProperty(
-                propertyName,
-                nonNullConvertedValues);
+            propertyName,
+            nonNullConvertedValues);
       }
     }
 
@@ -375,7 +401,7 @@ public class StructuredData {
       try {
         return converter.convert(v);
       } catch (IllegalArgumentException e) {
-        if(ignoreConversionErrors.get()) {
+        if (ignoreConversionErrors.get()) {
           logger.log(Level.FINEST, "Ignoring conversion error: {0}", e.getMessage());
           return null;
         }
