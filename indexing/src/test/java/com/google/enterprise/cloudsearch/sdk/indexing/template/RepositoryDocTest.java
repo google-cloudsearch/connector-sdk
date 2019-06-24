@@ -261,7 +261,7 @@ public class RepositoryDocTest {
             .setItem(item)
             .setContent(content, ContentFormat.TEXT)
             .addChildId("id1", pushItem1)
-            .addChildId("id2", pushItem2)
+            .addChildId("id2+b;more", pushItem2)
             .build();
 
     SettableFuture<Item> updateFuture = SettableFuture.create();
@@ -286,7 +286,7 @@ public class RepositoryDocTest {
     verify(mockIndexingService)
         .indexItemAndContent(item, content, null, ContentFormat.TEXT, RequestMode.UNSPECIFIED);
     verify(mockIndexingService).push("id1", pushItem1);
-    verify(mockIndexingService).push("id2", pushItem2);
+    verify(mockIndexingService).push("id2+b;more", pushItem2);
   }
 
   @Test
