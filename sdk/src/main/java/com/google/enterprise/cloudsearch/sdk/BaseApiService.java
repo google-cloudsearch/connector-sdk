@@ -39,11 +39,15 @@ import com.google.api.client.util.BackOff;
 import com.google.api.client.util.Beta;
 import com.google.api.client.util.ExponentialBackOff;
 import com.google.api.client.util.FieldInfo;
+import com.google.api.client.util.escape.Escaper;
+import com.google.api.client.util.escape.PercentEscaper;
 import com.google.common.base.Strings;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.enterprise.cloudsearch.sdk.StatsManager.OperationStats;
 import com.google.enterprise.cloudsearch.sdk.StatsManager.OperationStats.Event;
+import java.net.URLDecoder;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.security.GeneralSecurityException;
 import java.util.Collection;
 import java.util.Collections;
@@ -410,6 +414,31 @@ public abstract class BaseApiService<T extends AbstractGoogleJsonClient>
       }
     }
     return object;
+  }
+
+  /**
+   * This escaper behaves the same as CharEscapers.escapeUriPath,
+   * except that semi-colons are also escaped, and the same as
+   * UrlEscapers.urlPathSegmentEscaper, except that semi-colons and
+   * plus-signs are also escaped. Both characters cause problems
+   * somewhere in the Google API Client for Java.
+   *
+   * @see com.google.api.client.util.escape.CharEscapers#escapeUriPath
+   * @see com.google.common.net.UrlEscapers#urlPathSegmentEscaper
+   */
+  private static final Escaper URL_PATH_SEGMENT_ESCAPER =
+      new PercentEscaper(".-~_@:!$&'()*,=", false);
+
+  protected static String escapeResourceName(String name) {
+    return URL_PATH_SEGMENT_ESCAPER.escape(name);
+  }
+
+  protected static String decodeResourceName(String name) {
+    try {
+      return URLDecoder.decode(name.replace("+", "%2B"), "UTF-8");
+    } catch (UnsupportedEncodingException e) {
+      throw new IllegalArgumentException("unable to decode resource name " + name, e);
+    }
   }
 
   /**
