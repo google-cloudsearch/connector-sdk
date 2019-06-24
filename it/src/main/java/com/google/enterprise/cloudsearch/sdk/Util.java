@@ -35,7 +35,10 @@ public class Util {
   }
 
   public static String getItemId(String sourceId, String name) {
-    return "datasources/" + sourceId + "/items/" + name;
+    return "datasources/" + sourceId + "/items/" + BaseApiService.escapeResourceName(name);
   }
 
+  public static String unescapeItemName(String name) {
+    return BaseApiService.decodeResourceName(name);
+  }
 }

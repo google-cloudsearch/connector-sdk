@@ -59,9 +59,7 @@ import com.google.api.services.cloudsearch.v1.model.UploadItemRef;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
-import com.google.common.escape.Escaper;
 import com.google.common.io.ByteStreams;
-import com.google.common.net.UrlEscapers;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -81,8 +79,6 @@ import com.google.enterprise.cloudsearch.sdk.StatsManager.OperationStats;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -148,7 +144,6 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
   public static final int DEFAULT_CONTENT_UPLOAD_THRESHOLD_BYTES = 100000; // ~100KB
   public static final Set<String> API_SCOPES =
       Collections.singleton("https://www.googleapis.com/auth/cloud_search");
-  private static final Escaper URL_PATH_SEGMENT_ESCAPER = UrlEscapers.urlPathSegmentEscaper();
   private static final RequestMode DEFAULT_REQUEST_MODE = RequestMode.SYNCHRONOUS;
 
   private final String sourceId;
@@ -1062,18 +1057,6 @@ public class IndexingServiceImpl extends BaseApiService<CloudSearch> implements 
       return name;
     }
     return String.format(ITEM_RESOURCE_NAME_FORMAT, sourceId, escapeResourceName(name));
-  }
-
-  private static String escapeResourceName(String name) {
-    return URL_PATH_SEGMENT_ESCAPER.escape(name);
-  }
-
-  private static String decodeResourceName(String name) {
-    try {
-      return URLDecoder.decode(name.replace("+", "%2B"), "UTF-8");
-    } catch (UnsupportedEncodingException e) {
-      throw new IllegalArgumentException("unable to decode resource name " + name, e);
-    }
   }
 
   private void removeResourcePrefix(Item item) {
