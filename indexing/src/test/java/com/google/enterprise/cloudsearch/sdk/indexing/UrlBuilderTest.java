@@ -17,6 +17,7 @@ package com.google.enterprise.cloudsearch.sdk.indexing;
 
 import static org.hamcrest.CoreMatchers.isA;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import com.google.common.collect.ImmutableSet;
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
@@ -165,6 +166,32 @@ public class UrlBuilderTest {
     UrlBuilder urlBuilder = UrlBuilder.fromConfiguration();
     Set<String> missing = urlBuilder.getMissingColumns(allColumns);
     assertEquals(ImmutableSet.of("zipcode"), missing);
+  }
+
+  @Test
+  public void nullColumnValues_returnsNull() {
+    Properties config = new Properties();
+    config.put(UrlBuilder.CONFIG_COLUMNS, "id, name");
+    setupConfig.initConfig(config);
+    Map<String, Object> allColumnValues = new HashMap<String, Object>();
+    allColumnValues.put("id", "1#2#3");
+    allColumnValues.put("name", null);
+
+    UrlBuilder urlBuilder = UrlBuilder.fromConfiguration();
+    assertNull(urlBuilder.buildUrl(allColumnValues));
+  }
+
+  @Test
+  public void missingColumnValues_returnsNull() {
+    Properties config = new Properties();
+    config.put(UrlBuilder.CONFIG_COLUMNS, "id, name");
+    setupConfig.initConfig(config);
+    Map<String, Object> allColumnValues = new HashMap<String, Object>();
+    allColumnValues.put("id", "1#2#3");
+    // no name value
+
+    UrlBuilder urlBuilder = UrlBuilder.fromConfiguration();
+    assertNull(urlBuilder.buildUrl(allColumnValues));
   }
 
   @Test
