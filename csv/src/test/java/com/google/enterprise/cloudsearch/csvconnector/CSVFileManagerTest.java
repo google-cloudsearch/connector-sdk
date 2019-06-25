@@ -521,7 +521,9 @@ public class CSVFileManagerTest {
     createFile(tmpfile, UTF_8, testCSVEmptyField);
     Properties config = new Properties();
     config.put(CSVFileManager.FILEPATH, tmpfile.getAbsolutePath());
-    config.put(UrlBuilder.CONFIG_COLUMNS, "term,author");
+    config.put(UrlBuilder.CONFIG_COLUMNS, "term, definition");
+    config.put(UrlBuilder.CONFIG_FORMAT, "/lookup?term={0}&definition={1}");
+    config.put(UrlBuilder.CONFIG_COLUMNS_TO_ESCAPE, "term, definition");
     config.put(CONTENT_TITLE, "term");
     config.put(CONTENT_HIGH, "term,definition");
     config.put(CONTENT_LOW, "author");
@@ -531,12 +533,16 @@ public class CSVFileManagerTest {
     CSVFileManager csvFileManager = CSVFileManager.fromConfiguration();
     CloseableIterable<CSVRecord> csvFile = csvFileManager.getCSVFile();
     CSVRecord csvRecord = getOnlyElement(csvFile);
+    Item item = csvFileManager.createItem(csvRecord);
 
     ByteArrayContent content = csvFileManager.createContent(csvRecord);
     String html = CharStreams
         .toString(new InputStreamReader(content.getInputStream(), UTF_8));
-    //definition part has empty value
+    // Definition field has empty value.
     assertThat(html, containsString("<p>definition:</p>\n" + "  <h1></h1>"));
+    // Empty field is OK in UrlBuilder.
+    assertEquals("/lookup?term=moma%20search&definition=",
+        item.getMetadata().getSourceRepositoryUrl());
   }
 
   @Test

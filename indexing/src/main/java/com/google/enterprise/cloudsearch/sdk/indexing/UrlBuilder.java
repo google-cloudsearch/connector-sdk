@@ -68,13 +68,21 @@ public class UrlBuilder {
    * {@value #CONFIG_COLUMNS} columns.
    *
    * @param allColumnValues a map from column names to column values
-   * @return the escaped URL
+   * @return the escaped URL, or null if one or more configured column names are missing
+   * or have null values in {@code allColumnValues}
    */
   public String buildUrl(Map<String, ?> allColumnValues) {
     Set<String> missing = getMissingColumns(allColumnValues.keySet());
-    checkArgument(missing.isEmpty(), "Missing URL column(s): %s", missing);
+    if (!missing.isEmpty()) {
+      logger.log(Level.WARNING, "Missing value(s) for URL column(s): %s", missing);
+      return null;
+    }
     List<Object> values = new ArrayList<Object>();
     for (String col : columns) {
+      if (allColumnValues.get(col) == null) {
+        logger.log(Level.WARNING, "Missing value for URL column: %s", col);
+        return null;
+      }
       if (columnsToEscape.contains(col)) {
         values.add(escaper.escape(allColumnValues.get(col).toString()));
       } else {
