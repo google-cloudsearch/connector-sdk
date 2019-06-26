@@ -74,13 +74,13 @@ public class UrlBuilder {
   public String buildUrl(Map<String, ?> allColumnValues) {
     Set<String> missing = getMissingColumns(allColumnValues.keySet());
     if (!missing.isEmpty()) {
-      logger.log(Level.WARNING, "Missing value(s) for URL column(s): %s", missing);
+      logger.log(Level.WARNING, "Missing value(s) for URL column(s): {0}", missing);
       return null;
     }
     List<Object> values = new ArrayList<Object>();
     for (String col : columns) {
       if (allColumnValues.get(col) == null) {
-        logger.log(Level.WARNING, "Missing value for URL column: %s", col);
+        logger.log(Level.WARNING, "Missing value for URL column: {0}", col);
         return null;
       }
       if (columnsToEscape.contains(col)) {
