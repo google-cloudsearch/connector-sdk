@@ -20,12 +20,15 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.when;
 
 import com.google.enterprise.cloudsearch.sdk.config.SensitiveDataCodec.SecurityLevel;
 import com.google.enterprise.cloudsearch.sdk.config.SensitiveDataCodec.SensitiveDataCodecHelper;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
@@ -151,5 +154,54 @@ public class SensitiveDataCodecTest {
     String decrypt = sensitiveDataCodec.decodeData(encrypt);
     assertEquals(readable, decrypt);
     assertThat(encrypt, startsWith("pkc:"));
+  }
+
+  @Test
+  public void main_badSecurityLevel_throwsException() throws Exception {
+    try {
+      System.setProperty("securityLevel", "foo");
+      thrown.expect(IOException.class);
+      SensitiveDataCodec.main(null);
+    } finally {
+      System.clearProperty("securityLevel");
+    }
+  }
+
+  @Test
+  public void main_missingSecurityLevel_throwsException() throws Exception {
+    System.clearProperty("securityLevel");
+    thrown.expect(IOException.class);
+    SensitiveDataCodec.main(null);
+  }
+
+  @Test
+  public void mainHelper_isQuiet_succeeds() throws Exception {
+    System.setProperty("securityLevel", "PLAIN_TEXT");
+    String[] args = new String[] { "--quiet" };
+    InputStream in = new ByteArrayInputStream("password".getBytes(UTF_8));
+
+    String result = SensitiveDataCodec.mainHelper(args, in, null);
+    assertEquals("pl:password", result);
+  }
+
+  @Test
+  public void mainHelper_isNotQuiet_succeeds() throws Exception {
+    System.setProperty("securityLevel", "PLAIN_TEXT");
+    String[] args = new String[] {};
+    InputStream in = new ByteArrayInputStream(new byte[] {});
+
+    String result = SensitiveDataCodec.mainHelper(args, in,
+        prompt -> "password".toCharArray());
+    assertEquals("Encoded value is: pl:password", result);
+  }
+
+  @Test
+  public void mainHelper_noConsole_returnsNull() throws Exception {
+    System.setProperty("securityLevel", "PLAIN_TEXT");
+    String[] args = new String[] {};
+    InputStream in = new ByteArrayInputStream(new byte[] {});
+
+    String result = SensitiveDataCodec.mainHelper(args, in, null);
+    assertNull(result);
   }
 }

@@ -22,6 +22,7 @@ import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import java.io.BufferedReader;
 import java.io.Console;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.security.InvalidKeyException;
@@ -29,6 +30,7 @@ import java.security.Key;
 import java.security.KeyPair;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.function.Function;
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
@@ -268,6 +270,22 @@ public class SensitiveDataCodec {
    * without any additional text.
    */
   public static void main(String[] args) throws IOException {
+    Function<String, char[]> readPassword;
+    Console console = System.console();
+    if (console == null) {
+      readPassword = null;
+    } else {
+      readPassword = console::readPassword;
+    }
+    String result = mainHelper(args, System.in, readPassword);
+    if (result != null) {
+      System.out.println(result);
+    }
+  }
+
+  @VisibleForTesting
+  static String mainHelper(String[] args, InputStream in, Function<String, char[]> readPassword)
+      throws IOException {
     String securityLevelStr = System.getProperty("securityLevel");
     SecurityLevel securityLevel;
     try {
@@ -283,17 +301,15 @@ public class SensitiveDataCodec {
     SensitiveDataCodec sensitiveDataCodec = new SensitiveDataCodec();
     boolean isQuiet = isParameterSet(args, "--quiet");
     if (isQuiet) {
-      BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-      String encodedValue = sensitiveDataCodec.encodeData(reader.readLine(), securityLevel);
-      System.out.println(encodedValue);
+      BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+      return sensitiveDataCodec.encodeData(reader.readLine(), securityLevel);
     } else {
-      Console console = System.console();
-      if (console == null) {
-        return;
+      if (readPassword == null) {
+        return null;
       }
-      char[] valueToEncode = console.readPassword("Sensitive Value: ");
+      char[] valueToEncode = readPassword.apply("Sensitive Value: ");
       String encodedValue = sensitiveDataCodec.encodeData(new String(valueToEncode), securityLevel);
-      System.out.println("Encoded value is: " + encodedValue);
+      return "Encoded value is: " + encodedValue;
     }
   }
 }
