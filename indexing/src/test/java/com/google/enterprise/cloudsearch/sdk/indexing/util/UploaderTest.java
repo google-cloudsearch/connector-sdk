@@ -6,6 +6,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assume.assumeThat;
@@ -134,7 +135,7 @@ public class UploaderTest {
     verify(visitor).execute(captor.capture());
     Items.Delete delete = (Items.Delete) captor.getValue();
     assertEquals(enableDebugging, delete.getDebugOptionsEnableDebugging());
-    assertEquals("testConnectorName", delete.getConnectorName());
+    assertEquals("datasources/ds1/connectors/testConnectorName", delete.getConnectorName());
     assertEquals(RequestMode.SYNCHRONOUS.name(), delete.getMode());
     assertNotNull(delete.getVersion());
   }
@@ -182,7 +183,7 @@ public class UploaderTest {
     DeleteQueueItemsRequest dqiRequest =
         (DeleteQueueItemsRequest) deleteQueueItems.getJsonContent();
     assertEquals(enableDebugging, dqiRequest.getDebugOptions().getEnableDebugging());
-    assertEquals("testConnectorName", dqiRequest.getConnectorName());
+    assertEquals("datasources/ds1/connectors/testConnectorName", dqiRequest.getConnectorName());
     assertEquals("testQueue", dqiRequest.getQueue());
   }
 
@@ -225,7 +226,7 @@ public class UploaderTest {
     verify(visitor).execute(captor.capture());
     Items.Get get = (Items.Get) captor.getValue();
     assertEquals(enableDebugging, get.getDebugOptionsEnableDebugging());
-    assertEquals("testConnectorName", get.getConnectorName());
+    assertEquals("datasources/ds1/connectors/testConnectorName", get.getConnectorName());
   }
 
   @Test
@@ -268,7 +269,8 @@ public class UploaderTest {
     Items.Push push = (Items.Push) captor.getValue();
     PushItemRequest pushItemRequest = (PushItemRequest) push.getJsonContent();
     assertEquals(enableDebugging, pushItemRequest.getDebugOptions().getEnableDebugging());
-    assertEquals("testConnectorName", pushItemRequest.getConnectorName());
+    assertEquals("datasources/ds1/connectors/testConnectorName",
+        pushItemRequest.getConnectorName());
     PushItem item = pushItemRequest.getItem();
     assertEquals("testQueue", item.getQueue());
   }
@@ -315,7 +317,8 @@ public class UploaderTest {
     UnreserveItemsRequest unreserveItemsRequest =
         (UnreserveItemsRequest) unreserve.getJsonContent();
     assertEquals(enableDebugging, unreserveItemsRequest.getDebugOptions().getEnableDebugging());
-    assertEquals("testConnectorName", unreserveItemsRequest.getConnectorName());
+    assertEquals("datasources/ds1/connectors/testConnectorName",
+        unreserveItemsRequest.getConnectorName());
     assertEquals("default", unreserveItemsRequest.getQueue());
   }
 
@@ -531,7 +534,8 @@ public class UploaderTest {
     Items.Index index = (Items.Index) captor.getValue();
     IndexItemRequest indexItemRequest = (IndexItemRequest) index.getJsonContent();
     assertEquals(enableDebugging, indexItemRequest.getDebugOptions().getEnableDebugging());
-    assertEquals("testConnectorName", indexItemRequest.getConnectorName());
+    assertEquals("datasources/ds1/connectors/testConnectorName",
+        indexItemRequest.getConnectorName());
     assertNotNull(indexItemRequest.getItem());
     assertNotNull(indexItemRequest.getItem().decodeVersion());
     assertEquals(RequestMode.SYNCHRONOUS.name(), indexItemRequest.getMode());
@@ -584,7 +588,8 @@ public class UploaderTest {
     Items.Index index = (Items.Index) captor.getValue();
     IndexItemRequest indexItemRequest = (IndexItemRequest) index.getJsonContent();
     assertEquals(enableDebugging, indexItemRequest.getDebugOptions().getEnableDebugging());
-    assertEquals("testConnectorName", indexItemRequest.getConnectorName());
+    assertEquals("datasources/ds1/connectors/testConnectorName",
+        indexItemRequest.getConnectorName());
     assertNotNull(indexItemRequest.getItem());
     assertNotNull(indexItemRequest.getItem().decodeVersion());
     assertNotNull(indexItemRequest.getItem().getContent());
@@ -686,15 +691,17 @@ public class UploaderTest {
     Items.Poll poll = (Items.Poll) captor.getValue();
     PollItemsRequest pollItemsRequest = (PollItemsRequest) poll.getJsonContent();
     assertEquals(enableDebugging, pollItemsRequest.getDebugOptions().getEnableDebugging());
-    assertEquals("testConnectorName", pollItemsRequest.getConnectorName());
+    assertEquals("datasources/ds1/connectors/testConnectorName",
+        pollItemsRequest.getConnectorName());
     assertEquals(Integer.valueOf(10), pollItemsRequest.getLimit());
     assertEquals("default", pollItemsRequest.getQueue());
     assertEquals(Collections.singletonList("MODIFIED"), pollItemsRequest.getStatusCodes());
   }
 
+  // Tests both values for enableDebugging and both formats for connector name
   @Test
-  @Parameters({"true", "false"})
-  public void listItems(boolean enableDebugging) throws Exception {
+  @Parameters({"true|testConnectorName", "false|datasources/ds1/connectors/testConnectorName"})
+  public void listItems(boolean enableDebugging, String connectorName) throws Exception {
     when(uploaderHelper.createTransport())
         .thenReturn(
             new MockHttpTransport() {
@@ -714,7 +721,7 @@ public class UploaderTest {
             .setServiceAccountKeyFilePath(SERVICE_ACCOUNT_FILE_PATH)
             .setUploaderHelper(uploaderHelper)
             .setEnableDebugging(enableDebugging)
-            .setConnectorName("testConnectorName")
+            .setConnectorName(connectorName)
             .build());
     Uploader.Visitor visitor = spy(uploader.new Visitor("ds1"));
     when(uploader.getVisitor("ds1")).thenReturn(visitor);
@@ -733,9 +740,43 @@ public class UploaderTest {
     verify(visitor).execute(captor.capture());
     Items.List list = (Items.List) captor.getValue();
     assertEquals(enableDebugging, list.getDebugOptionsEnableDebugging());
-    assertEquals("testConnectorName", list.getConnectorName());
+    assertEquals("datasources/ds1/connectors/testConnectorName", list.getConnectorName());
     assertEquals(Integer.valueOf(10), list.getPageSize());
     assertEquals(true, list.getBrief());
+  }
+
+  @Test
+  public void listItems_nullConnectorName_succeeds() throws Exception {
+    when(uploaderHelper.createTransport())
+        .thenReturn(
+            new MockHttpTransport() {
+              @Override
+              public MockLowLevelHttpRequest buildRequest(String method, String url) {
+                return buildApiRequest(200, new Operation());
+              }
+            });
+    Uploader uploader = spy(
+        new Uploader.Builder()
+            .setServiceAccountKeyFilePath(SERVICE_ACCOUNT_FILE_PATH)
+            .setUploaderHelper(uploaderHelper)
+            .setConnectorName(null)
+            .build());
+    Uploader.Visitor visitor = spy(uploader.new Visitor("ds1"));
+    when(uploader.getVisitor("ds1")).thenReturn(visitor);
+
+    UploadRequest uploadRequest = new UploadRequest();
+    uploadRequest.sourceId = "ds1";
+    UploadRequest.ListRequest listRequest = new UploadRequest.ListRequest();
+    listRequest.pageSize = 10;
+    listRequest.brief = true;
+    uploadRequest.requests = Collections.singletonList(listRequest);
+    uploader.execute(uploadRequest);
+
+    ArgumentCaptor<CloudSearchRequest<?>> captor =
+        ArgumentCaptor.forClass(CloudSearchRequest.class);
+    verify(visitor).execute(captor.capture());
+    Items.List list = (Items.List) captor.getValue();
+    assertNull(list.getConnectorName());
   }
 
   @Test
