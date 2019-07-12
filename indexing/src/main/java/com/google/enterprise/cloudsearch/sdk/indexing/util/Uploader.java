@@ -268,10 +268,13 @@ public class Uploader {
   //a visitor class to visit each request individually.
   class Visitor {
 
-    private static final String RESOURCE_NAME_FORMAT = "datasources/%s";
+    private static final String DATA_SOURCES_PREFIX = "datasources/";
+    private static final String RESOURCE_NAME_FORMAT = DATA_SOURCES_PREFIX + "%s";
     private static final String ITEM_RESOURCE_NAME_FORMAT = RESOURCE_NAME_FORMAT + "/items/%s";
+    private static final String CONNECTOR_NAME_FORMAT = RESOURCE_NAME_FORMAT + "/connectors/%s";
     private String resourcePrefix;
     private final String sourceId;
+    private final String connectorName;
 
     private byte[] getVersion() {
       return String.valueOf(System.currentTimeMillis()).getBytes();
@@ -280,6 +283,7 @@ public class Uploader {
     Visitor(String sourceId) {
       this.sourceId = sourceId;
       resourcePrefix = String.format(RESOURCE_NAME_FORMAT, sourceId);
+      this.connectorName = getConnectorResourceName(sourceId, Uploader.this.connectorName);
     }
 
     Operation upload(UploadRequest.DeleteRequest deleteRequest) throws IOException {
@@ -586,6 +590,17 @@ public class Uploader {
     private String getItemResourceName(String sourceId, String name) {
       return String.format(
           ITEM_RESOURCE_NAME_FORMAT, sourceId, escapeResourceName(name));
+    }
+
+    private String getConnectorResourceName(String sourceId, String connectorName) {
+      if (connectorName == null) {
+        return null;
+      }
+      if (connectorName.startsWith(DATA_SOURCES_PREFIX)) {
+        return connectorName;
+      }
+      return String.format(
+          CONNECTOR_NAME_FORMAT, sourceId, connectorName);
     }
 
     private String escapeResourceName(String name) {
