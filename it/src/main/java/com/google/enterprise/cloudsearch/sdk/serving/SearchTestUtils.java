@@ -22,6 +22,7 @@ import com.google.api.services.cloudsearch.v1.model.SearchResult;
 import java.io.File;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -38,41 +39,53 @@ public class SearchTestUtils {
   private static final Logger logger = Logger.getLogger(SearchTestUtils.class.getName());
   private static final Duration ITEM_EQUAL_TIMEOUT = new Duration(30, TimeUnit.SECONDS);
   private static final Duration ITEM_EQUAL_POLL_INTERVAL = Duration.TWO_SECONDS;
+
   private final SearchHelper searchHelper;
+  private final Duration itemEqualTimeout;
+  private final Duration itemEqualPollInterval;
 
   public SearchTestUtils(SearchHelper searchHelper){
+    this(searchHelper, ITEM_EQUAL_TIMEOUT, ITEM_EQUAL_POLL_INTERVAL);
+  }
+
+  SearchTestUtils(SearchHelper searchHelper, Duration itemEqualTimeout,
+      Duration itemEqualPollInterval) {
     this.searchHelper = searchHelper;
+    this.itemEqualTimeout = itemEqualTimeout;
+    this.itemEqualPollInterval = itemEqualPollInterval;
   }
 
   public void waitUntilItemServed(String itemId, String query) throws IOException {
     Awaitility.with()
-        .pollInterval(ITEM_EQUAL_POLL_INTERVAL)
+        .pollInterval(itemEqualPollInterval)
         .await()
-        .atMost(ITEM_EQUAL_TIMEOUT)
+        .atMost(itemEqualTimeout)
         .until(() -> resultExists(itemId, query));
   }
 
   public void waitUntilItemNotServed(String itemId, String query) throws IOException {
     Awaitility.await()
-        .atMost(ITEM_EQUAL_TIMEOUT)
-        .pollInterval(ITEM_EQUAL_POLL_INTERVAL)
+        .atMost(itemEqualTimeout)
+        .pollInterval(itemEqualPollInterval)
         .untilFalse(new AtomicBoolean(resultExists(itemId, query)));
   }
 
   private boolean resultExists(String itemId, String query) throws IOException {
     SearchResponse searchResponse = searchHelper.search(query);
-    long resultCountExact = searchResponse.getResultCountExact();
-    logger.log(Level.FINE, "Search response: {0}", searchResponse.toPrettyString());
-    if (resultCountExact > 0) {
-      for (SearchResult result : searchResponse.getResults()) {
+    List<SearchResult> results = searchResponse.getResults();
+    if (results != null) {
+      for (SearchResult result : results) {
         boolean titlePresent = result.getTitle().equals(itemId);
         boolean isSnippetRight = result.getSnippet().getSnippet().contains(query);
         if (titlePresent && isSnippetRight) {
-          logger.log(Level.FINE, "Expected Item in Search Result: {0}", result);
+          logger.log(Level.FINE, "Found expected item {0} in search result: {1}",
+              new Object[] { itemId, result });
           return true;
         }
       }
     }
+    logger.log(Level.INFO, "Did not find expected item {0} in search response: {1}",
+        new Object[] { itemId, searchResponse.toPrettyString() });
     return false;
   }
 
