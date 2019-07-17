@@ -148,5 +148,10 @@
       <artifactId>awaitility</artifactId>
       <version>3.1.1</version>
     </dependency>
+    <dependency>
+      <groupId>pl.pragmatists</groupId>
+      <artifactId>JUnitParams</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

@@ -208,7 +208,7 @@ public class UploadRequest extends GenericJson {
    *  {
    *    "item": {
    *         "name": "test123",
-   *         "item_type": "CONTAINER_ITEM",
+   *         "itemType": "CONTAINER_ITEM",
    *         "content": {
    *             "content_format": "TEXT"
    *          },
@@ -270,7 +270,7 @@ public class UploadRequest extends GenericJson {
    *    },
    *    "item": {
    *         "name": "test567",
-   *         "item_type": "CONTAINER_ITEM",
+   *         "itemType": "CONTAINER_ITEM",
    *         "content": {
    *             "content_format": "TEXT"
    *          },
