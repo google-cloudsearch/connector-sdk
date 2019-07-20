@@ -63,13 +63,25 @@ public class TestUtils {
   /**
    * Waits for the item with the given ID to be deleted.
    *
-   * @throws org.awaitility.core.ConditionTimeoutException - if the item is not deleted before the
-   *  timeout.
+   * @throws org.awaitility.core.ConditionTimeoutException if the item is not deleted before the
+   *     timeout
    */
   public void waitUntilDeleted(String itemId) {
+    waitUntilDeleted(itemId, ITEM_DELETION_TIMEOUT, ITEM_DELETION_POLL_INTERVAL);
+  }
+
+  /**
+   * Waits for the item with the given ID to be deleted.
+   *
+   * @throws org.awaitility.core.ConditionTimeoutException if the item is not deleted before the
+   *     timeout
+   */
+  // TODO(jlacey): Resolve this one-off to support the verifier repository (as of commit 20b0d95)
+  // into a consistent design.
+  public void waitUntilDeleted(String itemId, Duration timeout, Duration pollInterval) {
     Awaitility.await()
-        .atMost(ITEM_DELETION_TIMEOUT)
-        .pollInterval(ITEM_DELETION_POLL_INTERVAL)
+        .atMost(timeout)
+        .pollInterval(pollInterval)
         .until(() -> {
           try {
             service.getItem(itemId);
