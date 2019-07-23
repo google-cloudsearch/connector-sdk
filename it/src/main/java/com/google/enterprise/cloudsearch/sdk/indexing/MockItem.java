@@ -60,6 +60,14 @@ public class MockItem {
     this.values = ImmutableMultimap.copyOf(values);
   }
 
+  public String getName() {
+    return name;
+  }
+
+  public String getContainerName() {
+    return getItem().getMetadata().getContainerName();
+  }
+
   public Item getItem() {
     return new IndexingItemBuilder(name)
         .setValues(values)
