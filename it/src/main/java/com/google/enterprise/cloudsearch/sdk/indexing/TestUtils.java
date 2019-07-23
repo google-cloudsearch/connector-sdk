@@ -114,6 +114,8 @@ public class TestUtils {
 
     ItemMetadata expectedMetadata = expected.getMetadata();
     ItemMetadata actualMetadata = actual.getMetadata();
+    expectedMetadata.setContainerName(getItemName(expectedMetadata.getContainerName()));
+    actualMetadata.setContainerName(getItemName(actualMetadata.getContainerName()));
     if (!expectedMetadata.equals(actualMetadata)) {
       // toString() produces different output (expected does not contain quotes, actual
       // does), so set a JSON factory here so assertEquals can highlight the differences.
@@ -131,6 +133,9 @@ public class TestUtils {
    * @param name an item name
    */
   private String getItemName(String name) {
+    if (name == null) {
+      return null;
+    }
     Matcher matcher = NAME_PATTERN.matcher(name);
     if (matcher.matches()) {
       name = matcher.group(1);

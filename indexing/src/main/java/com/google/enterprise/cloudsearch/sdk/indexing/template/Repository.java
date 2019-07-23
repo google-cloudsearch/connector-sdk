@@ -111,6 +111,7 @@ public interface Repository {
    * @return {@code true} if the document exists in the data repository
    * @throws RepositoryException when processing the requested document fails
    */
+  // TODO(jlacey): this is currently unused; consider adding a default implementation here.
   boolean exists(Item item) throws RepositoryException;
 
   /**
