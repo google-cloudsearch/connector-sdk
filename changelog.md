@@ -2,9 +2,9 @@
 
 ## v1-0.0.4 changelist
 
-### Identity SDK update
+### Identity SDK changes
 
-* Upgrade Cloud Identity client to use V1 API
+* Upgraded Cloud Identity client to use V1 API
 
 ### Indexing SDK changes
 
