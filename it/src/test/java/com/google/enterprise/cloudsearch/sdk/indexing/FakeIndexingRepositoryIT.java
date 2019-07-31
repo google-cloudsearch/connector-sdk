@@ -20,6 +20,7 @@ import static com.google.enterprise.cloudsearch.sdk.TestProperties.qualifyTestPr
 import static com.google.enterprise.cloudsearch.sdk.Util.PUBLIC_ACL;
 import static com.google.enterprise.cloudsearch.sdk.Util.getRandomId;
 import static java.util.Arrays.asList;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
@@ -192,8 +193,12 @@ public class FakeIndexingRepositoryIT {
     FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
         .addPage(asList(item))
         .build();
-    runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
-    testUtils.waitUntilEqual(itemId, item.getItem());
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
+      testUtils.waitUntilEqual(itemId, item.getItem());
+    } finally {
+      v1Client.deleteItemsIfExist(asList(itemId));
+    }
   }
 
   @Test
@@ -218,9 +223,13 @@ public class FakeIndexingRepositoryIT {
         .addPage(asList(itemPdf))
         .addPage(asList(itemHtm))
         .build();
-    runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
-    testUtils.waitUntilEqual(pdfItemId, itemPdf.getItem());
-    testUtils.waitUntilEqual(htmItemId, itemHtm.getItem());
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
+      testUtils.waitUntilEqual(pdfItemId, itemPdf.getItem());
+      testUtils.waitUntilEqual(htmItemId, itemHtm.getItem());
+    } finally {
+      v1Client.deleteItemsIfExist(asList(pdfItemId, htmItemId));
+    }
   }
 
   @Test
@@ -770,6 +779,36 @@ public class FakeIndexingRepositoryIT {
     }
   }
 
+  @Test
+  public void indexing_charactersInId_succeeds() throws InterruptedException, IOException {
+    // Test all printable ASCII characters, a Latin-1 character, and a larger code point.
+    StringBuilder idBuilder = new StringBuilder("\u00f6\u20ac"); // o-umlaut Euro
+    for (int i = 32; i < 127; i++) {
+      idBuilder.append((char) i);
+    }
+    // This id is not qualified with "datasources/<id>/items/". It's intended to match
+    // what a typical Repository would use when creating an Item.
+    String rawItemId = "ItemIdTest_" + idBuilder.toString() + "_" + getRandomId();
+    // Note: not local method getItemId; that one will add another random number to the end
+    String escapedFullId = Util.getItemId(indexingSourceId, rawItemId);
+    MockItem mockItem = new MockItem.Builder(rawItemId)
+        .setTitle("Item Id Test")
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
+        .build();
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(asList(mockItem))
+        .build();
+
+    try {
+      runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
+      testUtils.waitUntilEqual(escapedFullId, mockItem.getItem());
+    } finally {
+      v1Client.deleteItemsIfExist(asList(escapedFullId));
+    }
+  }
+
   private void verifyStructuredData(String itemId, String schemaObjectType,
       Item expectedItem) throws IOException {
     Item actualItem = v1Client.getItem(itemId);
@@ -790,6 +829,7 @@ public class FakeIndexingRepositoryIT {
   }
 
   private String getItemId(String itemName) {
+    // Util.getItemId returns datasources/<source>/items/<itemname>
     return Util.getItemId(indexingSourceId, itemName) + getRandomId();
   }
 }

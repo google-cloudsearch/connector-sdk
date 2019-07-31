@@ -15,14 +15,19 @@
  */
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
+import static com.google.enterprise.cloudsearch.sdk.Util.unescapeItemName;
 import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import static org.junit.Assert.assertEquals;
 
 import com.google.api.client.googleapis.json.GoogleJsonResponseException;
+import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.cloudsearch.v1.model.Item;
+import com.google.api.services.cloudsearch.v1.model.ItemMetadata;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.awaitility.Awaitility;
 import org.awaitility.Duration;
 
@@ -79,16 +84,46 @@ public class TestUtils {
   }
 
   /**
-   * Asserts that the expected and the actual items match.
+   * Asserts that the expected and the actual items match. Tests tend to use this by
+   * passing in an Item constructed in the test class to compare with an Item from the
+   * server. Tests have an option of setting the name to a fully-qualified name
+   * (datasources/id/items/name) or just the name. This comparison compares the item
+   * names, ignoring any prefixes.
    *
    * @throws AssertionError - if the items don't match.
    */
   private void assertItemsMatch(Item expected, Item actual) {
-    logger.log(Level.INFO, "Verifying item {0}...", actual);
+    logger.log(Level.INFO, "Comparing item \n{0} \nto \n{1}", new Object[] {expected, actual});
+
     // TODO(lchandramouli): verify all applicable meta data
     assertEquals("ACCEPTED", actual.getStatus().getCode());
-    assertEquals(expected.getItemType(), actual.getItemType());
-    assertEquals(expected.getMetadata(), actual.getMetadata());
-    assertEquals(expected.getName(), actual.getName());
+    assertEquals("name", getItemName(expected.getName()), getItemName(actual.getName()));
+    assertEquals("item type", expected.getItemType(), actual.getItemType());
+
+    ItemMetadata expectedMetadata = expected.getMetadata();
+    ItemMetadata actualMetadata = actual.getMetadata();
+    if (!expectedMetadata.equals(actualMetadata)) {
+      // toString() produces different output (expected does not contain quotes, actual
+      // does), so set a JSON factory here so assertEquals can highlight the differences.
+      expectedMetadata.setFactory(JacksonFactory.getDefaultInstance());
+      assertEquals(expectedMetadata.toString(), actualMetadata.toString());
+    }
+  }
+
+  private static final Pattern NAME_PATTERN = Pattern.compile("^datasources/[^/]+/items/([^/]+)$");
+
+  /**
+   * For a fully-qualified id (datasources/sourceid/items/name), returns the name
+   * portion, unescaped, otherwise returns the name.
+   *
+   * @param name an item name
+   */
+  private String getItemName(String name) {
+    Matcher matcher = NAME_PATTERN.matcher(name);
+    if (matcher.matches()) {
+      name = matcher.group(1);
+      return unescapeItemName(name);
+    }
+    return name;
   }
 }

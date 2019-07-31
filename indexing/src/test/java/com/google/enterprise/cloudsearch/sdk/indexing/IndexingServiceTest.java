@@ -1037,7 +1037,7 @@ public class IndexingServiceTest {
 
     verify(quotaServer).acquire(Operations.DEFAULT);
     verify(batchingService).pushItem(pushCaptor.capture());
-    assertThat(pushCaptor.getValue().getName(), endsWith("/a+b%2Fc"));
+    assertThat(pushCaptor.getValue().getName(), endsWith("/a%2Bb%2Fc"));
   }
 
   @Test

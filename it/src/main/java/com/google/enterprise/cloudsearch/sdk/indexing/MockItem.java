@@ -61,7 +61,7 @@ public class MockItem {
   }
 
   public Item getItem() {
-    Item item = new IndexingItemBuilder(name)
+    return new IndexingItemBuilder(name)
         .setValues(values)
         .setTitle(FieldOrValue.withField(TITLE))
         .setSourceRepositoryUrl(FieldOrValue.withField(URL))
@@ -78,7 +78,6 @@ public class MockItem {
         .setPayload(getByteArrayValue(values, PAYLOAD))
         .setAcl(MockItem.<Acl>getSingleValue(values, ACL).orElse(null))
         .build();
-    return item;
   }
 
   private static ItemType getItemType(Multimap<String, Object> values) {
