@@ -34,6 +34,9 @@ import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+/**
+ * Tests for IncludeExcludeFilter.
+ */
 @RunWith(JUnit4.class)
 public class IncludeExcludeFilterTest {
   @Rule public ExpectedException thrown = ExpectedException.none();
@@ -76,7 +79,7 @@ public class IncludeExcludeFilterTest {
   }
 
   @Test
-  public void invalidPatternPrefix_succeeds() throws IOException {
+  public void invalidPatternPrefix_throwsException() throws IOException {
     File patternsFile = tempFolder.newFile("patterns.txt");
     Properties config = new Properties();
     config.put("connector.includeExcludeFilter.includeExcludePatternFile",
@@ -85,9 +88,8 @@ public class IncludeExcludeFilterTest {
     try (FileWriter writer = new FileWriter(patternsFile)) {
       writer.write("notAPattern");
     }
-    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
-    assertEquals(0, filter.includeRules.size());
-    assertEquals(0, filter.excludeRules.size());
+    thrown.expect(InvalidConfigurationException.class);
+    IncludeExcludeFilter.fromConfiguration();
   }
 
   @Test

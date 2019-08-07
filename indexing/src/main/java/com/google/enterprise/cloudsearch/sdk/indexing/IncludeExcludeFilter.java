@@ -18,6 +18,7 @@ package com.google.enterprise.cloudsearch.sdk.indexing;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Predicate;
@@ -27,9 +28,10 @@ import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -91,7 +93,8 @@ public class IncludeExcludeFilter {
     }
     List<Rule<String>> includeRules = new ArrayList<IncludeExcludeFilter.Rule<String>>();
     List<Rule<String>> excludeRules = new ArrayList<IncludeExcludeFilter.Rule<String>>();
-    try (BufferedReader br = new BufferedReader(new FileReader(configFile))) {
+    try (BufferedReader br = new BufferedReader(
+            new InputStreamReader(new FileInputStream(configFile), UTF_8))) {
       String line;
       while ((line = br.readLine()) != null) {
         try {
@@ -102,9 +105,9 @@ public class IncludeExcludeFilter {
             excludeRules.add(
                 new Rule<>(new RegexPredicate(line.substring(EXCLUDE_RULE_PREFIX.length()))));
           } else {
-            logger.log(Level.WARNING, "Invalid Rule [{0}] for include exclude pattern", line);
+            throw new InvalidConfigurationException(
+                String.format("Invalid Rule [{%s}] for include exclude pattern", line));
           }
-
         } catch (PatternSyntaxException e) {
           throw new InvalidConfigurationException("Invalid regex pattern " + line, e);
         }
@@ -113,6 +116,13 @@ public class IncludeExcludeFilter {
     return new IncludeExcludeFilter(includeRules, excludeRules);
   }
 
+  /**
+   * Returns true if the given string is included based on the configured include/exclude
+   * patterns.
+   *
+   * @param value a value to test
+   * @return true if the value is included based on the configuration
+   */
   public boolean isAllowed(String value) {
     boolean exclude = evaluateRules(excludeRules, value, false /* nothing is excluded */);
     if (exclude) {
