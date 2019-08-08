@@ -18,45 +18,51 @@ package com.google.enterprise.cloudsearch.sdk.indexing;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Predicate;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
  * Helper utility to check if a particular item should be indexed. Include/exclude
  * patterns are specified using Java regular expressions; see <a
- * href="https://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">java.util.regex.Pattern</a>. Include/exclude
- * patterns are specified in a separate configuration file.
+ * href="https://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">java.util.regex.Pattern</a>.
  *
- * <p>Configuration file:
- * <li>the path to the include/exclude pattern file is defined by the configuration property
- *     <b>connector.includeExcludeFilter.includeExcludePatternFile</b>
- * <li>include patterns are prefixed with "include:regex:"
- * <li>exclude patterns are prefixed with "exclude:regex:"
+ * <p>A connector can choose whether to use this helper; see the connector documentation
+ * to find out if this is supported.
+ *
+ * <p>This filter uses configuration property names with the following patterns:
+ * <ul>
+ *   <li>include patterns are prefixed with "includeExcludeFilter.include.regex."
+ *   <li>exclude patterns are prefixed with "includeExcludeFilter.exclude.regex."
+ * </ul>
+ * The last part of the property name is not used here but can be used to describe the
+ * pattern. Each property name must be unique. For example
+ * <ul>
+ *   <li>includeExcludeFilter.include.regex.textFiles = .*\\.txt
+ *   <li>includeExcludeFilter.include.regex.htmlFiles = .*\\.html
+ *   <li>includeExcludeFilter.exclude.regex.pdfFiles = .*\\.pdf
+ * </ul>
+ * Since the property values are in a Java Properties file, any backslash characters in
+ * the regular expression must be escaped.
  */
 public class IncludeExcludeFilter {
   private static final Logger logger = Logger.getLogger(IncludeExcludeFilter.class.getName());
-  private static final String INCLUDE_RULE_PREFIX = "include:regex:";
-  private static final String EXCLUDE_RULE_PREFIX = "exclude:regex:";
+  public static final String FILTER_CONFIG_PREFIX = "includeExcludeFilter.";
+  public static final String INCLUDE_RULE_PREFIX = FILTER_CONFIG_PREFIX + "include.regex.";
+  public static final String EXCLUDE_RULE_PREFIX = FILTER_CONFIG_PREFIX + "exclude.regex.";
 
   @VisibleForTesting final List<Rule<String>> includeRules;
   @VisibleForTesting final List<Rule<String>> excludeRules;
@@ -68,49 +74,28 @@ public class IncludeExcludeFilter {
 
   public static IncludeExcludeFilter fromConfiguration() {
     checkState(Configuration.isInitialized());
-    String includeExcludePatternFile =
-        Configuration.getString("connector.includeExcludeFilter.includeExcludePatternFile", "").get();
-    if (Strings.isNullOrEmpty(includeExcludePatternFile)) {
+    Set<String> filterProperties = Configuration.getConfig()
+        .stringPropertyNames()
+        .stream()
+        .filter(key -> key.startsWith(FILTER_CONFIG_PREFIX))
+        .collect(Collectors.toSet());
+    if (filterProperties.isEmpty()) {
       return new IncludeExcludeFilter(ImmutableList.of(), ImmutableList.of());
-    }
-    try {
-      return fromFile(includeExcludePatternFile);
-    } catch (IOException e) {
-      throw new InvalidConfigurationException(
-          "Error loading IncludeExcludeFilter configuration.", e);
-    }
-  }
-
-  public static IncludeExcludeFilter fromFile(String filePath)
-      throws FileNotFoundException, IOException {
-    File configFile = new File(filePath);
-    if (!configFile.exists()) {
-      throw new InvalidConfigurationException(String.format("Path [%s] does not exist", filePath));
-    }
-    if (configFile.isDirectory()) {
-      throw new InvalidConfigurationException(
-          String.format("Path [%s] points to directory instead of file", filePath));
     }
     List<Rule<String>> includeRules = new ArrayList<IncludeExcludeFilter.Rule<String>>();
     List<Rule<String>> excludeRules = new ArrayList<IncludeExcludeFilter.Rule<String>>();
-    try (BufferedReader br = new BufferedReader(
-            new InputStreamReader(new FileInputStream(configFile), UTF_8))) {
-      String line;
-      while ((line = br.readLine()) != null) {
-        try {
-          if (line.startsWith(INCLUDE_RULE_PREFIX)) {
-            includeRules.add(
-                new Rule<>(new RegexPredicate(line.substring(INCLUDE_RULE_PREFIX.length()))));
-          } else if (line.startsWith(EXCLUDE_RULE_PREFIX)) {
-            excludeRules.add(
-                new Rule<>(new RegexPredicate(line.substring(EXCLUDE_RULE_PREFIX.length()))));
-          } else {
-            throw new InvalidConfigurationException(
-                String.format("Invalid Rule [{%s}] for include exclude pattern", line));
-          }
-        } catch (PatternSyntaxException e) {
-          throw new InvalidConfigurationException("Invalid regex pattern " + line, e);
+    for (String propertyName : filterProperties) {
+      String propertyValue = Configuration.getString(propertyName, null).get();
+      logger.log(Level.FINEST, "Processing include/exclude rule {0}: {1}",
+          new Object[] { propertyName, propertyValue });
+      try {
+        if (propertyName.startsWith(INCLUDE_RULE_PREFIX)) {
+          includeRules.add(new Rule<>(new RegexPredicate(propertyValue)));
+        } else if (propertyName.startsWith(EXCLUDE_RULE_PREFIX)) {
+          excludeRules.add(new Rule<>(new RegexPredicate(propertyValue)));
         }
+      } catch (PatternSyntaxException e) {
+        throw new InvalidConfigurationException("Invalid regex pattern " + propertyValue, e);
       }
     }
     return new IncludeExcludeFilter(includeRules, excludeRules);

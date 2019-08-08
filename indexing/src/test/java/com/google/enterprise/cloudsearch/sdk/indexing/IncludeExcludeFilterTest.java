@@ -21,6 +21,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
+import com.google.enterprise.cloudsearch.sdk.config.Configuration;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRule;
 import java.io.File;
@@ -57,83 +58,26 @@ public class IncludeExcludeFilterTest {
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
     assertEquals(0, filter.includeRules.size());
     assertEquals(0, filter.excludeRules.size());
-  }
-
-  @Test
-  public void fromConfiguration_fileMissing_throwsException() {
-    Properties config = new Properties();
-    config.put("connector.includeExcludeFilter.includeExcludePatternFile", "/no/such/file");
-    setupConfig.initConfig(config);
-    thrown.expect(InvalidConfigurationException.class);
-    IncludeExcludeFilter.fromConfiguration();
-  }
-
-  @Test
-  public void fromConfiguration_fileIsDirectory_throwsException() throws IOException {
-    File dir = tempFolder.newFolder("testdir");
-    Properties config = new Properties();
-    config.put("connector.includeExcludeFilter.includeExcludePatternFile", dir.getAbsolutePath());
-    setupConfig.initConfig(config);
-    thrown.expect(InvalidConfigurationException.class);
-    IncludeExcludeFilter.fromConfiguration();
-  }
-
-  @Test
-  public void invalidPatternPrefix_throwsException() throws IOException {
-    File patternsFile = tempFolder.newFile("patterns.txt");
-    Properties config = new Properties();
-    config.put("connector.includeExcludeFilter.includeExcludePatternFile",
-        patternsFile.getAbsolutePath());
-    setupConfig.initConfig(config);
-    try (FileWriter writer = new FileWriter(patternsFile)) {
-      writer.write("notAPattern");
-    }
-    thrown.expect(InvalidConfigurationException.class);
-    IncludeExcludeFilter.fromConfiguration();
+    assertTrue(filter.isAllowed("anything is allowed"));
   }
 
   @Test
   public void invalidRegex_throwsException() throws IOException {
-    File patternsFile = tempFolder.newFile("patterns.txt");
     Properties config = new Properties();
-    config.put("connector.includeExcludeFilter.includeExcludePatternFile",
-        patternsFile.getAbsolutePath());
+    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "invalidPattern", "*");
     setupConfig.initConfig(config);
-    try (FileWriter writer = new FileWriter(patternsFile)) {
-      writer.write("include:regex:*");
-    }
-    thrown.expect(InvalidConfigurationException.class);
-    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
-  }
-
-  @Test
-  public void fileNotReadable_throwsException() throws IOException {
-    File patternsFile = tempFolder.newFile("patterns.txt");
-    Properties config = new Properties();
-    config.put("connector.includeExcludeFilter.includeExcludePatternFile",
-        patternsFile.getAbsolutePath());
-    setupConfig.initConfig(config);
-    try (FileWriter writer = new FileWriter(patternsFile)) {
-      writer.write("include:regex:foo");
-    }
-    patternsFile.setReadable(false);
     thrown.expect(InvalidConfigurationException.class);
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
   }
 
   @Test
   public void validPattern_succeeds() throws IOException {
-    File patternsFile = tempFolder.newFile("patterns.txt");
     Properties config = new Properties();
-    config.put("connector.includeExcludeFilter.includeExcludePatternFile",
-        patternsFile.getAbsolutePath());
+    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "textFiles", ".*\\.txt");
+    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "htmlFiles", ".*\\.html");
+    config.setProperty(IncludeExcludeFilter.EXCLUDE_RULE_PREFIX + "pdfFiles", ".*\\.pdf");
+    config.setProperty(IncludeExcludeFilter.EXCLUDE_RULE_PREFIX + "docFiles", ".*\\.doc");
     setupConfig.initConfig(config);
-    try (FileWriter writer = new FileWriter(patternsFile)) {
-      writer.write("include:regex:.*\\.txt" + System.lineSeparator());
-      writer.write("include:regex:.*\\.html" + System.lineSeparator());
-      writer.write("exclude:regex:.*\\.pdf" + System.lineSeparator());
-      writer.write("exclude:regex:.*\\.doc" + System.lineSeparator());
-    }
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
     assertEquals(2, filter.includeRules.size());
     assertEquals(2, filter.excludeRules.size());
@@ -141,15 +85,10 @@ public class IncludeExcludeFilterTest {
 
   @Test
   public void include_succeeds() throws IOException {
-    File patternsFile = tempFolder.newFile("patterns.txt");
     Properties config = new Properties();
-    config.put("connector.includeExcludeFilter.includeExcludePatternFile",
-        patternsFile.getAbsolutePath());
+    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "textFiles", ".*\\.txt");
+    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "htmlFiles", ".*\\.html");
     setupConfig.initConfig(config);
-    try (FileWriter writer = new FileWriter(patternsFile)) {
-      writer.write("include:regex:.*\\.txt$" + System.lineSeparator());
-      writer.write("include:regex:.*\\.html$" + System.lineSeparator());
-    }
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
     assertTrue("/path/to/file.txt", filter.isAllowed("/path/to/file.txt"));
     assertTrue("/path/to/file.html", filter.isAllowed("/path/to/file.html"));
@@ -161,15 +100,10 @@ public class IncludeExcludeFilterTest {
 
   @Test
   public void exclude_succeeds() throws IOException {
-    File patternsFile = tempFolder.newFile("patterns.txt");
     Properties config = new Properties();
-    config.put("connector.includeExcludeFilter.includeExcludePatternFile",
-        patternsFile.getAbsolutePath());
+    config.setProperty(IncludeExcludeFilter.EXCLUDE_RULE_PREFIX + "textFiles", ".*\\.txt");
+    config.setProperty(IncludeExcludeFilter.EXCLUDE_RULE_PREFIX + "htmlFiles", ".*\\.html");
     setupConfig.initConfig(config);
-    try (FileWriter writer = new FileWriter(patternsFile)) {
-      writer.write("exclude:regex:.*\\.txt$" + System.lineSeparator());
-      writer.write("exclude:regex:.*\\.html$" + System.lineSeparator());
-    }
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
     assertFalse("/path/to/file.txt", filter.isAllowed("/path/to/file.txt"));
     assertFalse("/path/to/file.html", filter.isAllowed("/path/to/file.html"));
@@ -181,18 +115,27 @@ public class IncludeExcludeFilterTest {
 
   @Test
   public void includeExclude_succeeds() throws IOException {
-    File patternsFile = tempFolder.newFile("patterns.txt");
     Properties config = new Properties();
-    config.put("connector.includeExcludeFilter.includeExcludePatternFile",
-        patternsFile.getAbsolutePath());
+    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "textFiles", ".*\\.txt");
+    config.setProperty(IncludeExcludeFilter.EXCLUDE_RULE_PREFIX + "devFiles", ".*DEVELOPMENT.*");
     setupConfig.initConfig(config);
-    try (FileWriter writer = new FileWriter(patternsFile)) {
-      writer.write("include:regex:.*\\.txt$" + System.lineSeparator());
-      writer.write("exclude:regex:.*DEVELOPMENT.*" + System.lineSeparator());
-    }
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
     assertTrue("/path/to/file.txt", filter.isAllowed("/path/to/file.txt"));
     assertFalse("/path/to/file-DEVELOPMENT.txt",
         filter.isAllowed("/path/to/file-DEVELOPMENT.txt"));
+  }
+
+  @Test
+  public void configure_fromFile_succeeds() throws Exception {
+    File configFile = tempFolder.newFile("config.properties");
+    String configFilePath = "-Dconfig=" + configFile.getAbsolutePath();
+    String[] args = {"-Dconfig=config.properties", configFilePath};
+    try (FileWriter writer = new FileWriter(configFile)) {
+      writer.write(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "textFiles = .*\\\\.txt");
+    }
+    Configuration.initConfig(args);
+    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
+    assertTrue("/path/to/file.txt", filter.isAllowed("/path/to/file.txt"));
+    assertFalse("/path/to/filetxt", filter.isAllowed("/path/to/filetxt"));
   }
 }
