@@ -3,7 +3,7 @@
 The Google Cloud Search CSV connector works with any comma-separated values (CSV) file, that is a
 delimited text file that uses a comma to separate values.
 
-Before running the CSV connector, you should review [access control list options](https://developers.google.com/cloud-search/docs/guides/csv-connector#9_specify_access_control_list_acl_options).
+Before running the CSV connector, you should review the [access control list options](https://developers.google.com/cloud-search/docs/guides/csv-connector#9_specify_access_control_list_acl_options).
 
 
 ## Build instructions
