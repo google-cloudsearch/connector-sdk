@@ -38,7 +38,7 @@ import javax.annotation.Nullable;
 /**
  * Helper utility to check if a particular item should be indexed. Include/exclude
  * patterns are specified using Java regular expressions; see <a
- * href="https://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">java.util.regex.Pattern</a>.
+ * href="https://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">java.util.regex.Pattern</a>. Patterns will use case-insensitive matching.
  *
  * <p>A connector can choose whether to use this helper; see the connector documentation
  * to find out if this is supported.
@@ -48,7 +48,7 @@ import javax.annotation.Nullable;
  *   <li>include patterns are prefixed with "includeExcludeFilter.include.regex."
  *   <li>exclude patterns are prefixed with "includeExcludeFilter.exclude.regex."
  * </ul>
- * The last part of the property name is not used here but can be used to describe the
+ * The last part of the property name is a meaningful name used to describe the
  * pattern. Each property name must be unique. For example
  * <ul>
  *   <li>includeExcludeFilter.include.regex.textFiles = .*\\.txt
@@ -60,16 +60,16 @@ import javax.annotation.Nullable;
  */
 public class IncludeExcludeFilter {
   private static final Logger logger = Logger.getLogger(IncludeExcludeFilter.class.getName());
-  public static final String FILTER_CONFIG_PREFIX = "includeExcludeFilter.";
-  public static final String INCLUDE_RULE_PREFIX = FILTER_CONFIG_PREFIX + "include.regex.";
-  public static final String EXCLUDE_RULE_PREFIX = FILTER_CONFIG_PREFIX + "exclude.regex.";
+  private static final String FILTER_CONFIG_PREFIX = "includeExcludeFilter.";
+  @VisibleForTesting static final String INCLUDE_RULE_PREFIX = FILTER_CONFIG_PREFIX + "include.regex.";
+  @VisibleForTesting static final String EXCLUDE_RULE_PREFIX = FILTER_CONFIG_PREFIX + "exclude.regex.";
 
-  @VisibleForTesting final List<Rule<String>> includeRules;
-  @VisibleForTesting final List<Rule<String>> excludeRules;
+  @VisibleForTesting final ImmutableList<Rule<String>> includeRules;
+  @VisibleForTesting final ImmutableList<Rule<String>> excludeRules;
 
   public IncludeExcludeFilter(List<Rule<String>> includeRules, List<Rule<String>> excludeRules) {
-    this.includeRules = includeRules;
-    this.excludeRules = excludeRules;
+    this.includeRules = ImmutableList.copyOf(includeRules);
+    this.excludeRules = ImmutableList.copyOf(excludeRules);
   }
 
   public static IncludeExcludeFilter fromConfiguration() {
@@ -82,8 +82,9 @@ public class IncludeExcludeFilter {
     if (filterProperties.isEmpty()) {
       return new IncludeExcludeFilter(ImmutableList.of(), ImmutableList.of());
     }
-    List<Rule<String>> includeRules = new ArrayList<IncludeExcludeFilter.Rule<String>>();
-    List<Rule<String>> excludeRules = new ArrayList<IncludeExcludeFilter.Rule<String>>();
+    ImmutableList.Builder<Rule<String>> includeRules = ImmutableList.builder();
+    ImmutableList.Builder<Rule<String>> excludeRules = ImmutableList.builder();
+
     for (String propertyName : filterProperties) {
       String propertyValue = Configuration.getString(propertyName, null).get();
       logger.log(Level.FINEST, "Processing include/exclude rule {0}: {1}",
@@ -98,7 +99,7 @@ public class IncludeExcludeFilter {
         throw new InvalidConfigurationException("Invalid regex pattern " + propertyValue, e);
       }
     }
-    return new IncludeExcludeFilter(includeRules, excludeRules);
+    return new IncludeExcludeFilter(includeRules.build(), excludeRules.build());
   }
 
   /**
@@ -109,19 +110,22 @@ public class IncludeExcludeFilter {
    * @return true if the value is included based on the configuration
    */
   public boolean isAllowed(String value) {
-    boolean exclude = evaluateRules(excludeRules, value, false /* nothing is excluded */);
+    boolean exclude = evaluateRules(excludeRules, value, false /* no rules: nothing is excluded */);
     if (exclude) {
       logger.log(Level.FINEST, "excluding " + value);
       return false;
     }
-    return evaluateRules(includeRules, value, true /* everything is included */);
+    boolean include =
+        evaluateRules(includeRules, value, true /* no rules: everything is included */);
+    logger.log(Level.FINEST, (include ? "including " : "not including ") + value);
+    return include;
   }
 
   private boolean evaluateRules(List<Rule<String>> rules, String value, boolean emptyRulesOutcome) {
     if (rules.isEmpty()) {
       return emptyRulesOutcome;
     }
-    return rules.stream().map(r -> r.eval(value)).filter(e -> e == true).findFirst().orElse(false);
+    return rules.stream().map(r -> r.eval(value)).anyMatch(e -> e);
   }
 
   private static class Rule<T> {
