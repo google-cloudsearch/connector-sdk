@@ -21,13 +21,11 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
-import com.google.enterprise.cloudsearch.sdk.config.Configuration;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRule;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
 import java.util.Properties;
+import java.util.regex.PatternSyntaxException;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -46,96 +44,337 @@ public class IncludeExcludeFilterTest {
   @Rule public TemporaryFolder tempFolder = new TemporaryFolder();
 
   @Test
+  public void ruleBuilder_allValuesSet_succeeds() {
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
+        .setItemType("CONTENT_ITEM")
+        .setFilterType("REGEX")
+        .setFilterPattern("file.txt")
+        .setAction("INCLUDE")
+        .build();
+    assertEquals("testRule", rule.getName());
+    assertEquals(ItemType.CONTENT_ITEM, rule.getItemType());
+    assertEquals(IncludeExcludeFilter.Action.INCLUDE, rule.getAction());
+  }
+
+  @Test
+  public void ruleBuilder_missingName_throwsException() {
+    thrown.expect(IllegalStateException.class);
+    thrown.expectMessage("Rule name");
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder(null)
+        .build();
+  }
+
+  @Test
+  public void ruleBuilder_missingItemType_throwsException() {
+    thrown.expect(IllegalStateException.class);
+    thrown.expectMessage("Rule item type");
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
+        .build();
+  }
+
+  @Test
+  public void ruleBuilder_missingFilterType_throwsException() {
+    thrown.expect(IllegalStateException.class);
+    thrown.expectMessage("Rule filter type");
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
+        .setItemType("CONTENT_ITEM")
+        .build();
+  }
+
+  @Test
+  public void ruleBuilder_missingFilterPattern_throwsException() {
+    thrown.expect(IllegalStateException.class);
+    thrown.expectMessage("Rule filter pattern");
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
+        .setItemType("CONTENT_ITEM")
+        .setFilterType("REGEX")
+        .build();
+  }
+
+  @Test
+  public void ruleBuilder_missingAction_throwsException() {
+    thrown.expect(IllegalStateException.class);
+    thrown.expectMessage("Rule action");
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
+        .setItemType("CONTENT_ITEM")
+        .setFilterType("REGEX")
+        .setFilterPattern("pattern")
+        .build();
+  }
+
+  @Test
+  public void ruleBuilder_badItemType_throwsException() {
+    thrown.expect(IllegalArgumentException.class);
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
+        .setItemType("DOCUMENT")
+        .setFilterType("REGEX")
+        .setFilterPattern("pattern")
+        .setAction("INCLUDE")
+        .build();
+  }
+
+  @Test
+  public void ruleBuilder_badFilterType_throwsException() {
+    thrown.expect(IllegalArgumentException.class);
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
+        .setItemType("CONTENT_ITEM")
+        .setFilterType("EXACT")
+        .setFilterPattern("pattern")
+        .setAction("INCLUDE")
+        .build();
+  }
+
+  @Test
+  public void ruleBuilder_badAction_throwsException() {
+    thrown.expect(IllegalArgumentException.class);
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
+        .setItemType("CONTENT_ITEM")
+        .setFilterType("REGEX")
+        .setFilterPattern("pattern")
+        .setAction("TOSS")
+        .build();
+  }
+
+  @Test
+  public void ruleBuilder_badRegex_throwsException() {
+    thrown.expect(PatternSyntaxException.class);
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
+        .setItemType("CONTENT_ITEM")
+        .setFilterType("REGEX")
+        .setFilterPattern("*")
+        .setAction("EXCLUDE")
+        .build();
+  }
+
+  @Test
   public void fromConfiguration_notInitialized_throwsException() {
     thrown.expect(IllegalStateException.class);
     IncludeExcludeFilter.fromConfiguration();
   }
 
   @Test
-  public void fromConfiguration_initializedNoConfig_succeeds() {
+  public void fromConfiguration_initializedNoConfig_emptyRulesCreated() {
     setupConfig.initConfig(new Properties());
-    IncludeExcludeFilter.fromConfiguration();
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
-    assertEquals(0, filter.includeRules.size());
-    assertEquals(0, filter.excludeRules.size());
-    assertTrue(filter.isAllowed("anything is allowed"));
+    assertEquals(ItemType.values().length, filter.includeRules.size());
+    assertEquals(ItemType.values().length, filter.excludeRules.size());
+    for (ItemType itemType : ItemType.values()) {
+      assertEquals(0, filter.includeRules.get(itemType).size());
+      assertEquals(0, filter.excludeRules.get(itemType).size());
+    }
+    assertTrue(filter.isAllowed("anything is allowed", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("anything is allowed", ItemType.CONTAINER_ITEM));
   }
 
   @Test
-  public void invalidRegex_throwsException() throws IOException {
+  public void fromConfiguration_invalidProperty_throwsException() {
     Properties config = new Properties();
-    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "invalidPattern", "*");
+    config.setProperty("includeExcludeFilter.propertyTest.unknownProperty", "prop value");
     setupConfig.initConfig(config);
     thrown.expect(InvalidConfigurationException.class);
-    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
+    thrown.expectMessage("Unknown property includeExcludeFilter.propertyTest.unknownProperty");
+    IncludeExcludeFilter.fromConfiguration();
   }
 
   @Test
-  public void validPattern_succeeds() throws IOException {
+  public void fromConfiguration_invalidPropertyFormat_throwsException() {
     Properties config = new Properties();
-    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "textFiles", ".*\\.txt");
-    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "htmlFiles", ".*\\.html");
-    config.setProperty(IncludeExcludeFilter.EXCLUDE_RULE_PREFIX + "pdfFiles", ".*\\.pdf");
-    config.setProperty(IncludeExcludeFilter.EXCLUDE_RULE_PREFIX + "docFiles", ".*\\.doc");
+    config.setProperty(
+        "includeExcludeFilter.propertyTest.unknownProperty.unknownElement", "prop value");
+    setupConfig.initConfig(config);
+    thrown.expect(InvalidConfigurationException.class);
+    thrown.expectMessage(
+        "Unknown property includeExcludeFilter.propertyTest.unknownProperty.unknownElement");
+    IncludeExcludeFilter.fromConfiguration();
+  }
+
+  @Test
+  public void fromConfiguration_includeRule_succeeds() {
+    Properties config = new Properties();
+    config.setProperty("includeExcludeFilter.includeText.itemType", "CONTENT_ITEM");
+    config.setProperty("includeExcludeFilter.includeText.filterType", "REGEX");
+    config.setProperty("includeExcludeFilter.includeText.filterPattern", "\\.txt$");
+    config.setProperty("includeExcludeFilter.includeText.action", "INCLUDE");
     setupConfig.initConfig(config);
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
-    assertEquals(2, filter.includeRules.size());
-    assertEquals(2, filter.excludeRules.size());
+    assertEquals(1, filter.includeRules.get(ItemType.CONTENT_ITEM).size());
+    assertEquals(0, filter.excludeRules.get(ItemType.CONTENT_ITEM).size());
+    IncludeExcludeFilter.Rule rule = filter.includeRules.get(ItemType.CONTENT_ITEM).get(0);
+    assertEquals("includeText", rule.getName());
+    assertEquals(ItemType.CONTENT_ITEM, rule.getItemType());
+    assertEquals(IncludeExcludeFilter.Action.INCLUDE, rule.getAction());
+
+    assertTrue(filter.isAllowed("/path", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/path/to", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/path/to/file.txt", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("file.txt", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("File.TXT", ItemType.CONTENT_ITEM));
+
+    // All containers should be allowed
+    assertTrue(filter.isAllowed("filetxt", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("file.txt", ItemType.CONTAINER_ITEM));
+
+    assertFalse(filter.isAllowed("/path/to/file.pdf", ItemType.CONTENT_ITEM));
+    assertFalse(filter.isAllowed("/path/to/file.txt.bak", ItemType.CONTENT_ITEM));
+    assertFalse(filter.isAllowed("filetxt", ItemType.CONTENT_ITEM));
   }
 
   @Test
-  public void include_succeeds() throws IOException {
+  public void fromConfiguration_multipleRules_succeeds() {
     Properties config = new Properties();
-    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "textFiles", ".*\\.txt");
-    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "htmlFiles", ".*\\.html");
+
+    // Include files with given extensions
+    config.setProperty("includeExcludeFilter.includeTextFiles.itemType", "CONTENT_ITEM");
+    config.setProperty("includeExcludeFilter.includeTextFiles.filterType", "REGEX");
+    config.setProperty("includeExcludeFilter.includeTextFiles.filterPattern",
+        "\\.(txt|text|htm|html)$");
+    config.setProperty("includeExcludeFilter.includeTextFiles.action", "INCLUDE");
+
+    // Exclude files named XXX-ARCHIVE.YYY
+    config.setProperty("includeExcludeFilter.excludeArchiveFiles.itemType", "CONTENT_ITEM");
+    config.setProperty("includeExcludeFilter.excludeArchiveFiles.filterType", "REGEX");
+    config.setProperty("includeExcludeFilter.excludeArchiveFiles.filterPattern",
+        "-ARCHIVE\\.[^/]+$");
+    config.setProperty("includeExcludeFilter.excludeArchiveFiles.action", "EXCLUDE");
+
+    // Exclude folders named XXX-ARCHIVE
+    config.setProperty("includeExcludeFilter.excludeArchiveFolders.itemType", "CONTAINER_ITEM");
+    config.setProperty("includeExcludeFilter.excludeArchiveFolders.filterType", "REGEX");
+    config.setProperty("includeExcludeFilter.excludeArchiveFolders.filterPattern",
+        "/[^/]+-ARCHIVE$|/[^/]+-ARCHIVE/"); // assumes path separator is "/"
+    config.setProperty("includeExcludeFilter.excludeArchiveFolders.action", "EXCLUDE");
+
+    // Exclude files with a folder named XXX-ARCHIVE in their path. In a listing
+    // connector, the folder would have been excluded by a previous rule, but if the rules
+    // were changed, the file might be polled for re-indexing sooner than the folder; this
+    // rule would allow the connector to delete it.
+    config.setProperty(
+        "includeExcludeFilter.excludeFilesInArchiveFolders.itemType", "CONTENT_ITEM");
+    config.setProperty("includeExcludeFilter.excludeFilesInArchiveFolders.filterType", "REGEX");
+    config.setProperty("includeExcludeFilter.excludeFilesInArchiveFolders.filterPattern",
+        "/[^/]+-ARCHIVE/");
+    config.setProperty("includeExcludeFilter.excludeFilesInArchiveFolders.action", "EXCLUDE");
+
     setupConfig.initConfig(config);
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
-    assertTrue("/path/to/file.txt", filter.isAllowed("/path/to/file.txt"));
-    assertTrue("/path/to/file.html", filter.isAllowed("/path/to/file.html"));
-    // uses case-insensitive match
-    assertTrue("/path/to/file.HTML", filter.isAllowed("/path/to/file.HTML"));
-    assertFalse("/path/to/file.other", filter.isAllowed("/path/to/file.other"));
-    assertFalse("/path/to/file.txt.bak", filter.isAllowed("/path/to/file.txt.bak"));
+    assertEquals(1, filter.includeRules.get(ItemType.CONTENT_ITEM).size());
+    assertEquals(2, filter.excludeRules.get(ItemType.CONTENT_ITEM).size());
+    assertEquals(1, filter.excludeRules.get(ItemType.CONTAINER_ITEM).size());
+
+    assertTrue(filter.isAllowed("/path", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/path/current", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/path/current/file.txt", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("/path/current/file.text", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("/path/current/file.htm", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("/path/current/file.html", ItemType.CONTENT_ITEM));
+
+    assertFalse(filter.isAllowed("/path/current/file-ARCHIVE.html", ItemType.CONTENT_ITEM));
+    assertFalse(filter.isAllowed("/path/last-month-ARCHIVE", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/path/last-month-ARCHIVE/", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/path/last-month-ARCHIVE/reports", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/path/last-month-ARCHIVE/file.txt", ItemType.CONTENT_ITEM));
+
+    assertTrue(filter.isAllowed("/path/last-month-ARCHIVE-notAnArchive/file.txt",
+            ItemType.CONTENT_ITEM));
   }
 
   @Test
-  public void exclude_succeeds() throws IOException {
+  public void fromConfiguration_excludeFolder_succeeds() {
     Properties config = new Properties();
-    config.setProperty(IncludeExcludeFilter.EXCLUDE_RULE_PREFIX + "textFiles", ".*\\.txt");
-    config.setProperty(IncludeExcludeFilter.EXCLUDE_RULE_PREFIX + "htmlFiles", ".*\\.html");
+
+    // Exclude folders with paths containing folders named /ARCHIVE/.
+    config.setProperty("includeExcludeFilter.excludeArchiveFolders.itemType", "CONTAINER_ITEM");
+    config.setProperty("includeExcludeFilter.excludeArchiveFolders.filterType", "REGEX");
+    config.setProperty("includeExcludeFilter.excludeArchiveFolders.filterPattern",
+        "/ARCHIVE$|/ARCHIVE/"); // assumes path separator is "/"
+    config.setProperty("includeExcludeFilter.excludeArchiveFolders.action", "EXCLUDE");
+
+    // Exclude docs with paths containing folders named /ARCHIVE/.
+    config.setProperty("includeExcludeFilter.excludeDocsInArchiveFolders.itemType", "CONTENT_ITEM");
+    config.setProperty("includeExcludeFilter.excludeDocsInArchiveFolders.filterType", "REGEX");
+    config.setProperty("includeExcludeFilter.excludeDocsInArchiveFolders.filterPattern",
+        "/ARCHIVE/"); // assumes path separator is "/"
+    config.setProperty("includeExcludeFilter.excludeDocsInArchiveFolders.action", "EXCLUDE");
+
     setupConfig.initConfig(config);
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
-    assertFalse("/path/to/file.txt", filter.isAllowed("/path/to/file.txt"));
-    assertFalse("/path/to/file.html", filter.isAllowed("/path/to/file.html"));
-    // uses case-insensitive match
-    assertFalse("/path/to/file.HTML", filter.isAllowed("/path/to/file.HTML"));
-    assertTrue("/path/to/file.other", filter.isAllowed("/path/to/file.other"));
-    assertTrue("/path/to/file.txt.bak", filter.isAllowed("/path/to/file.txt.bak"));
+
+    assertTrue(filter.isAllowed("/path", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/path/current", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/path/current/file.txt", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("/path/current/file.pdf", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("/path/current/file.doc", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("/path/current/file.html", ItemType.CONTENT_ITEM));
+
+    assertFalse(filter.isAllowed("/ARCHIVE", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/path/ARCHIVE", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/path/ARCHIVE/", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/path/ARCHIVE/reports", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/path/ARCHIVE/reports/last-month.doc", ItemType.CONTENT_ITEM));
+    assertFalse(filter.isAllowed("/path/is/longer/with/ARCHIVE/folder", ItemType.CONTAINER_ITEM));
   }
 
   @Test
-  public void includeExclude_succeeds() throws IOException {
+  public void fromConfiguration_includeFolders_succeeds() {
     Properties config = new Properties();
-    config.setProperty(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "textFiles", ".*\\.txt");
-    config.setProperty(IncludeExcludeFilter.EXCLUDE_RULE_PREFIX + "devFiles", ".*DEVELOPMENT.*");
+
+    // Include only some folders below the root. The parent paths must also be included in
+    // the pattern for a hierarchical repository.
+    config.setProperty("includeExcludeFilter.includePublicFolder.itemType", "CONTAINER_ITEM");
+    config.setProperty("includeExcludeFilter.includePublicFolder.filterType", "REGEX");
+    config.setProperty("includeExcludeFilter.includePublicFolder.filterPattern",
+        "^/$|^/root[/]?$|^/root/folder[/]?$|^/root/folder/public[/]?$|^/root/folder/public/");
+    config.setProperty("includeExcludeFilter.includePublicFolder.action", "INCLUDE");
+
+    config.setProperty("includeExcludeFilter.includePressFolder.itemType", "CONTAINER_ITEM");
+    config.setProperty("includeExcludeFilter.includePressFolder.filterType", "REGEX");
+    config.setProperty("includeExcludeFilter.includePressFolder.filterPattern",
+        "^/$|^/root[/]?$|^/root/releases[/]?$|^/root/releases/press[/]?$|^/root/releases/press/");
+    config.setProperty("includeExcludeFilter.includePressFolder.action", "INCLUDE");
+
+    // Include .doc files in the public, press folders.
+    config.setProperty("includeExcludeFilter.includeDocsInPublicFolder.itemType", "CONTENT_ITEM");
+    config.setProperty("includeExcludeFilter.includeDocsInPublicFolder.filterType", "REGEX");
+    config.setProperty("includeExcludeFilter.includeDocsInPublicFolder.filterPattern",
+        "^/root/folder/public/.*\\.doc$|^/root/releases/press/.*\\.doc$");
+    config.setProperty("includeExcludeFilter.includeDocsInPublicFolder.action", "INCLUDE");
+
     setupConfig.initConfig(config);
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
-    assertTrue("/path/to/file.txt", filter.isAllowed("/path/to/file.txt"));
-    assertFalse("/path/to/file-DEVELOPMENT.txt",
-        filter.isAllowed("/path/to/file-DEVELOPMENT.txt"));
+
+    assertTrue(filter.isAllowed("/", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/folder", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/folder/", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/folder/public", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/folder/public/", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/folder/public/path/to/more/content",
+            ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/releases", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/releases/", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/releases/press", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/releases/press/", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/root/releases/press/path/to/more/content",
+            ItemType.CONTAINER_ITEM));
+
+    assertFalse(filter.isAllowed("/other-folder", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/root/other-folder", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/other-folder/public", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/other-folder/public/path", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/other-folder/public/path", ItemType.CONTAINER_ITEM));
+
+    assertTrue(filter.isAllowed("/root/folder/public/file.doc", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("/root/folder/public/path/to/file.doc", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("/root/releases/press/file.doc", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("/root/releases/press/path/to/file.doc", ItemType.CONTENT_ITEM));
+
+    assertFalse(filter.isAllowed("/root/folder/public/path/to/file.pdf", ItemType.CONTENT_ITEM));
   }
 
   @Test
-  public void configure_fromFile_succeeds() throws Exception {
-    File configFile = tempFolder.newFile("config.properties");
-    String configFilePath = "-Dconfig=" + configFile.getAbsolutePath();
-    String[] args = {"-Dconfig=config.properties", configFilePath};
-    try (FileWriter writer = new FileWriter(configFile)) {
-      writer.write(IncludeExcludeFilter.INCLUDE_RULE_PREFIX + "textFiles = .*\\\\.txt");
-    }
-    Configuration.initConfig(args);
-    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
-    assertTrue("/path/to/file.txt", filter.isAllowed("/path/to/file.txt"));
-    assertFalse("/path/to/filetxt", filter.isAllowed("/path/to/filetxt"));
+  public void mainHelper_succeeds() throws Exception {
+    IncludeExcludeFilter.mainHelper(new String[0],
+        new java.io.ByteArrayInputStream("/path/to/doc.txt".getBytes()));
   }
 }

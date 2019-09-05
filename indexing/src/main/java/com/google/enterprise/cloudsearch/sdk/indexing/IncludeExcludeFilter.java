@@ -16,16 +16,23 @@
 
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Predicate;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
+import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Scanner;
 import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,45 +40,127 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.annotation.Nullable;
 
 /**
- * Helper utility to check if a particular item should be indexed. Include/exclude
- * patterns are specified using Java regular expressions; see <a
- * href="https://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html">java.util.regex.Pattern</a>. Patterns will use case-insensitive matching.
+ * Matches values against configured include/exclude rules. A connector can use this to
+ * limit which repository items are indexed.
  *
- * <p>A connector can choose whether to use this helper; see the connector documentation
- * to find out if this is supported.
+ * <p>See the documentation for a given connector to find out if it includes support for
+ * this class. Each connector determines which value(s) are tested against configured
+ * rules.
  *
- * <p>This filter uses configuration property names with the following patterns:
+ * <p>Each rule is specified using four configuration properties. A unique, meaningful
+ * name is used to group the properties for a rule together.
  * <ul>
- *   <li>include patterns are prefixed with "includeExcludeFilter.include.regex."
- *   <li>exclude patterns are prefixed with "includeExcludeFilter.exclude.regex."
+ * <li>{@code includeExcludeFilter.<name>.itemType}
+ * <li>{@code includeExcludeFilter.<name>.filterType}
+ * <li>{@code includeExcludeFilter.<name>.filterPattern}
+ * <li>{@code includeExcludeFilter.<name>.action}
  * </ul>
- * The last part of the property name is a meaningful name used to describe the
- * pattern. Each property name must be unique. For example
- * <ul>
- *   <li>includeExcludeFilter.include.regex.textFiles = .*\\.txt
- *   <li>includeExcludeFilter.include.regex.htmlFiles = .*\\.html
- *   <li>includeExcludeFilter.exclude.regex.pdfFiles = .*\\.pdf
- * </ul>
- * Since the property values are in a Java Properties file, any backslash characters in
- * the regular expression must be escaped.
+ *
+ * <p>{@code itemType} must be one of the valid {@link IndexingItemBuilder.ItemType}
+ * values, generally either CONTAINER_ITEM or CONTENT_ITEM.
+ *
+ * <p>{@code filterType} must be set to REGEX.
+ *
+ * <p>{@code filterPattern} must be set to a Java regular expression; see <a
+ * href="https://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html"
+ * >java.util.regex.Pattern</a>. This
+ * class will use case-insensitive matching. Since the property values are in a Java
+ * Properties file, any backslash characters in the regular expression must be escaped.
+ * Patterns will be matched using {@code java.util.regex.Matcher.find()}, which looks for
+ * a subsequence matching the given pattern, so patterns need not match the entire input
+ * value.
+ *
+ * <p>{@code action} must be set to {@code INCLUDE} or {@code EXCLUDE}.
+ *
+ * <p>If any EXCLUDE rules are configured for an item type, an item will be excluded if it
+ * matches any of those rules. Otherwise, if any INCLUDE rules are configured for an item
+ * type, an item must match at least one INCLUDE rule to be included. When no rules are
+ * configured, all items of the given type are allowed.
+ *
+ * <p>Examples:
+ * <p>Index text files (by extension)
+ * <pre>
+ *  includeExcludeFilter.includeText.action = INCLUDE
+ *  includeExcludeFilter.includeText.itemType = CONTENT_ITEM
+ *  includeExcludeFilter.includeText.filterType = REGEX
+ *  includeExcludeFilter.includeText.filterPattern = \\.txt$
+ * </pre>
+ * This rule includes content items ending in {@code .txt}. If this is the only configured
+ * rule, all CONTAINER_ITEM objects are also included, since no rules are defined for that
+ * type. Including the containers is important when indexing a hierarchical repository
+ * using a listing connector.
+ *
+ * <p>Index {@code .doc} files within a subfolder under the root
+ * <pre>
+ * includeExcludeFilter.includePublicFolder.action = INCLUDE
+ * includeExcludeFilter.includePublicFolder.itemType = CONTAINER_ITEM
+ * includeExcludeFilter.includePublicFolder.filterType = REGEX
+ * includeExcludeFilter.includePublicFolder.filterPattern = \
+ *     ^/$|^/root[/]?$|^/root/folder[/]?$|^/root/folder/public[/]?$|^/root/folder/public/
+ *
+ * includeExcludeFilter.includePressFolder.action = INCLUDE
+ * includeExcludeFilter.includePressFolder.itemType = CONTAINER_ITEM
+ * includeExcludeFilter.includePressFolder.filterType = REGEX
+ * includeExcludeFilter.includePressFolder.filterPattern = \
+ *     ^/$|^/root[/]?$|^/root/releases[/]?$|^/root/releases/press[/]?$|^/root/releases/press/
+ *
+ * includeExcludeFilter.includeDocsInFolder.action = INCLUDE
+ * includeExcludeFilter.includeDocsInFolder.itemType = CONTENT_ITEM
+ * includeExcludeFilter.includeDocsInFolder.filterType = REGEX
+ * includeExcludeFilter.includeDocsInFolder.filterPattern = \
+ *     ^/root/folder/public/.*\\.doc$|^/root/releases/press/.*\\.doc$
+ * </pre>
+ * These rules include content below two specified folders, indexing only files ending in
+ * {@code .doc}.
+ *
+ * <p>Exclude files and folders with a folder named ARCHIVE in the path.
+ * <pre>
+ * includeExcludeFilter.excludeArchiveFolders.action = EXCLUDE
+ * includeExcludeFilter.excludeArchiveFolders.itemType = CONTAINER_ITEM
+ * includeExcludeFilter.excludeArchiveFolders.filterType = REGEX
+ * includeExcludeFilter.excludeArchiveFolders.filterPattern = /ARCHIVE$|/ARCHIVE/
+ *
+ * includeExcludeFilter.excludeDocsInArchiveFolders.action = EXCLUDE
+ * includeExcludeFilter.excludeDocsInArchiveFolders.itemType = CONTENT_ITEM
+ * includeExcludeFilter.excludeDocsInArchiveFolders.filterType = REGEX
+ * includeExcludeFilter.excludeDocsInArchiveFolders.filterPattern = /ARCHIVE/
+ * </pre>
  */
 public class IncludeExcludeFilter {
   private static final Logger logger = Logger.getLogger(IncludeExcludeFilter.class.getName());
   private static final String FILTER_CONFIG_PREFIX = "includeExcludeFilter.";
-  @VisibleForTesting static final String INCLUDE_RULE_PREFIX = FILTER_CONFIG_PREFIX + "include.regex.";
-  @VisibleForTesting static final String EXCLUDE_RULE_PREFIX = FILTER_CONFIG_PREFIX + "exclude.regex.";
 
-  @VisibleForTesting final ImmutableList<Rule<String>> includeRules;
-  @VisibleForTesting final ImmutableList<Rule<String>> excludeRules;
+  enum Action { INCLUDE, EXCLUDE };
 
-  public IncludeExcludeFilter(List<Rule<String>> includeRules, List<Rule<String>> excludeRules) {
-    this.includeRules = ImmutableList.copyOf(includeRules);
-    this.excludeRules = ImmutableList.copyOf(excludeRules);
+  enum FilterType { REGEX };
+
+  @VisibleForTesting final ImmutableMap<ItemType, ImmutableList<Rule>> includeRules;
+  @VisibleForTesting final ImmutableMap<ItemType, ImmutableList<Rule>> excludeRules;
+
+  public IncludeExcludeFilter(Map<ItemType, List<Rule>> includeRules,
+      Map<ItemType, List<Rule>> excludeRules) {
+    ImmutableMap.Builder<ItemType, ImmutableList<Rule>> includeBuilder = ImmutableMap.builder();
+    ImmutableMap.Builder<ItemType, ImmutableList<Rule>> excludeBuilder = ImmutableMap.builder();
+    for (ItemType itemType : ItemType.values()) {
+      includeBuilder.put(itemType,
+          ImmutableList.copyOf(includeRules.getOrDefault(itemType, ImmutableList.of())));
+      excludeBuilder.put(itemType,
+          ImmutableList.copyOf(excludeRules.getOrDefault(itemType, ImmutableList.of())));
+    }
+    this.includeRules = includeBuilder.build();
+    this.excludeRules = excludeBuilder.build();
   }
 
+  /**
+   * Builds an IncludeExcludeFilter instance from configured properties. With no
+   * properties, returns a filter that allows everything.
+   *
+   * @return an IncludeExcludeFilter
+   */
   public static IncludeExcludeFilter fromConfiguration() {
     checkState(Configuration.isInitialized());
     Set<String> filterProperties = Configuration.getConfig()
@@ -80,26 +169,57 @@ public class IncludeExcludeFilter {
         .filter(key -> key.startsWith(FILTER_CONFIG_PREFIX))
         .collect(Collectors.toSet());
     if (filterProperties.isEmpty()) {
-      return new IncludeExcludeFilter(ImmutableList.of(), ImmutableList.of());
+      return new IncludeExcludeFilter(ImmutableMap.of(), ImmutableMap.of());
     }
-    ImmutableList.Builder<Rule<String>> includeRules = ImmutableList.builder();
-    ImmutableList.Builder<Rule<String>> excludeRules = ImmutableList.builder();
-
+    HashMap<String, Rule.Builder> ruleBuilders = new HashMap<>();
     for (String propertyName : filterProperties) {
+      String[] propertyNameParts = propertyName.split("\\.");
+      if (propertyNameParts.length != 3) {
+        throw new InvalidConfigurationException("Unknown property " + propertyName);
+      }
+      String ruleName = propertyNameParts[1];
+      String rulePropertyType = propertyNameParts[2];
       String propertyValue = Configuration.getString(propertyName, null).get();
-      logger.log(Level.FINEST, "Processing include/exclude rule {0}: {1}",
-          new Object[] { propertyName, propertyValue });
-      try {
-        if (propertyName.startsWith(INCLUDE_RULE_PREFIX)) {
-          includeRules.add(new Rule<>(new RegexPredicate(propertyValue)));
-        } else if (propertyName.startsWith(EXCLUDE_RULE_PREFIX)) {
-          excludeRules.add(new Rule<>(new RegexPredicate(propertyValue)));
-        }
-      } catch (PatternSyntaxException e) {
-        throw new InvalidConfigurationException("Invalid regex pattern " + propertyValue, e);
+      Rule.Builder builder = ruleBuilders.get(ruleName);
+      if (builder == null) {
+        builder = new Rule.Builder(ruleName);
+        ruleBuilders.put(ruleName, builder);
+      }
+      if (rulePropertyType.equals("itemType")) {
+        builder.setItemType(propertyValue);
+      } else if (rulePropertyType.equals("filterType")) {
+        builder.setFilterType(propertyValue);
+      } else if (rulePropertyType.equals("filterPattern")) {
+        builder.setFilterPattern(propertyValue);
+      } else if (rulePropertyType.equals("action")) {
+        builder.setAction(propertyValue);
+      } else {
+        throw new InvalidConfigurationException("Unknown property " + propertyName);
       }
     }
-    return new IncludeExcludeFilter(includeRules.build(), excludeRules.build());
+
+    EnumMap<ItemType, List<Rule>> includeRules = new EnumMap<>(ItemType.class);
+    EnumMap<ItemType, List<Rule>> excludeRules = new EnumMap<>(ItemType.class);
+    for (ItemType itemType : ItemType.values()) {
+      includeRules.put(itemType, new ArrayList<>());
+      excludeRules.put(itemType, new ArrayList<>());
+    }
+    for (Rule.Builder builder : ruleBuilders.values()) {
+      try {
+        Rule rule = builder.build();
+        if (rule.getAction().equals(Action.INCLUDE)) {
+          includeRules.get(rule.getItemType()).add(rule);
+        } else {
+          excludeRules.get(rule.getItemType()).add(rule);
+        }
+      } catch (IllegalStateException | IllegalArgumentException e) {
+        throw new InvalidConfigurationException(e.getMessage());
+      }
+    }
+
+    logger.log(Level.CONFIG, "Include rules: " + includeRules);
+    logger.log(Level.CONFIG, "Exclude rules: " + excludeRules);
+    return new IncludeExcludeFilter(includeRules, excludeRules);
   }
 
   /**
@@ -107,57 +227,186 @@ public class IncludeExcludeFilter {
    * patterns.
    *
    * @param value a value to test
+   * @param itemType the type of item
    * @return true if the value is included based on the configuration
    */
-  public boolean isAllowed(String value) {
-    boolean exclude = evaluateRules(excludeRules, value, false /* no rules: nothing is excluded */);
+  public boolean isAllowed(String value, ItemType itemType) {
+    List<Rule> includeByType = includeRules.get(itemType);
+    List<Rule> excludeByType = excludeRules.get(itemType);
+    boolean exclude =
+        evaluateRules(excludeByType, value, false /* if no rules: nothing is excluded */);
     if (exclude) {
-      logger.log(Level.FINEST, "excluding " + value);
+      logger.log(Level.FINEST, "Excluding " + value);
       return false;
     }
     boolean include =
-        evaluateRules(includeRules, value, true /* no rules: everything is included */);
-    logger.log(Level.FINEST, (include ? "including " : "not including ") + value);
+        evaluateRules(includeByType, value, true /* if no rules: everything is included */);
+    logger.log(Level.FINEST, (include ? "Including " : "Not including ") + value);
     return include;
   }
 
-  private boolean evaluateRules(List<Rule<String>> rules, String value, boolean emptyRulesOutcome) {
+  private boolean evaluateRules(List<Rule> rules, String value, boolean emptyRulesOutcome) {
     if (rules.isEmpty()) {
       return emptyRulesOutcome;
     }
     return rules.stream().map(r -> r.eval(value)).anyMatch(e -> e);
   }
 
-  private static class Rule<T> {
-    private final Predicate<T> predicate;
+  @VisibleForTesting
+  static class Rule {
+    private final String name;
+    private final ItemType itemType;
+    private final Action action;
+    private final Predicate<String> predicate;
 
-    public Rule(Predicate<T> predicate) {
-      this.predicate = checkNotNull(predicate);
+    private Rule(String name, ItemType itemType, Action action, Predicate<String> predicate) {
+      this.name = name;
+      this.itemType = itemType;
+      this.action = action;
+      this.predicate = predicate;
     }
 
-    public boolean eval(T val) {
-      return predicate.apply(val);
+    boolean eval(String val) {
+      boolean result = predicate.apply(val);
+      if (logger.isLoggable(Level.FINEST)) {
+        logger.log(Level.FINEST,
+            name + ": " + predicate + (result ? " matches " : " does not match ") + val);
+      }
+      return result;
+    }
+
+    String getName() {
+      return name;
+    }
+
+    ItemType getItemType() {
+      return itemType;
+    }
+
+    Action getAction() {
+      return action;
+    }
+
+    @Override
+    public String toString() {
+      return name + ": " + action + " " + itemType + " matching " + predicate;
+    }
+
+    @VisibleForTesting
+    static class Builder {
+      private String name;
+      private String itemTypeConfig;
+      private String filterTypeConfig;
+      private String filterPatternConfig;
+      private String actionConfig;
+
+      Builder(String name) {
+        this.name = name;
+      }
+
+      Builder setItemType(String itemType) {
+        this.itemTypeConfig = itemType;
+        return this;
+      }
+
+      Builder setFilterType(String filterType) {
+        this.filterTypeConfig = filterType;
+        return this;
+      }
+
+      Builder setFilterPattern(String filterPattern) {
+        this.filterPatternConfig = filterPattern;
+        return this;
+      }
+
+      Builder setAction(String action) {
+        this.actionConfig = action;
+        return this;
+      }
+
+      Rule build()
+          throws IllegalArgumentException, IllegalStateException, PatternSyntaxException {
+        // checkState throws IllegalStateException
+        checkState(!Strings.isNullOrEmpty(name), "Rule name is missing");
+        checkState(!Strings.isNullOrEmpty(itemTypeConfig), "Rule item type is missing: " + name);
+        checkState(!Strings.isNullOrEmpty(filterTypeConfig),
+            "Rule filter type is missing: " + name);
+        checkState(!Strings.isNullOrEmpty(filterPatternConfig),
+            "Rule filter pattern is missing: " + name);
+        checkState(!Strings.isNullOrEmpty(actionConfig), "Rule action is missing: " + name);
+
+        // valueOf throws IllegalArgumentException
+        ItemType itemType = ItemType.valueOf(itemTypeConfig.toUpperCase());
+        Action action = Action.valueOf(actionConfig.toUpperCase());
+        FilterType filterType = FilterType.valueOf(filterTypeConfig.toUpperCase());
+
+        switch (filterType) {
+          case REGEX:
+            return new Rule(name, itemType, action, new RegexPredicate(filterPatternConfig));
+          default:
+            throw new IllegalArgumentException(filterTypeConfig);
+        }
+      }
     }
   }
 
   private static class RegexPredicate implements Predicate<String> {
-    private final Pattern p;
+    private final Pattern pattern;
     private final String regex;
 
-    private RegexPredicate(String regex) {
-      this.p = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
+    private RegexPredicate(String regex) throws PatternSyntaxException {
+      this.pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
       this.regex = regex;
     }
 
     @Override
     public boolean apply(@Nullable String input) {
-      Matcher matcher = p.matcher(input);
-      boolean matches = matcher.matches();
-      logger.log(
-          Level.FINE,
-          "Pattern [{0}] input [{1}] matches Outcome [{2}] with Regex[{3}]",
-          new Object[] {p, input, matches, regex});
-      return matches;
+      Matcher matcher = pattern.matcher(input);
+      return matcher.find();
+    }
+
+    @Override
+    public String toString() {
+      return regex;
+    }
+  }
+
+  /**
+   * Run this class to test patterns against possible values.
+   *
+   * <p>Pass {@code -Dconfig=<config-file>} to specify a file containing the configuration
+   * properties.
+   *
+   * <p>Test values are read from standard input, either typed or redirected from a file.
+   */
+  public static void main(String[] args) throws java.io.IOException {
+    mainHelper(args, System.in);
+  }
+
+  @VisibleForTesting
+  static void mainHelper(String[] args, java.io.InputStream inStream) throws java.io.IOException {
+    Configuration.initConfig(args);
+    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
+    System.out.println("Rules:");
+    Stream.concat(
+        filter.includeRules.values().stream().filter(list -> !list.isEmpty()),
+        filter.excludeRules.values().stream().filter(list -> !list.isEmpty()))
+        .forEach(list -> list.stream().forEach(rule -> System.out.println("*** " + rule)));
+    System.out.println();
+
+    System.out.println("Enter test value(s)");
+    try (Scanner in = new Scanner(inStream)) {
+      while (true) {
+        try {
+          String value = in.next();
+          System.out.println(value);
+          System.out.println("  as content  : " + filter.isAllowed(value, ItemType.CONTENT_ITEM));
+          System.out.println("  as container: " + filter.isAllowed(value, ItemType.CONTAINER_ITEM));
+          System.out.println();
+        } catch (NoSuchElementException e) {
+          return;
+        }
+      }
     }
   }
 }
