@@ -83,7 +83,8 @@ import java.util.concurrent.ExecutionException;
  *    -Dpayload={your json file contains all the request} \
  *    -Dapi.serviceAccountPrivateKeyFile={service account private key file} \
  *    -DrootUrl=https://www.googleapis.com/ \
- *    -jar cloudsearch-uploader-{version}.jar
+ *    -cp google-cloudsearch-indexing-connector-sdk-{version}.jar \
+ *    com.google.enterprise.cloudsearch.sdk.indexing.util.Uploader
  *  </pre>
  *
  * payload is the json file which contains the source Id and all the requests related to it.

@@ -32,11 +32,11 @@ import com.google.enterprise.cloudsearch.sdk.indexing.template.FullTraversalConn
  * to the indexing API. A sample glossary schema json file can be found at
  * {src/main/resources/com/google/enterprise/cloudsearch/csvconnector/glossarySchema.json}
  *
- * <p>cmd to run csv connector:
+ * <p>Command to run the csv connector:
  *
  * <pre>
  *    java
- *    -jar cloudsearch-csvconnector-{version}.jar
+ *    -jar google-cloudsearch-csv-connector-{version}.jar
  *    -Dconfig={your config.properties file}
  *  </pre>
  *
