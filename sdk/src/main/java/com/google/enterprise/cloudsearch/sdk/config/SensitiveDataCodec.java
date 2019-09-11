@@ -261,7 +261,7 @@ public class SensitiveDataCodec {
    * -Djavax.net.ssl.keyStorePassword=testtest \
    * -Djavax.net.ssl.keyStoreType=JKS \
    * -Dalias=testkeypair \
-   * -classpath 'cloudsearch-connector-sdk-{version}-SNAPSHOT-withlib.jar' \
+   * -classpath 'cloudsearch-connector-sdk-{version}.jar' \
    * com.google.enterprise.cloudsearch.sdk.config.SensitiveDataCodec
    * </pre>
    *
