@@ -26,12 +26,18 @@ import com.google.common.collect.ImmutableMap;
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Scanner;
 import java.util.Set;
 import java.util.logging.Level;
@@ -136,24 +142,53 @@ public class IncludeExcludeFilter {
 
   enum Action { INCLUDE, EXCLUDE };
 
-  enum FilterType { REGEX };
+  enum FilterType { REGEX, FILE_PREFIX, URL_PREFIX };
 
-  @VisibleForTesting final ImmutableMap<ItemType, ImmutableList<Rule>> includeRules;
-  @VisibleForTesting final ImmutableMap<ItemType, ImmutableList<Rule>> excludeRules;
+  @VisibleForTesting final ImmutableList<Rule> prefixIncludeRules;
+  @VisibleForTesting final ImmutableList<Rule> prefixExcludeRules;
+  @VisibleForTesting final ImmutableMap<ItemType, List<Rule>> regexIncludeRules;
+  @VisibleForTesting final ImmutableMap<ItemType, List<Rule>> regexExcludeRules;
 
-  public IncludeExcludeFilter(Map<ItemType, List<Rule>> includeRules,
-      Map<ItemType, List<Rule>> excludeRules) {
-    ImmutableMap.Builder<ItemType, ImmutableList<Rule>> includeBuilder = ImmutableMap.builder();
-    ImmutableMap.Builder<ItemType, ImmutableList<Rule>> excludeBuilder = ImmutableMap.builder();
-    for (ItemType itemType : ItemType.values()) {
-      includeBuilder.put(itemType,
-          ImmutableList.copyOf(includeRules.getOrDefault(itemType, ImmutableList.of())));
-      excludeBuilder.put(itemType,
-          ImmutableList.copyOf(excludeRules.getOrDefault(itemType, ImmutableList.of())));
-    }
-    this.includeRules = includeBuilder.build();
-    this.excludeRules = excludeBuilder.build();
+  public IncludeExcludeFilter(List<Rule> rules) {
+    List<Rule> prefixIncludeList = rules.stream()
+        .filter(r -> (r.getFilterType().equals(FilterType.FILE_PREFIX)
+                || r.getFilterType().equals(FilterType.URL_PREFIX)))
+        .filter(r -> r.getAction().equals(Action.INCLUDE))
+        .collect(Collectors.toList());
+    prefixIncludeRules = ImmutableList.copyOf(prefixIncludeList);
+
+    List<Rule> prefixExcludeList = rules.stream()
+        .filter(r -> (r.getFilterType().equals(FilterType.FILE_PREFIX)
+                || r.getFilterType().equals(FilterType.URL_PREFIX)))
+        .filter(r -> r.getAction().equals(Action.EXCLUDE))
+        .collect(Collectors.toList());
+    prefixExcludeRules = ImmutableList.copyOf(prefixExcludeList);
+
+    Map<ItemType, List<Rule>> regexIncludeMap = rules.stream()
+        .filter(r -> r.getFilterType().equals(FilterType.REGEX))
+        .filter(r -> r.getAction().equals(Action.INCLUDE))
+        .collect(Collectors.groupingBy(r -> r.getItemType().get()));
+    Arrays.stream(ItemType.values())
+        .forEach(t -> regexIncludeMap.putIfAbsent(t, ImmutableList.of()));
+    regexIncludeMap.replaceAll((k, v) -> ImmutableList.copyOf(v));
+    regexIncludeRules = ImmutableMap.copyOf(regexIncludeMap);
+
+    Map<ItemType, List<Rule>> regexExcludeMap = rules.stream()
+        .filter(r -> r.getFilterType().equals(FilterType.REGEX))
+        .filter(r -> r.getAction().equals(Action.EXCLUDE))
+        .collect(Collectors.groupingBy(r -> r.getItemType().get()));
+    Arrays.stream(ItemType.values())
+        .forEach(t -> regexExcludeMap.putIfAbsent(t, ImmutableList.of()));
+    regexExcludeMap.replaceAll((k, v) -> ImmutableList.copyOf(v));
+    regexExcludeRules = ImmutableMap.copyOf(regexExcludeMap);
   }
+
+  @Override
+  public String toString() {
+    return "Include: \n" + prefixIncludeRules + "\n" + regexIncludeRules
+        + "\nExclude: \n" + prefixExcludeRules + "\n" + regexExcludeRules;
+  }
+
 
   /**
    * Builds an IncludeExcludeFilter instance from configured properties. With no
@@ -169,7 +204,7 @@ public class IncludeExcludeFilter {
         .filter(key -> key.startsWith(FILTER_CONFIG_PREFIX))
         .collect(Collectors.toSet());
     if (filterProperties.isEmpty()) {
-      return new IncludeExcludeFilter(ImmutableMap.of(), ImmutableMap.of());
+      return new IncludeExcludeFilter(ImmutableList.of());
     }
     HashMap<String, Rule.Builder> ruleBuilders = new HashMap<>();
     for (String propertyName : filterProperties) {
@@ -197,29 +232,15 @@ public class IncludeExcludeFilter {
         throw new InvalidConfigurationException("Unknown property " + propertyName);
       }
     }
-
-    EnumMap<ItemType, List<Rule>> includeRules = new EnumMap<>(ItemType.class);
-    EnumMap<ItemType, List<Rule>> excludeRules = new EnumMap<>(ItemType.class);
-    for (ItemType itemType : ItemType.values()) {
-      includeRules.put(itemType, new ArrayList<>());
-      excludeRules.put(itemType, new ArrayList<>());
-    }
+    List<Rule> rules = new ArrayList<>();
     for (Rule.Builder builder : ruleBuilders.values()) {
       try {
-        Rule rule = builder.build();
-        if (rule.getAction().equals(Action.INCLUDE)) {
-          includeRules.get(rule.getItemType()).add(rule);
-        } else {
-          excludeRules.get(rule.getItemType()).add(rule);
-        }
+        rules.add(builder.build());
       } catch (IllegalStateException | IllegalArgumentException e) {
         throw new InvalidConfigurationException(e.getMessage());
       }
     }
-
-    logger.log(Level.CONFIG, "Include rules: " + includeRules);
-    logger.log(Level.CONFIG, "Exclude rules: " + excludeRules);
-    return new IncludeExcludeFilter(includeRules, excludeRules);
+    return new IncludeExcludeFilter(rules);
   }
 
   /**
@@ -231,16 +252,19 @@ public class IncludeExcludeFilter {
    * @return true if the value is included based on the configuration
    */
   public boolean isAllowed(String value, ItemType itemType) {
-    List<Rule> includeByType = includeRules.get(itemType);
-    List<Rule> excludeByType = excludeRules.get(itemType);
+    List<Rule> excludeRules = Stream.concat(prefixExcludeRules.stream(), regexExcludeRules.get(itemType).stream())
+        .collect(Collectors.toList());
     boolean exclude =
-        evaluateRules(excludeByType, value, false /* if no rules: nothing is excluded */);
+        evaluateRules(excludeRules, value, false /* if no rules: nothing is excluded */);
     if (exclude) {
       logger.log(Level.FINEST, "Excluding " + value);
       return false;
     }
+
     boolean include =
-        evaluateRules(includeByType, value, true /* if no rules: everything is included */);
+        evaluateRules(prefixIncludeRules, value, true /* if no rules: everything is included */)
+        &&
+        evaluateRules(regexIncludeRules.get(itemType), value, true /* if no rules: everything is included */);
     logger.log(Level.FINEST, (include ? "Including " : "Not including ") + value);
     return include;
   }
@@ -254,12 +278,15 @@ public class IncludeExcludeFilter {
 
   @VisibleForTesting
   static class Rule {
-    private final String name;
-    private final ItemType itemType;
-    private final Action action;
-    private final Predicate<String> predicate;
+    final FilterType filterType;
+    final String name;
+    final Optional<ItemType> itemType;
+    final Action action;
+    final Predicate<String> predicate;
 
-    private Rule(String name, ItemType itemType, Action action, Predicate<String> predicate) {
+    private Rule(FilterType filterType, String name, Optional<ItemType> itemType,
+        Action action, Predicate<String> predicate) {
+      this.filterType = filterType;
       this.name = name;
       this.itemType = itemType;
       this.action = action;
@@ -279,17 +306,26 @@ public class IncludeExcludeFilter {
       return name;
     }
 
-    ItemType getItemType() {
-      return itemType;
-    }
-
     Action getAction() {
       return action;
     }
 
+    Optional<ItemType> getItemType() {
+      return itemType;
+    }
+
+    FilterType getFilterType() {
+      return filterType;
+    }
+
+    Predicate<String> getPredicate() {
+      return predicate;
+    }
+
     @Override
     public String toString() {
-      return name + ": " + action + " " + itemType + " matching " + predicate;
+      return name + ": " + action + " "
+          + (itemType.isPresent() ? itemType : "ANY") + " matching " + predicate;
     }
 
     @VisibleForTesting
@@ -328,7 +364,6 @@ public class IncludeExcludeFilter {
           throws IllegalArgumentException, IllegalStateException, PatternSyntaxException {
         // checkState throws IllegalStateException
         checkState(!Strings.isNullOrEmpty(name), "Rule name is missing");
-        checkState(!Strings.isNullOrEmpty(itemTypeConfig), "Rule item type is missing: " + name);
         checkState(!Strings.isNullOrEmpty(filterTypeConfig),
             "Rule filter type is missing: " + name);
         checkState(!Strings.isNullOrEmpty(filterPatternConfig),
@@ -336,13 +371,23 @@ public class IncludeExcludeFilter {
         checkState(!Strings.isNullOrEmpty(actionConfig), "Rule action is missing: " + name);
 
         // valueOf throws IllegalArgumentException
-        ItemType itemType = ItemType.valueOf(itemTypeConfig.toUpperCase());
         Action action = Action.valueOf(actionConfig.toUpperCase());
         FilterType filterType = FilterType.valueOf(filterTypeConfig.toUpperCase());
 
         switch (filterType) {
           case REGEX:
-            return new Rule(name, itemType, action, new RegexPredicate(filterPatternConfig));
+            checkState(!Strings.isNullOrEmpty(itemTypeConfig), "Rule item type is missing: " + name);
+            ItemType itemType = ItemType.valueOf(itemTypeConfig.toUpperCase());
+            return new Rule(FilterType.REGEX,
+                name, Optional.of(itemType), action, new RegexPredicate(filterPatternConfig));
+          case FILE_PREFIX:
+            checkState(itemTypeConfig == null, "Item type should not be set for prefix rules");
+            return new Rule(FilterType.FILE_PREFIX,
+                name, Optional.empty(), action, new FilePrefixPredicate(action, filterPatternConfig));
+          case URL_PREFIX:
+            checkState(itemTypeConfig == null, "Item type should not be set for prefix rules");
+            return new Rule(FilterType.URL_PREFIX,
+                name, Optional.empty(), action, new UrlPrefixPredicate(action, filterPatternConfig));
           default:
             throw new IllegalArgumentException(filterTypeConfig);
         }
@@ -361,6 +406,9 @@ public class IncludeExcludeFilter {
 
     @Override
     public boolean apply(@Nullable String input) {
+      if (input == null) {
+        return false;
+      }
       Matcher matcher = pattern.matcher(input);
       return matcher.find();
     }
@@ -368,6 +416,142 @@ public class IncludeExcludeFilter {
     @Override
     public String toString() {
       return regex;
+    }
+  }
+
+  private static class FilePrefixPredicate implements Predicate<String> {
+    private final Action action;
+    private final Path prefixPath;
+    private final Path prefixRoot;
+    private final List<Path> prefixComponents;
+
+    private FilePrefixPredicate(Action action, String prefix) {
+      this.action = action;
+      prefixPath = Paths.get(prefix);
+      if (!prefixPath.isAbsolute()) {
+        throw new IllegalArgumentException("file prefix must be absolute");
+      }
+        prefixRoot = prefixPath.getRoot();
+        ImmutableList.Builder<Path> builder = ImmutableList.builder();
+        builder.add(prefixRoot);
+        for (int i = 1; i <= prefixPath.getNameCount(); i++) {
+          builder.add(prefixRoot.resolve(prefixPath.subpath(0, i)));
+        }
+        prefixComponents = builder.build();
+    }
+
+    @Override
+    public boolean apply(@Nullable String input) {
+      if (input == null) {
+        return false;
+      }
+      Path inputPath = Paths.get(input);
+      if (action.equals(Action.INCLUDE)) {
+        for (Path p : prefixComponents) {
+          if (p.equals(inputPath)) {
+            return true;
+          }
+        }
+      }
+      return inputPath.startsWith(prefixPath);
+    }
+
+    @Override
+    public String toString() {
+      return prefixPath.toString();
+    }
+  }
+
+  // Both host and path are matched case-insensitively.
+  private static class UrlPrefixPredicate implements Predicate<String> {
+    private final Action action;
+    private final String configuredPrefix;
+    private final String lowercasePrefix;
+    //    private final List<String> hostValues;
+    private final List<String> pathValues;
+
+    private UrlPrefixPredicate(Action action, String configuredPrefix) {
+      this.action = action;
+      this.configuredPrefix = configuredPrefix;
+      String tmp = configuredPrefix.toLowerCase();
+      if (tmp.endsWith("/")) {
+        tmp = tmp.substring(0, tmp.length() - 1);
+      }
+      this.lowercasePrefix = tmp;
+      URL url;
+      try {
+        url = new URL(lowercasePrefix);
+      } catch (MalformedURLException e) {
+        throw new IllegalArgumentException(configuredPrefix + " is not a URL", e);
+      }
+      ImmutableList.Builder<String> hostBuilder = ImmutableList.builder();
+      ImmutableList.Builder<String> pathBuilder = ImmutableList.builder();
+      String path = url.getPath();
+      if (path.isEmpty() || path.equals("/")) {
+        // Just "http://host:port"
+        pathBuilder.add(lowercasePrefix);
+        pathBuilder.add(lowercasePrefix + "/");
+      } else {
+        String hostPart = lowercasePrefix.substring(0, lowercasePrefix.indexOf(path));
+        pathBuilder.add(hostPart);
+        pathBuilder.add(hostPart + "/");
+
+        // For /a/b/c, build prefix matches {/a, /a/, /a/b, /a/b/, /a/b/c, /a/b/c/}
+        String[] pathParts = path.substring(1).split("/"); // Avoid empty first element
+        for (int i = 1; i <= pathParts.length; i++) {
+          String pathPart = hostPart + "/" + String.join("/", Arrays.copyOfRange(pathParts, 0, i));
+          pathBuilder.add(pathPart);
+          pathBuilder.add(pathPart + "/");
+        }
+      }
+      pathValues = pathBuilder.build();
+    }
+
+    @Override
+    public boolean apply(@Nullable String input) {
+      if (input == null) {
+        return false;
+      }
+      try {
+        new URL(input);
+      } catch (MalformedURLException e) {
+        logger.log(Level.FINE, input + " is not a valid URL", e);
+        return false;
+      }
+
+      String lowercaseInput = input.toLowerCase();
+      if (action.equals(Action.INCLUDE)) {
+        if (pathValues.contains(lowercaseInput)) {
+          return true;
+        }
+      } else {
+        if (lowercaseInput.equals(lowercasePrefix)) {
+          return true;
+        }
+      }
+      // If the input isn't one of the prefix parts, and doesn't start with the
+      // prefix, it isn't a match.
+      if (!lowercaseInput.startsWith(lowercasePrefix)) {
+        return false;
+      }
+
+      // If the input starts with the configured prefix, the next character must be a
+      // separator; /apple should not match /applesauce, but should match /apple/sauce.
+      char c = lowercaseInput.charAt(lowercasePrefix.length());
+      switch (c) {
+        case '/':
+        case ';':
+        case '?':
+        case '#':
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    @Override
+    public String toString() {
+      return configuredPrefix;
     }
   }
 
@@ -385,6 +569,7 @@ public class IncludeExcludeFilter {
 
   @VisibleForTesting
   static void mainHelper(String[] args, java.io.InputStream inStream) throws java.io.IOException {
+    /*
     Configuration.initConfig(args);
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
     System.out.println("Rules:");
@@ -408,5 +593,6 @@ public class IncludeExcludeFilter {
         }
       }
     }
+    */
   }
 }
