@@ -32,7 +32,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,75 +52,94 @@ import javax.annotation.Nullable;
  * Matches values against configured include/exclude rules. A connector can use this to
  * limit which repository items are indexed.
  *
- * <p>See the documentation for a given connector to find out if it includes support for
- * this class. Each connector determines which value(s) are tested against configured
+ * <p>See the documentation for your connector to find out if it includes support for
+ * this class. Each connector determines which values are tested against configured
  * rules.
  *
- * <p>Each rule is specified using four configuration properties. A unique, meaningful
- * name is used to group the properties for a rule together.
+ * <p>This class supports three types of filter rules: REGEX, FILE_PREFIX, and URL_PREFIX. A
+ * REGEX rule is used to match values against any Java regular expression. A FILE_PREFIX
+ * rule is used to match file system path values against a given absolute file prefix. A
+ * URL_PREFIX rule is used to match URL values against a given URL prefix. This class
+ * uses case-insensitive matching for all rule types. Multiple rules can be specified.
+ *
+ * <p>Each rule is specified using either three or four configuration properties. A
+ * unique, meaningful name is used to group the properties for a rule together.
+
+ * <pre>
+ * includeExcludeFilter.&lt;name&gt;.itemType
+ * includeExcludeFilter.&lt;name&gt;.filterType
+ * includeExcludeFilter.&lt;name&gt;.filterPattern
+ * includeExcludeFilter.&lt;name&gt;.action
+ * </pre>
+ *
  * <ul>
- * <li>{@code includeExcludeFilter.<name>.itemType}
- * <li>{@code includeExcludeFilter.<name>.filterType}
- * <li>{@code includeExcludeFilter.<name>.filterPattern}
- * <li>{@code includeExcludeFilter.<name>.action}
- * </ul>
+ * <li>{@code itemType} must be one of the valid {@link IndexingItemBuilder.ItemType}
+ * values, generally either CONTAINER_ITEM or CONTENT_ITEM. Separating REGEX filters by
+ * type allows you to write simpler rules, for example, when filtering by file extension,
+ * to match files by extension without accidentally excluding all folders from
+ * indexing. Only a REGEX filter can have an {@code itemType} property.
  *
- * <p>{@code itemType} must be one of the valid {@link IndexingItemBuilder.ItemType}
- * values, generally either CONTAINER_ITEM or CONTENT_ITEM.
+ * <li>{@code filterType} must be set to REGEX, FILE_PREFIX, or URL_PREFIX.
  *
- * <p>{@code filterType} must be set to REGEX.
- *
- * <p>{@code filterPattern} must be set to a Java regular expression; see <a
+ * <li>{@code filterPattern}
+ * <ul>
+ * <li>For REGEX filters, {@code filterPattern} must be set to a Java regular expression; see <a
  * href="https://docs.oracle.com/javase/7/docs/api/java/util/regex/Pattern.html"
- * >java.util.regex.Pattern</a>. This
- * class will use case-insensitive matching. Since the property values are in a Java
+ * >java.util.regex.Pattern</a>.  Since the property values are in a Java
  * Properties file, any backslash characters in the regular expression must be escaped.
  * Patterns will be matched using {@code java.util.regex.Matcher.find()}, which looks for
  * a subsequence matching the given pattern, so patterns need not match the entire input
  * value.
  *
- * <p>{@code action} must be set to {@code INCLUDE} or {@code EXCLUDE}.
+
+ * <li>For FILE_PREFIX filters, {@code filterPattern} must be set to an absolute file path.
+
+ * <li>For URL_PREFIX filters, {@code filterPattern} must be set to an absolute URL.
+ * </ul>
+ *
+ * <li>{@code action} must be set to {@code INCLUDE} or {@code EXCLUDE}.
  *
  * <p>If any EXCLUDE rules are configured for an item type, an item will be excluded if it
  * matches any of those rules. Otherwise, if any INCLUDE rules are configured for an item
  * type, an item must match at least one INCLUDE rule to be included. When no rules are
- * configured, all items of the given type are allowed.
+ * configured, all items of the given type are allowed. When combining FILE_PREFIX or
+ * URL_PREFIX filters with REGEX filters in INCLUDe rules, an item must match both at
+ * least one of the FILE_PREFIX or URL_PREFIX rules and at least one of the REGEX filters.
+ * </ul>
  *
  * <p>Examples:
- * <p>Index text files (by extension)
+
+ * <p>Index text files (by extension). This rule includes content items ending in {@code
+ * .txt}. If this is the only configured rule, all CONTAINER_ITEM objects are also
+ * included, since no rules are defined for that type. Including the containers is
+ * important when indexing a hierarchical repository using a listing connector.
+
  * <pre>
  *  includeExcludeFilter.includeText.action = INCLUDE
  *  includeExcludeFilter.includeText.itemType = CONTENT_ITEM
  *  includeExcludeFilter.includeText.filterType = REGEX
  *  includeExcludeFilter.includeText.filterPattern = \\.txt$
  * </pre>
- * This rule includes content items ending in {@code .txt}. If this is the only configured
- * rule, all CONTAINER_ITEM objects are also included, since no rules are defined for that
- * type. Including the containers is important when indexing a hierarchical repository
- * using a listing connector.
  *
- * <p>Index {@code .doc} files within a subfolder under the root
+ * <p>Include only content within a subfolder.  This rule will include {@code
+ * \\share\shareFolder} and {@code \\share\shareFolder\folder} as well as {@code
+ * \\share\shareFolder\folder\pathToInclude} and its contents.
+ *
  * <pre>
  * includeExcludeFilter.includePublicFolder.action = INCLUDE
- * includeExcludeFilter.includePublicFolder.itemType = CONTAINER_ITEM
- * includeExcludeFilter.includePublicFolder.filterType = REGEX
- * includeExcludeFilter.includePublicFolder.filterPattern = \
- *     ^/$|^/root[/]?$|^/root/folder[/]?$|^/root/folder/public[/]?$|^/root/folder/public/
- *
- * includeExcludeFilter.includePressFolder.action = INCLUDE
- * includeExcludeFilter.includePressFolder.itemType = CONTAINER_ITEM
- * includeExcludeFilter.includePressFolder.filterType = REGEX
- * includeExcludeFilter.includePressFolder.filterPattern = \
- *     ^/$|^/root[/]?$|^/root/releases[/]?$|^/root/releases/press[/]?$|^/root/releases/press/
- *
- * includeExcludeFilter.includeDocsInFolder.action = INCLUDE
- * includeExcludeFilter.includeDocsInFolder.itemType = CONTENT_ITEM
- * includeExcludeFilter.includeDocsInFolder.filterType = REGEX
- * includeExcludeFilter.includeDocsInFolder.filterPattern = \
- *     ^/root/folder/public/.*\\.doc$|^/root/releases/press/.*\\.doc$
+ * includeExcludeFilter.includePublicFolder.filterType = FILE_PREFIX
+ * includeExcludeFilter.includePublicFolder.filterPattern = \\\\share\\shareFolder\\folder\\pathToInclude
  * </pre>
- * These rules include content below two specified folders, indexing only files ending in
- * {@code .doc}.
+ *
+ * <p>Include only content within a subfolder of a web site. This rule will include {@code
+ * https://example.com/} and {@code https://example.com/folder/} as well as {@code
+ * https://example.com/folder/pathToInclude} and its contents.
+ *
+ * <pre>
+ * includeExcludeFilter.includePublicFolder.action = INCLUDE
+ * includeExcludeFilter.includePublicFolder.filterType = URL_PREFIX
+ * includeExcludeFilter.includePublicFolder.filterPattern = https://example.com/folder/pathToInclude
+ * </pre>
  *
  * <p>Exclude files and folders with a folder named ARCHIVE in the path.
  * <pre>
@@ -149,7 +167,8 @@ public class IncludeExcludeFilter {
   @VisibleForTesting final ImmutableMap<ItemType, List<Rule>> regexIncludeRules;
   @VisibleForTesting final ImmutableMap<ItemType, List<Rule>> regexExcludeRules;
 
-  public IncludeExcludeFilter(List<Rule> rules) {
+  @VisibleForTesting
+  IncludeExcludeFilter(List<Rule> rules) {
     List<Rule> prefixIncludeList = rules.stream()
         .filter(r -> (r.getFilterType().equals(FilterType.FILE_PREFIX)
                 || r.getFilterType().equals(FilterType.URL_PREFIX)))
@@ -188,7 +207,6 @@ public class IncludeExcludeFilter {
     return "Include: \n" + prefixIncludeRules + "\n" + regexIncludeRules
         + "\nExclude: \n" + prefixExcludeRules + "\n" + regexExcludeRules;
   }
-
 
   /**
    * Builds an IncludeExcludeFilter instance from configured properties. With no
@@ -252,19 +270,21 @@ public class IncludeExcludeFilter {
    * @return true if the value is included based on the configuration
    */
   public boolean isAllowed(String value, ItemType itemType) {
-    List<Rule> excludeRules = Stream.concat(prefixExcludeRules.stream(), regexExcludeRules.get(itemType).stream())
+    List<Rule> excludeRules =
+        Stream.concat(prefixExcludeRules.stream(), regexExcludeRules.get(itemType).stream())
         .collect(Collectors.toList());
-    boolean exclude =
-        evaluateRules(excludeRules, value, false /* if no rules: nothing is excluded */);
+    // If no rules: nothing is excluded
+    boolean exclude = evaluateRules(excludeRules, value, false);
     if (exclude) {
       logger.log(Level.FINEST, "Excluding " + value);
       return false;
     }
 
+    // If no rules: everything is included
     boolean include =
-        evaluateRules(prefixIncludeRules, value, true /* if no rules: everything is included */)
+        evaluateRules(prefixIncludeRules, value, true)
         &&
-        evaluateRules(regexIncludeRules.get(itemType), value, true /* if no rules: everything is included */);
+        evaluateRules(regexIncludeRules.get(itemType), value, true);
     logger.log(Level.FINEST, (include ? "Including " : "Not including ") + value);
     return include;
   }
@@ -324,8 +344,9 @@ public class IncludeExcludeFilter {
 
     @Override
     public String toString() {
-      return name + ": " + action + " "
-          + (itemType.isPresent() ? itemType : "ANY") + " matching " + predicate;
+      return name + ": " + filterType + " " + action + " "
+          + (itemType.isPresent() ? itemType.get() : "ANY")
+          + " matching " + predicate;
     }
 
     @VisibleForTesting
@@ -376,18 +397,18 @@ public class IncludeExcludeFilter {
 
         switch (filterType) {
           case REGEX:
-            checkState(!Strings.isNullOrEmpty(itemTypeConfig), "Rule item type is missing: " + name);
+            checkState(!Strings.isNullOrEmpty(itemTypeConfig), "Item type is missing: " + name);
             ItemType itemType = ItemType.valueOf(itemTypeConfig.toUpperCase());
             return new Rule(FilterType.REGEX,
                 name, Optional.of(itemType), action, new RegexPredicate(filterPatternConfig));
           case FILE_PREFIX:
             checkState(itemTypeConfig == null, "Item type should not be set for prefix rules");
-            return new Rule(FilterType.FILE_PREFIX,
-                name, Optional.empty(), action, new FilePrefixPredicate(action, filterPatternConfig));
+            return new Rule(FilterType.FILE_PREFIX, name, Optional.empty(),
+                action, new FilePrefixPredicate(action, filterPatternConfig));
           case URL_PREFIX:
             checkState(itemTypeConfig == null, "Item type should not be set for prefix rules");
-            return new Rule(FilterType.URL_PREFIX,
-                name, Optional.empty(), action, new UrlPrefixPredicate(action, filterPatternConfig));
+            return new Rule(FilterType.URL_PREFIX, name, Optional.empty(),
+                action, new UrlPrefixPredicate(action, filterPatternConfig));
           default:
             throw new IllegalArgumentException(filterTypeConfig);
         }
@@ -421,13 +442,15 @@ public class IncludeExcludeFilter {
 
   private static class FilePrefixPredicate implements Predicate<String> {
     private final Action action;
+    private final String configuredPrefix;
     private final Path prefixPath;
     private final Path prefixRoot;
     private final List<Path> prefixComponents;
 
     private FilePrefixPredicate(Action action, String prefix) {
       this.action = action;
-      prefixPath = Paths.get(prefix);
+      configuredPrefix = prefix;
+      prefixPath = Paths.get(prefix.toLowerCase());
       if (!prefixPath.isAbsolute()) {
         throw new IllegalArgumentException("file prefix must be absolute");
       }
@@ -445,7 +468,7 @@ public class IncludeExcludeFilter {
       if (input == null) {
         return false;
       }
-      Path inputPath = Paths.get(input);
+      Path inputPath = Paths.get(input.toLowerCase());
       if (action.equals(Action.INCLUDE)) {
         for (Path p : prefixComponents) {
           if (p.equals(inputPath)) {
@@ -458,7 +481,7 @@ public class IncludeExcludeFilter {
 
     @Override
     public String toString() {
-      return prefixPath.toString();
+      return configuredPrefix;
     }
   }
 
@@ -467,7 +490,6 @@ public class IncludeExcludeFilter {
     private final Action action;
     private final String configuredPrefix;
     private final String lowercasePrefix;
-    //    private final List<String> hostValues;
     private final List<String> pathValues;
 
     private UrlPrefixPredicate(Action action, String configuredPrefix) {
@@ -569,13 +591,14 @@ public class IncludeExcludeFilter {
 
   @VisibleForTesting
   static void mainHelper(String[] args, java.io.InputStream inStream) throws java.io.IOException {
-    /*
     Configuration.initConfig(args);
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
     System.out.println("Rules:");
+    Stream.concat(filter.prefixIncludeRules.stream(), filter.prefixExcludeRules.stream())
+        .forEach(rule -> System.out.println("*** " + rule));
     Stream.concat(
-        filter.includeRules.values().stream().filter(list -> !list.isEmpty()),
-        filter.excludeRules.values().stream().filter(list -> !list.isEmpty()))
+        filter.regexIncludeRules.values().stream().filter(list -> !list.isEmpty()),
+        filter.regexExcludeRules.values().stream().filter(list -> !list.isEmpty()))
         .forEach(list -> list.stream().forEach(rule -> System.out.println("*** " + rule)));
     System.out.println();
 
@@ -585,14 +608,13 @@ public class IncludeExcludeFilter {
         try {
           String value = in.next();
           System.out.println(value);
-          System.out.println("  as content  : " + filter.isAllowed(value, ItemType.CONTENT_ITEM));
           System.out.println("  as container: " + filter.isAllowed(value, ItemType.CONTAINER_ITEM));
+          System.out.println("  as content  : " + filter.isAllowed(value, ItemType.CONTENT_ITEM));
           System.out.println();
         } catch (NoSuchElementException e) {
           return;
         }
       }
     }
-    */
   }
 }

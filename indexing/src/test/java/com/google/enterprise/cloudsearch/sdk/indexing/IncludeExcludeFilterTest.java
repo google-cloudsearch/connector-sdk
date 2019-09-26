@@ -16,19 +16,18 @@
 
 package com.google.enterprise.cloudsearch.sdk.indexing;
 
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assume.assumeThat;
 
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
 import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
@@ -45,6 +44,8 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class IncludeExcludeFilterTest {
+  private static final boolean IS_WINDOWS = System.getProperty("file.separator").equals("\\");
+
   @Rule public ExpectedException thrown = ExpectedException.none();
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public SetupConfigRule setupConfig = SetupConfigRule.uninitialized();
@@ -74,7 +75,7 @@ public class IncludeExcludeFilterTest {
   @Test
   public void ruleBuilder_regexMissingItemType_throwsException() {
     thrown.expect(IllegalStateException.class);
-    thrown.expectMessage("Rule item type");
+    thrown.expectMessage("Item type");
     IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
         .setFilterType("REGEX")
         .setFilterPattern("file.txt")
@@ -84,9 +85,10 @@ public class IncludeExcludeFilterTest {
 
   @Test
   public void ruleBuilder_prefixMissingItemType_isEmpty() {
+    String pattern = IS_WINDOWS ? "\\\\share\\folder" : "/folder";
     IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
         .setFilterType("FILE_PREFIX")
-        .setFilterPattern("/file")
+        .setFilterPattern(pattern)
         .setAction("INCLUDE")
         .build();
     assertTrue(!rule.getItemType().isPresent());
@@ -212,16 +214,18 @@ public class IncludeExcludeFilterTest {
 
   @Test
   public void filePrefixRule_nullPath_returnsFalse() {
+    String pattern = IS_WINDOWS ? "\\\\share\\folder" : "/folder";
     IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
         .setFilterType("FILE_PREFIX")
-        .setFilterPattern("/path/to/content")
+        .setFilterPattern(pattern)
         .setAction("INCLUDE")
         .build();
     assertFalse(rule.eval(null));
   }
 
   @Test
-  public void filePrefixIncludeRule_acceptsExpectedPatterns() {
+  public void filePrefixIncludeRule_acceptsExpectedPatterns_unix() {
+    assumeThat(IS_WINDOWS, is(false));
     List<IncludeExcludeFilter.Rule> rules;
 
     rules = Arrays.asList(
@@ -242,6 +246,8 @@ public class IncludeExcludeFilterTest {
         "/",
         "/folder",
         "/folder/",
+        "/FOLDER",
+        "/FOLDER/",
         "/folder/path",
         "/folder/path/",
         "/folder/path/file.txt",
@@ -271,7 +277,43 @@ public class IncludeExcludeFilterTest {
   }
 
   @Test
-  public void filePrefixExcludeRule_acceptsExpectedPatterns() {
+  public void filePrefixIncludeRule_acceptsExpectedPatterns_windows() {
+    assumeThat(IS_WINDOWS, is(true));
+    List<IncludeExcludeFilter.Rule> rules;
+
+    rules = Arrays.asList(
+        filePrefixRule("\\\\share\\folder", "INCLUDE"),
+        filePrefixRule("\\\\share\\folder\\", "INCLUDE"));
+    eval(true, rules,
+        "\\\\share\\folder",
+        "\\\\share\\folder\\path",
+        "\\\\share\\folder\\path\\",
+        "\\\\share\\folder\\path\\path1",
+        "\\\\share\\folder\\path\\path1\\",
+        "\\\\share\\folder\\path\\path1\\file.txt");
+    eval(false, rules,
+        "\\\\share\\fold",
+        "\\\\share\\folder1",
+        "\\\\share\\folder1\\path");
+
+    rules = Arrays.asList(
+        filePrefixRule("\\\\share\\folder\\path", "INCLUDE"),
+        filePrefixRule("\\\\share\\folder\\path\\", "INCLUDE"));
+    eval(true, rules,
+        "\\\\share\\folder",
+        "\\\\share\\folder\\path",
+        "\\\\share\\folder\\path\\",
+        "\\\\share\\folder\\path\\path1",
+        "\\\\share\\folder\\path\\path1\\",
+        "\\\\share\\folder\\path\\path1\\file.txt");
+    eval(false, rules,
+        "\\\\share\\folderWithLongerName",
+        "\\\\share\\folder\\pathToOtherFolder");
+  }
+
+  @Test
+  public void filePrefixExcludeRule_acceptsExpectedPatterns_unix() {
+    assumeThat(IS_WINDOWS, is(false));
     List<IncludeExcludeFilter.Rule> rules;
 
     rules = Arrays.asList(
@@ -287,6 +329,29 @@ public class IncludeExcludeFilterTest {
         "/",
         "/folderWithLongerName/",
         "/otherFolder/path/nestedfolder/file.txt");
+  }
+
+  @Test
+  public void filePrefixExcludeRule_acceptsExpectedPatterns_windows() {
+    assumeThat(IS_WINDOWS, is(true));
+    List<IncludeExcludeFilter.Rule> rules;
+
+    rules = Arrays.asList(
+        filePrefixRule("\\\\share\\folder\\path", "EXCLUDE"),
+        filePrefixRule("\\\\share\\folder\\path\\", "EXCLUDE"));
+    eval(true, rules,
+        "\\\\share\\folder\\path",
+        "\\\\share\\folder\\path\\",
+        "\\\\share\\folder\\path\\nestedfolder",
+        "\\\\share\\folder\\path\\nestedfolder\\",
+        "\\\\share\\folder\\path\\file.txt");
+    eval(false, rules,
+        "\\\\share\\folder",
+        "\\\\share\\folder\\",
+        "\\\\share\\folder\\otherpath",
+        "\\\\share\\folder\\otherpath\\",
+        "\\\\share\\folder\\file.txt",
+        "\\\\share\\folder\\pathWithMoreText\\file.txt");
   }
 
   @Test
@@ -533,7 +598,8 @@ public class IncludeExcludeFilterTest {
   }
 
   @Test
-  public void fromConfiguration_prefixRules_rulesCreated() throws IOException {
+  public void fromConfiguration_prefixRules_rulesCreated_unix() throws IOException {
+    assumeThat(IS_WINDOWS, is(false));
     Properties config = createProperties(
         "includeExcludeFilter.includeText.filterType = FILE_PREFIX",
         "includeExcludeFilter.includeText.filterPattern = /path/to/records",
@@ -548,17 +614,44 @@ public class IncludeExcludeFilterTest {
 
     List<IncludeExcludeFilter.Rule> includeRules = filter.prefixIncludeRules;
     assertEquals(1, includeRules.size());
-
     IncludeExcludeFilter.Rule rule = includeRules.get(0);
     assertEquals(IncludeExcludeFilter.Action.INCLUDE, rule.getAction());
     assertEquals("/path/to/records", rule.getPredicate().toString());
 
     List<IncludeExcludeFilter.Rule> excludeRules = filter.prefixExcludeRules;
     assertEquals(1, excludeRules.size());
-
     rule = excludeRules.get(0);
     assertEquals(IncludeExcludeFilter.Action.EXCLUDE, rule.getAction());
     assertEquals("/path/to/records/butNotThese", rule.getPredicate().toString());
+  }
+
+  @Test
+  public void fromConfiguration_prefixRules_rulesCreated_windows() throws IOException {
+    assumeThat(IS_WINDOWS, is(true));
+    Properties config = createProperties(
+        "includeExcludeFilter.includeText.filterType = FILE_PREFIX",
+        "includeExcludeFilter.includeText.filterPattern = \\\\\\\\share\\\\folder\\\\path",
+        "includeExcludeFilter.includeText.action = INCLUDE",
+
+        "includeExcludeFilter.includeHtml.filterType = FILE_PREFIX",
+        "includeExcludeFilter.includeHtml.filterPattern = "
+            + "\\\\\\\\share\\\\folder\\\\path\\\\notThese",
+        "includeExcludeFilter.includeHtml.action = EXCLUDE"
+      );
+    setupConfig.initConfig(config);
+    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
+
+    List<IncludeExcludeFilter.Rule> includeRules = filter.prefixIncludeRules;
+    assertEquals(1, includeRules.size());
+    IncludeExcludeFilter.Rule rule = includeRules.get(0);
+    assertEquals(IncludeExcludeFilter.Action.INCLUDE, rule.getAction());
+    assertEquals("\\\\share\\folder\\path", rule.getPredicate().toString());
+
+    List<IncludeExcludeFilter.Rule> excludeRules = filter.prefixExcludeRules;
+    assertEquals(1, excludeRules.size());
+    rule = excludeRules.get(0);
+    assertEquals(IncludeExcludeFilter.Action.EXCLUDE, rule.getAction());
+    assertEquals("\\\\share\\folder\\path\\notThese", rule.getPredicate().toString());
   }
 
   @Test
@@ -610,7 +703,8 @@ public class IncludeExcludeFilterTest {
   }
 
   @Test
-  public void fromConfiguration_filePrefixIncludeRule_succeeds() throws IOException {
+  public void fromConfiguration_filePrefixIncludeRule_succeeds_unix() throws IOException {
+    assumeThat(IS_WINDOWS, is(false));
     Properties config = createProperties(
         "includeExcludeFilter.rule1.filterType = FILE_PREFIX",
         "includeExcludeFilter.rule1.filterPattern = /folder1/folder2",
@@ -639,7 +733,42 @@ public class IncludeExcludeFilterTest {
   }
 
   @Test
-  public void fromConfiguration_filePrefixExcludeRule_succeeds() throws IOException {
+  public void fromConfiguration_filePrefixIncludeRule_succeeds_windows() throws IOException {
+    assumeThat(IS_WINDOWS, is(true));
+    Properties config = createProperties(
+        "includeExcludeFilter.rule1.filterType = FILE_PREFIX",
+        "includeExcludeFilter.rule1.filterPattern = \\\\\\\\host\\\\share\\\\folder1",
+        "includeExcludeFilter.rule1.action = INCLUDE");
+    setupConfig.initConfig(config);
+    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
+    assertTrue(filter.isAllowed("\\\\host\\share", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\folder2", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\folder2", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\folder2\\", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\folder2\\", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed(
+            "\\\\host\\share\\folder1\\folder2\\file.pdf", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed(
+            "\\\\host\\share\\folder1\\folder2\\file.pdf", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed(
+            "\\\\host\\share\\folder1\\folder2\\folder3\\file.pdf", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed(
+            "\\\\host\\share\\folder1\\folder2\\folder3\\file.pdf", ItemType.CONTENT_ITEM));
+
+    assertFalse(filter.isAllowed("\\\\host\\share\\folder3", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("\\\\host\\share\\folder3", ItemType.CONTENT_ITEM));
+    assertFalse(filter.isAllowed("\\\\host\\othershare\\folder3", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("\\\\host\\othershare\\folder3", ItemType.CONTENT_ITEM));
+  }
+
+  @Test
+  public void fromConfiguration_filePrefixExcludeRule_succeeds_unix() throws IOException {
+    assumeThat(IS_WINDOWS, is(false));
     Properties config = createProperties(
         "includeExcludeFilter.rule1.filterType = FILE_PREFIX",
         "includeExcludeFilter.rule1.filterPattern = /folder1/folder2",
@@ -666,6 +795,41 @@ public class IncludeExcludeFilterTest {
     assertFalse(filter.isAllowed("/folder1/folder2/file.pdf", ItemType.CONTENT_ITEM));
     assertFalse(filter.isAllowed("/folder1/folder2/folder3/file.pdf", ItemType.CONTAINER_ITEM));
     assertFalse(filter.isAllowed("/folder1/folder2/folder3/file.pdf", ItemType.CONTENT_ITEM));
+  }
+
+  @Test
+  public void fromConfiguration_filePrefixExcludeRule_succeeds_windows() throws IOException {
+    assumeThat(IS_WINDOWS, is(true));
+    Properties config = createProperties(
+        "includeExcludeFilter.rule1.filterType = FILE_PREFIX",
+        "includeExcludeFilter.rule1.filterPattern = \\\\\\\\host\\\\share\\\\folder1\\\\folder2",
+        "includeExcludeFilter.rule1.action = EXCLUDE");
+    setupConfig.initConfig(config);
+    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
+
+    assertTrue(filter.isAllowed("\\\\host\\share", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder\\", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder3", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\folder3", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\folder3", ItemType.CONTENT_ITEM));
+
+    assertFalse(filter.isAllowed("\\\\host\\share\\folder1\\folder2", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("\\\\host\\share\\folder1\\folder2", ItemType.CONTENT_ITEM));
+    assertFalse(filter.isAllowed("\\\\host\\share\\folder1\\folder2\\", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("\\\\host\\share\\folder1\\folder2\\", ItemType.CONTENT_ITEM));
+    assertFalse(filter.isAllowed(
+            "\\\\host\\share\\folder1\\folder2\\file.pdf", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed(
+            "\\\\host\\share\\folder1\\folder2\\file.pdf", ItemType.CONTENT_ITEM));
+    assertFalse(filter.isAllowed(
+            "\\\\host\\share\\folder1\\folder2\\folder3\\file.pdf", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed(
+            "\\\\host\\share\\folder1\\folder2\\folder3\\file.pdf", ItemType.CONTENT_ITEM));
   }
 
   @Test
@@ -730,8 +894,6 @@ public class IncludeExcludeFilterTest {
     assertFalse(filter.isAllowed("http://example.com/folder2/folder3", ItemType.CONTENT_ITEM));
   }
 
-
-
   @Test
   public void fromConfiguration_excludeFolders_succeeds() throws IOException {
     Properties config = createProperties(
@@ -769,7 +931,8 @@ public class IncludeExcludeFilterTest {
   }
 
   @Test
-  public void fromConfiguration_includeFilesFolders_succeeds() throws IOException {
+  public void fromConfiguration_includeFilesFolders_succeeds_unix() throws IOException {
+    assumeThat(IS_WINDOWS, is(false));
     Properties config = createProperties(
         "includeExcludeFilter.rule1.filterType = REGEX",
         "includeExcludeFilter.rule1.itemType = CONTENT_ITEM",
@@ -804,10 +967,51 @@ public class IncludeExcludeFilterTest {
   }
 
   @Test
+  public void fromConfiguration_includeFilesFolders_succeeds_windows() throws IOException {
+    assumeThat(IS_WINDOWS, is(true));
+    Properties config = createProperties(
+        "includeExcludeFilter.rule1.filterType = REGEX",
+        "includeExcludeFilter.rule1.itemType = CONTENT_ITEM",
+        "includeExcludeFilter.rule1.filterPattern = \\\\.(pdf|doc)$",
+        "includeExcludeFilter.rule1.action = INCLUDE",
+
+        "includeExcludeFilter.rule2.filterType = FILE_PREFIX",
+        "includeExcludeFilter.rule2.filterPattern = \\\\\\\\host\\\\share\\\\folder1",
+        "includeExcludeFilter.rule2.action = INCLUDE",
+
+        "includeExcludeFilter.rule3.filterType = FILE_PREFIX",
+        "includeExcludeFilter.rule3.filterPattern = \\\\\\\\host\\\\share\\\\folder2",
+        "includeExcludeFilter.rule3.action = INCLUDE");
+    setupConfig.initConfig(config);
+
+    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder2", ItemType.CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\file.doc", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder1\\file.pdf", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder2\\file.doc", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed("\\\\host\\share\\folder2\\file.pdf", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed(
+            "\\\\host\\share\\folder1\\path\\to\\file.doc", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed(
+            "\\\\host\\share\\folder1\\path\\to\\file.pdf", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed(
+            "\\\\host\\share\\folder2\\path\\to\\file.doc", ItemType.CONTENT_ITEM));
+    assertTrue(filter.isAllowed(
+            "\\\\host\\share\\folder2\\path\\tofile.pdf", ItemType.CONTENT_ITEM));
+
+    assertFalse(filter.isAllowed("\\\\host\\share\\folder3", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("\\\\host\\share\\folder12", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("\\\\host\\share\\folder1\\file.txt", ItemType.CONTENT_ITEM));
+    assertFalse(filter.isAllowed(
+            "\\\\host\\share\\folder2\\path\\to\\file.txt", ItemType.CONTENT_ITEM));
+  }
+
+  @Test
   public void mainHelper_succeeds() throws Exception {
     // No rules, one test value.
     IncludeExcludeFilter.mainHelper(new String[0],
-        new java.io.ByteArrayInputStream("/path/to/doc.txt".getBytes()));
+        new ByteArrayInputStream("/path/to/doc.txt".getBytes()));
   }
 
   private Properties createProperties(String... propertyLines) throws IOException {
@@ -815,13 +1019,5 @@ public class IncludeExcludeFilterTest {
     Properties p = new Properties();
     p.load(new java.io.StringReader(in));
     return p;
-  }
-
-  private void createFile(File file, String... content) throws IOException {
-    try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
-      for (String s : content) {
-        pw.println(s);
-      }
-    }
   }
 }
