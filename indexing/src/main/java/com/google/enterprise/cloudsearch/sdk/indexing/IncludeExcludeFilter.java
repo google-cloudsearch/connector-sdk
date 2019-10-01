@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,11 +74,15 @@ import javax.annotation.Nullable;
  * </pre>
  *
  * <ul>
- * <li>{@code itemType} must be one of the valid {@link IndexingItemBuilder.ItemType}
- * values, generally either CONTAINER_ITEM or CONTENT_ITEM. Separating REGEX filters by
- * type allows you to write simpler rules, for example, when filtering by file extension,
- * to match files by extension without accidentally excluding all folders from
- * indexing. Only a REGEX filter can have an {@code itemType} property.
+ *
+ * <li>{@code itemType} may only be specified for REGEX filters. The value must be either
+ * CONTAINER_ITEM or CONTENT_ITEM. Specifying VIRTUAL_CONTAINER_ITEM in configuration is
+ * an error. If VIRTUAL_CONTAINER_ITEM is passed at runtime to {@link #isAllowed(String,
+ * ItemType)}, it will be mapped to CONTAINER_ITEM.
+ * <p>
+ * Separating REGEX filters by type allows you to write simpler rules, for example, when
+ * filtering by file extension, to match files by extension without accidentally excluding
+ * all folders from indexing.
  *
  * <li>{@code filterType} must be set to REGEX, FILE_PREFIX, or URL_PREFIX.
  *
@@ -91,9 +96,8 @@ import javax.annotation.Nullable;
  * a subsequence matching the given pattern, so patterns need not match the entire input
  * value.
  *
-
  * <li>For FILE_PREFIX filters, {@code filterPattern} must be set to an absolute file path.
-
+ *
  * <li>For URL_PREFIX filters, {@code filterPattern} must be set to an absolute URL.
  * </ul>
  *
@@ -122,13 +126,13 @@ import javax.annotation.Nullable;
  * </pre>
  *
  * <p>Include only content within a subfolder.  This rule will include {@code
- * \\share\shareFolder} and {@code \\share\shareFolder\folder} as well as {@code
- * \\share\shareFolder\folder\pathToInclude} and its contents.
+ * \\host\shareFolder} and {@code \\host\shareFolder\folder} as well as {@code
+ * \\host\shareFolder\folder\pathToInclude} and its contents.
  *
  * <pre>
- * includeExcludeFilter.includePublicFolder.action = INCLUDE
- * includeExcludeFilter.includePublicFolder.filterType = FILE_PREFIX
- * includeExcludeFilter.includePublicFolder.filterPattern = \\\\share\\shareFolder\\folder\\pathToInclude
+ * includeExcludeFilter.pathToInclude.action = INCLUDE
+ * includeExcludeFilter.pathToInclude.filterType = FILE_PREFIX
+ * includeExcludeFilter.pathToInclude.filterPattern = \\\\host\\shareFolder\\folder\\pathToInclude
  * </pre>
  *
  * <p>Include only content within a subfolder of a web site. This rule will include {@code
@@ -157,6 +161,9 @@ import javax.annotation.Nullable;
 public class IncludeExcludeFilter {
   private static final Logger logger = Logger.getLogger(IncludeExcludeFilter.class.getName());
   private static final String FILTER_CONFIG_PREFIX = "includeExcludeFilter.";
+
+  @VisibleForTesting static final EnumSet<ItemType> allowedItemTypes =
+      EnumSet.of(ItemType.CONTAINER_ITEM, ItemType.CONTENT_ITEM);
 
   enum Action { INCLUDE, EXCLUDE };
 
@@ -187,7 +194,7 @@ public class IncludeExcludeFilter {
         .filter(r -> r.getFilterType().equals(FilterType.REGEX))
         .filter(r -> r.getAction().equals(Action.INCLUDE))
         .collect(Collectors.groupingBy(r -> r.getItemType().get()));
-    Arrays.stream(ItemType.values())
+    allowedItemTypes.stream()
         .forEach(t -> regexIncludeMap.putIfAbsent(t, ImmutableList.of()));
     regexIncludeMap.replaceAll((k, v) -> ImmutableList.copyOf(v));
     regexIncludeRules = ImmutableMap.copyOf(regexIncludeMap);
@@ -196,7 +203,7 @@ public class IncludeExcludeFilter {
         .filter(r -> r.getFilterType().equals(FilterType.REGEX))
         .filter(r -> r.getAction().equals(Action.EXCLUDE))
         .collect(Collectors.groupingBy(r -> r.getItemType().get()));
-    Arrays.stream(ItemType.values())
+    allowedItemTypes.stream()
         .forEach(t -> regexExcludeMap.putIfAbsent(t, ImmutableList.of()));
     regexExcludeMap.replaceAll((k, v) -> ImmutableList.copyOf(v));
     regexExcludeRules = ImmutableMap.copyOf(regexExcludeMap);
@@ -266,10 +273,14 @@ public class IncludeExcludeFilter {
    * patterns.
    *
    * @param value a value to test
-   * @param itemType the type of item
+   * @param itemType the type of item; values of {@code VIRTUAL_CONTAINER_ITEM} will be
+   * mapped to {@code CONTAINER_ITEM}
    * @return true if the value is included based on the configuration
    */
   public boolean isAllowed(String value, ItemType itemType) {
+    if (itemType.equals(ItemType.VIRTUAL_CONTAINER_ITEM)) {
+      itemType = ItemType.CONTAINER_ITEM;
+    }
     List<Rule> excludeRules =
         Stream.concat(prefixExcludeRules.stream(), regexExcludeRules.get(itemType).stream())
         .collect(Collectors.toList());
@@ -399,6 +410,9 @@ public class IncludeExcludeFilter {
           case REGEX:
             checkState(!Strings.isNullOrEmpty(itemTypeConfig), "Item type is missing: " + name);
             ItemType itemType = ItemType.valueOf(itemTypeConfig.toUpperCase());
+            if (!allowedItemTypes.contains(itemType)) {
+              throw new IllegalArgumentException(itemTypeConfig);
+            }
             return new Rule(FilterType.REGEX,
                 name, Optional.of(itemType), action, new RegexPredicate(filterPatternConfig));
           case FILE_PREFIX:
@@ -608,8 +622,10 @@ public class IncludeExcludeFilter {
         try {
           String value = in.next();
           System.out.println(value);
-          System.out.println("  as container: " + filter.isAllowed(value, ItemType.CONTAINER_ITEM));
-          System.out.println("  as content  : " + filter.isAllowed(value, ItemType.CONTENT_ITEM));
+          for (ItemType itemType : ItemType.values()) {
+            System.out.println("  as " + itemType.name() + ": "
+                + filter.isAllowed(value, itemType));
+          }
           System.out.println();
         } catch (NoSuchElementException e) {
           return;

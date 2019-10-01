@@ -84,6 +84,18 @@ public class IncludeExcludeFilterTest {
   }
 
   @Test
+  public void ruleBuilder_regexInvalidItemType_throwsException() {
+    thrown.expect(IllegalArgumentException.class);
+    thrown.expectMessage("VIRTUAL_CONTAINER_ITEM");
+    IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
+        .setItemType("VIRTUAL_CONTAINER_ITEM")
+        .setFilterType("REGEX")
+        .setFilterPattern("file.txt")
+        .setAction("INCLUDE")
+        .build();
+  }
+
+  @Test
   public void ruleBuilder_prefixMissingItemType_isEmpty() {
     String pattern = IS_WINDOWS ? "\\\\share\\folder" : "/folder";
     IncludeExcludeFilter.Rule rule = new IncludeExcludeFilter.Rule.Builder("testRule")
@@ -511,9 +523,9 @@ public class IncludeExcludeFilterTest {
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
     assertEquals(0, filter.prefixIncludeRules.size());
     assertEquals(0, filter.prefixExcludeRules.size());
-    assertEquals(ItemType.values().length, filter.regexIncludeRules.size());
-    assertEquals(ItemType.values().length, filter.regexExcludeRules.size());
-    for (ItemType itemType : ItemType.values()) {
+    assertEquals(IncludeExcludeFilter.allowedItemTypes.size(), filter.regexIncludeRules.size());
+    assertEquals(IncludeExcludeFilter.allowedItemTypes.size(), filter.regexExcludeRules.size());
+    for (ItemType itemType : IncludeExcludeFilter.allowedItemTypes) {
       assertEquals(0, filter.regexIncludeRules.get(itemType).size());
       assertEquals(0, filter.regexExcludeRules.get(itemType).size());
     }
@@ -663,6 +675,8 @@ public class IncludeExcludeFilterTest {
         "includeExcludeFilter.rule1.action = INCLUDE");
     setupConfig.initConfig(config);
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
+    assertTrue(filter.isAllowed("/path", ItemType.VIRTUAL_CONTAINER_ITEM));
+    assertTrue(filter.isAllowed("/path/to", ItemType.VIRTUAL_CONTAINER_ITEM));
     assertTrue(filter.isAllowed("/path", ItemType.CONTAINER_ITEM));
     assertTrue(filter.isAllowed("/path/to", ItemType.CONTAINER_ITEM));
     assertTrue(filter.isAllowed("/path/to/file.txt", ItemType.CONTENT_ITEM));
@@ -700,6 +714,25 @@ public class IncludeExcludeFilterTest {
     assertFalse(filter.isAllowed("/path/to/file.txt", ItemType.CONTENT_ITEM));
     assertFalse(filter.isAllowed("file.txt", ItemType.CONTENT_ITEM));
     assertFalse(filter.isAllowed("File.TXT", ItemType.CONTENT_ITEM));
+  }
+
+  @Test
+  public void fromConfiguration_regexContainerRule_succeedsForVirtualContainer()
+      throws IOException {
+    Properties config = createProperties(
+        "includeExcludeFilter.rule1.itemType = CONTAINER_ITEM",
+        "includeExcludeFilter.rule1.filterType = REGEX",
+        "includeExcludeFilter.rule1.filterPattern = archive",
+        "includeExcludeFilter.rule1.action = EXCLUDE");
+    setupConfig.initConfig(config);
+    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
+
+    assertFalse(filter.isAllowed("/path/to/archive", ItemType.VIRTUAL_CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/path/to/archive", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/path/to/archive/more/content", ItemType.VIRTUAL_CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/path/to/archive/more/content", ItemType.CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/archiveFileStore", ItemType.VIRTUAL_CONTAINER_ITEM));
+    assertFalse(filter.isAllowed("/archiveFileStore", ItemType.CONTAINER_ITEM));
   }
 
   @Test
