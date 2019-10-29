@@ -19,20 +19,30 @@ package com.google.enterprise.cloudsearch.sdk.indexing;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.SERVICE_KEY_PROPERTY_NAME;
 import static com.google.enterprise.cloudsearch.sdk.TestProperties.qualifyTestProperty;
 import static com.google.enterprise.cloudsearch.sdk.Util.PUBLIC_ACL;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.google.api.client.json.GenericJson;
+import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.common.base.Strings;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
+import com.google.enterprise.cloudsearch.sdk.RepositoryException;
 import com.google.enterprise.cloudsearch.sdk.Util;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
 import com.google.enterprise.cloudsearch.sdk.indexing.StructuredData.ResetStructuredDataRule;
+import com.google.enterprise.cloudsearch.sdk.indexing.template.ApiOperation;
 import com.google.enterprise.cloudsearch.sdk.indexing.template.ListingConnector;
+import com.google.enterprise.cloudsearch.sdk.indexing.template.RepositoryContext;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
@@ -223,6 +233,92 @@ public class ListingConnectorIT {
       }
       testUtils.waitUntilEqual(getFullId(childItemId1), child1.getItem());
       testUtils.waitUntilEqual(getFullId(childItemId2), child2.getItem());
+    } finally {
+      // Deleting the container deletes the children.
+      v1Client.deleteItemsIfExist(getFullId(rootItemId));
+    }
+  }
+
+  @Test
+  public void getDoc_customApiOperation_usesIndexingService() throws Exception {
+    String rootItemId = "ListingConnectorIT_RootItem_" + Util.getRandomId();
+    String childItemId1 = "ListingConnectorIT_Child1_" + rootItemId;
+    MockItem root = new MockItem.Builder(rootItemId)
+        .setTitle("Root item")
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTAINER_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
+        .setPayload("hash value for root")
+        .build();
+    MockItem child1 = new MockItem.Builder(childItemId1)
+        .setTitle("Child item 1")
+        .setContainerName(rootItemId)
+        .setContentLanguage("en-us")
+        .setItemType(ItemType.CONTENT_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
+        .build();
+    SettableFuture<List<GenericJson>> retrievedFuture = SettableFuture.create();
+
+    ListingRepository testRepository = new ListingRepository() {
+        RepositoryContext repositoryContext;
+
+        @Override
+        public void init(RepositoryContext context) throws RepositoryException {
+          super.init(context);
+          repositoryContext = context;
+        }
+
+        class GetItemApiOperation implements ApiOperation {
+          String id;
+
+          GetItemApiOperation(String id) {
+            this.id = id;
+          }
+
+          @Override
+          public List<GenericJson> execute(IndexingService service)
+              throws IOException, InterruptedException {
+            return Collections.singletonList(service.getItem(id));
+          }
+        }
+
+        @Override
+        public ApiOperation getDoc(Item polledItem) throws RepositoryException {
+          // Root should be indexed already in order for Child1 to be polled.
+          if (polledItem.getName().contains("Child1")) {
+            // This test doesn't use the retrieved item to build the response to getDoc as
+            // an actual connector probably would, just caches it to verify that the use
+            // of the repositoryContext succeeded.
+            try {
+              ListenableFuture<List<GenericJson>> future =
+                  repositoryContext.postApiOperationAsync(new GetItemApiOperation(rootItemId));
+              retrievedFuture.set(future.get(10, TimeUnit.SECONDS));
+            } catch (Throwable e) {
+              retrievedFuture.setException(e);
+            }
+          }
+          return super.getDoc(polledItem);
+        }
+      };
+
+    testRepository
+        .addRootItems(root)
+        .addChildItems(child1);
+    ListingConnector connector = new ListingConnector(testRepository);
+    IndexingApplication application =
+        new IndexingApplication.Builder(connector, setupConfiguration(new Properties()))
+        .build();
+    try {
+      try {
+        application.start();
+        testRepository.awaitGetDoc(60, TimeUnit.SECONDS);
+      } finally {
+        application.shutdown("test ended");
+      }
+      List<GenericJson> retrievedList = retrievedFuture.get();
+      assertEquals(1, retrievedList.size());
+      Item retrievedItem = (Item) retrievedList.get(0);
+      assertEquals(getFullId(rootItemId), retrievedItem.getName());
     } finally {
       // Deleting the container deletes the children.
       v1Client.deleteItemsIfExist(getFullId(rootItemId));
