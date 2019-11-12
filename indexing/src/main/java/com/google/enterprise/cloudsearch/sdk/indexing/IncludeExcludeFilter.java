@@ -35,8 +35,8 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Scanner;
 import java.util.Set;
@@ -57,11 +57,15 @@ import javax.annotation.Nullable;
  * this class. Each connector determines which values are tested against configured
  * rules.
  *
- * <p>This class supports three types of filter rules: REGEX, FILE_PREFIX, and URL_PREFIX. A
- * REGEX rule is used to match values against any Java regular expression. A FILE_PREFIX
- * rule is used to match file system path values against a given absolute file prefix. A
- * URL_PREFIX rule is used to match URL values against a given URL prefix. This class
- * uses case-insensitive matching for all rule types. Multiple rules can be specified.
+ * <p>This class supports three types of filter rules: REGEX, FILE_PREFIX, and
+ * URL_PREFIX. A REGEX rule is used to match values against any Java regular expression. A
+ * FILE_PREFIX rule is used to match file system path values against a given absolute file
+ * prefix. A URL_PREFIX rule is used to match URL values against a given URL prefix. This
+ * class uses case-insensitive matching for all rule types. The connector-provided data to
+ * be tested is assumed to be in the JVM's default locale; you can change the connector's
+ * locale to control this.
+ *
+ * <p>Multiple rules can be specified.
  *
  * <p>Each rule is specified using either three or four configuration properties. A
  * unique, meaningful name is used to group the properties for a rule together.
@@ -98,7 +102,10 @@ import javax.annotation.Nullable;
  *
  * <li>For FILE_PREFIX filters, {@code filterPattern} must be set to an absolute file path.
  *
- * <li>For URL_PREFIX filters, {@code filterPattern} must be set to an absolute URL.
+ * <li>For URL_PREFIX filters, {@code filterPattern} must be set to an absolute URL. For
+ * URL values, the default port for the URL protocol will match whether or not it's
+ * actually present; for example, {@code http://host:80/folder} will match {@code
+ * http://host/folder}.
  * </ul>
  *
  * <li>{@code action} must be set to {@code INCLUDE} or {@code EXCLUDE}.
@@ -107,7 +114,7 @@ import javax.annotation.Nullable;
  * matches any of those rules. Otherwise, if any INCLUDE rules are configured for an item
  * type, an item must match at least one INCLUDE rule to be included. When no rules are
  * configured, all items of the given type are allowed. When combining FILE_PREFIX or
- * URL_PREFIX filters with REGEX filters in INCLUDe rules, an item must match both at
+ * URL_PREFIX filters with REGEX filters in INCLUDE rules, an item must match at
  * least one of the FILE_PREFIX or URL_PREFIX rules and at least one of the REGEX filters.
  * </ul>
  *
@@ -125,7 +132,7 @@ import javax.annotation.Nullable;
  *  includeExcludeFilter.includeText.filterPattern = \\.txt$
  * </pre>
  *
- * <p>Include only content within a subfolder.  This rule will include {@code
+ * <p>Include only content within a specified subfolder.  This rule will include {@code
  * \\host\shareFolder} and {@code \\host\shareFolder\folder} as well as {@code
  * \\host\shareFolder\folder\pathToInclude} and its contents.
  *
@@ -135,9 +142,9 @@ import javax.annotation.Nullable;
  * includeExcludeFilter.pathToInclude.filterPattern = \\\\host\\shareFolder\\folder\\pathToInclude
  * </pre>
  *
- * <p>Include only content within a subfolder of a web site. This rule will include {@code
- * https://example.com/} and {@code https://example.com/folder/} as well as {@code
- * https://example.com/folder/pathToInclude} and its contents.
+ * <p>Include only content within a specified subfolder of a web site. This rule will
+ * include {@code https://example.com/} and {@code https://example.com/folder/} as well as
+ * {@code https://example.com/folder/pathToInclude} and its contents.
  *
  * <pre>
  * includeExcludeFilter.includePublicFolder.action = INCLUDE
@@ -171,24 +178,22 @@ public class IncludeExcludeFilter {
 
   @VisibleForTesting final ImmutableList<Rule> prefixIncludeRules;
   @VisibleForTesting final ImmutableList<Rule> prefixExcludeRules;
-  @VisibleForTesting final ImmutableMap<ItemType, List<Rule>> regexIncludeRules;
-  @VisibleForTesting final ImmutableMap<ItemType, List<Rule>> regexExcludeRules;
+  @VisibleForTesting final ImmutableMap<ItemType, ImmutableList<Rule>> regexIncludeRules;
+  @VisibleForTesting final ImmutableMap<ItemType, ImmutableList<Rule>> regexExcludeRules;
 
   @VisibleForTesting
   IncludeExcludeFilter(List<Rule> rules) {
-    List<Rule> prefixIncludeList = rules.stream()
+    prefixIncludeRules = rules.stream()
         .filter(r -> (r.getFilterType().equals(FilterType.FILE_PREFIX)
                 || r.getFilterType().equals(FilterType.URL_PREFIX)))
         .filter(r -> r.getAction().equals(Action.INCLUDE))
-        .collect(Collectors.toList());
-    prefixIncludeRules = ImmutableList.copyOf(prefixIncludeList);
+        .collect(ImmutableList.toImmutableList());
 
-    List<Rule> prefixExcludeList = rules.stream()
+    prefixExcludeRules = rules.stream()
         .filter(r -> (r.getFilterType().equals(FilterType.FILE_PREFIX)
                 || r.getFilterType().equals(FilterType.URL_PREFIX)))
         .filter(r -> r.getAction().equals(Action.EXCLUDE))
-        .collect(Collectors.toList());
-    prefixExcludeRules = ImmutableList.copyOf(prefixExcludeList);
+        .collect(ImmutableList.toImmutableList());
 
     Map<ItemType, List<Rule>> regexIncludeMap = rules.stream()
         .filter(r -> r.getFilterType().equals(FilterType.REGEX))
@@ -196,8 +201,12 @@ public class IncludeExcludeFilter {
         .collect(Collectors.groupingBy(r -> r.getItemType().get()));
     allowedItemTypes.stream()
         .forEach(t -> regexIncludeMap.putIfAbsent(t, ImmutableList.of()));
-    regexIncludeMap.replaceAll((k, v) -> ImmutableList.copyOf(v));
-    regexIncludeRules = ImmutableMap.copyOf(regexIncludeMap);
+    ImmutableMap.Builder<ItemType, ImmutableList<Rule>> regexIncludeBuilder =
+        ImmutableMap.builder();
+    for (ItemType itemType : regexIncludeMap.keySet()) {
+      regexIncludeBuilder.put(itemType, ImmutableList.copyOf(regexIncludeMap.get(itemType)));
+    }
+    regexIncludeRules = regexIncludeBuilder.build();
 
     Map<ItemType, List<Rule>> regexExcludeMap = rules.stream()
         .filter(r -> r.getFilterType().equals(FilterType.REGEX))
@@ -205,8 +214,12 @@ public class IncludeExcludeFilter {
         .collect(Collectors.groupingBy(r -> r.getItemType().get()));
     allowedItemTypes.stream()
         .forEach(t -> regexExcludeMap.putIfAbsent(t, ImmutableList.of()));
-    regexExcludeMap.replaceAll((k, v) -> ImmutableList.copyOf(v));
-    regexExcludeRules = ImmutableMap.copyOf(regexExcludeMap);
+    ImmutableMap.Builder<ItemType, ImmutableList<Rule>> regexExcludeBuilder =
+        ImmutableMap.builder();
+    for (ItemType itemType : regexExcludeMap.keySet()) {
+      regexExcludeBuilder.put(itemType, ImmutableList.copyOf(regexExcludeMap.get(itemType)));
+    }
+    regexExcludeRules = regexExcludeBuilder.build();
   }
 
   @Override
@@ -281,9 +294,9 @@ public class IncludeExcludeFilter {
     if (itemType.equals(ItemType.VIRTUAL_CONTAINER_ITEM)) {
       itemType = ItemType.CONTAINER_ITEM;
     }
-    List<Rule> excludeRules =
+    ImmutableList<Rule> excludeRules =
         Stream.concat(prefixExcludeRules.stream(), regexExcludeRules.get(itemType).stream())
-        .collect(Collectors.toList());
+        .collect(ImmutableList.toImmutableList());
     // If no rules: nothing is excluded
     boolean exclude = evaluateRules(excludeRules, value, false);
     if (exclude) {
@@ -294,17 +307,24 @@ public class IncludeExcludeFilter {
     // If no rules: everything is included
     boolean include =
         evaluateRules(prefixIncludeRules, value, true)
-        &&
-        evaluateRules(regexIncludeRules.get(itemType), value, true);
+        && evaluateRules(regexIncludeRules.get(itemType), value, true);
     logger.log(Level.FINEST, (include ? "Including " : "Not including ") + value);
     return include;
   }
 
-  private boolean evaluateRules(List<Rule> rules, String value, boolean emptyRulesOutcome) {
+  /**
+   * Evalues the list of rules for the given value.
+   *
+   * @return {@code true} when any of the rules evaluates to {@code true} for the given
+   * value. When the list of rules is empty, returns {@code emptyRulesOutcome}.
+   */
+  private boolean evaluateRules(ImmutableList<Rule> rules, String value,
+      boolean emptyRulesOutcome) {
     if (rules.isEmpty()) {
       return emptyRulesOutcome;
     }
-    return rules.stream().map(r -> r.eval(value)).anyMatch(e -> e);
+    // Return true if any of the rule evaulations return true.
+    return rules.stream().map(r -> r.eval(value)).anyMatch(evalResult -> evalResult);
   }
 
   @VisibleForTesting
@@ -403,13 +423,13 @@ public class IncludeExcludeFilter {
         checkState(!Strings.isNullOrEmpty(actionConfig), "Rule action is missing: " + name);
 
         // valueOf throws IllegalArgumentException
-        Action action = Action.valueOf(actionConfig.toUpperCase());
-        FilterType filterType = FilterType.valueOf(filterTypeConfig.toUpperCase());
+        Action action = Action.valueOf(actionConfig.toUpperCase(Locale.US));
+        FilterType filterType = FilterType.valueOf(filterTypeConfig.toUpperCase(Locale.US));
 
         switch (filterType) {
           case REGEX:
             checkState(!Strings.isNullOrEmpty(itemTypeConfig), "Item type is missing: " + name);
-            ItemType itemType = ItemType.valueOf(itemTypeConfig.toUpperCase());
+            ItemType itemType = ItemType.valueOf(itemTypeConfig.toUpperCase(Locale.US));
             if (!allowedItemTypes.contains(itemType)) {
               throw new IllegalArgumentException(itemTypeConfig);
             }
@@ -435,7 +455,7 @@ public class IncludeExcludeFilter {
     private final String regex;
 
     private RegexPredicate(String regex) throws PatternSyntaxException {
-      this.pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
+      this.pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
       this.regex = regex;
     }
 
@@ -503,39 +523,35 @@ public class IncludeExcludeFilter {
   private static class UrlPrefixPredicate implements Predicate<String> {
     private final Action action;
     private final String configuredPrefix;
-    private final String lowercasePrefix;
+    private final String lowercasePrefixWithoutSlash;
     private final List<String> pathValues;
 
     private UrlPrefixPredicate(Action action, String configuredPrefix) {
       this.action = action;
       this.configuredPrefix = configuredPrefix;
-      String tmp = configuredPrefix.toLowerCase();
-      if (tmp.endsWith("/")) {
-        tmp = tmp.substring(0, tmp.length() - 1);
-      }
-      this.lowercasePrefix = tmp;
+
       URL url;
+      String hostValue;
       try {
-        url = new URL(lowercasePrefix);
+        url = new URL(configuredPrefix.toLowerCase());
+        hostValue = getHostValue(url);
+        String tmp = getUrlWithoutPort(url);
+        if (tmp.endsWith("/")) {
+          tmp = tmp.substring(0, tmp.length() - 1);
+        }
+        this.lowercasePrefixWithoutSlash = tmp.toLowerCase();
       } catch (MalformedURLException e) {
         throw new IllegalArgumentException(configuredPrefix + " is not a URL", e);
       }
-      ImmutableList.Builder<String> hostBuilder = ImmutableList.builder();
       ImmutableList.Builder<String> pathBuilder = ImmutableList.builder();
+      pathBuilder.add(hostValue);
+      pathBuilder.add(hostValue + "/");
       String path = url.getPath();
-      if (path.isEmpty() || path.equals("/")) {
-        // Just "http://host:port"
-        pathBuilder.add(lowercasePrefix);
-        pathBuilder.add(lowercasePrefix + "/");
-      } else {
-        String hostPart = lowercasePrefix.substring(0, lowercasePrefix.indexOf(path));
-        pathBuilder.add(hostPart);
-        pathBuilder.add(hostPart + "/");
-
+      if (!(path.isEmpty() || path.equals("/"))) {
         // For /a/b/c, build prefix matches {/a, /a/, /a/b, /a/b/, /a/b/c, /a/b/c/}
         String[] pathParts = path.substring(1).split("/"); // Avoid empty first element
         for (int i = 1; i <= pathParts.length; i++) {
-          String pathPart = hostPart + "/" + String.join("/", Arrays.copyOfRange(pathParts, 0, i));
+          String pathPart = hostValue + "/" + String.join("/", Arrays.copyOfRange(pathParts, 0, i));
           pathBuilder.add(pathPart);
           pathBuilder.add(pathPart + "/");
         }
@@ -543,37 +559,62 @@ public class IncludeExcludeFilter {
       pathValues = pathBuilder.build();
     }
 
+    /**
+     * If the URL contains a default port value, returns the URL without the port.
+     */
+    private String getUrlWithoutPort(URL url) throws MalformedURLException {
+      return getHostValue(url) + url.getFile();
+    }
+
+    /**
+     * Returns just the protocol://host[:non-default-port] part of the URL.
+     * Example: http://x.com -> http://x.com
+     *          http://x.com:80 -> http://x.com
+     *          http://x.com:4321 -> http://x.com:4321
+     */
+    private String getHostValue(URL url) throws MalformedURLException {
+      int port = url.getPort();
+      int defaultPort = url.getDefaultPort();
+      if ((port == -1 && defaultPort != -1) || (port == defaultPort)) {
+        return new URL(url.getProtocol(), url.getHost(), "").toString();
+      } else {
+        return new URL(url.getProtocol(), url.getHost(), url.getPort(), "").toString();
+      }
+    }
+
     @Override
     public boolean apply(@Nullable String input) {
       if (input == null) {
         return false;
       }
+
+      String lowercaseInput;
       try {
-        new URL(input);
+        // Remove default port values for comparison
+        lowercaseInput = getUrlWithoutPort(new URL(input.toLowerCase()));
       } catch (MalformedURLException e) {
         logger.log(Level.FINE, input + " is not a valid URL", e);
         return false;
       }
 
-      String lowercaseInput = input.toLowerCase();
       if (action.equals(Action.INCLUDE)) {
         if (pathValues.contains(lowercaseInput)) {
           return true;
         }
       } else {
-        if (lowercaseInput.equals(lowercasePrefix)) {
+        if (lowercaseInput.equals(lowercasePrefixWithoutSlash)) {
           return true;
         }
       }
       // If the input isn't one of the prefix parts, and doesn't start with the
       // prefix, it isn't a match.
-      if (!lowercaseInput.startsWith(lowercasePrefix)) {
+      if (!lowercaseInput.startsWith(lowercasePrefixWithoutSlash)) {
         return false;
       }
 
       // If the input starts with the configured prefix, the next character must be a
       // separator; /apple should not match /applesauce, but should match /apple/sauce.
-      char c = lowercaseInput.charAt(lowercasePrefix.length());
+      char c = lowercaseInput.charAt(lowercasePrefixWithoutSlash.length());
       switch (c) {
         case '/':
         case ';':
@@ -617,20 +658,16 @@ public class IncludeExcludeFilter {
     System.out.println();
 
     System.out.println("Enter test value(s)");
-    try (Scanner in = new Scanner(inStream)) {
-      while (true) {
-        try {
-          String value = in.next();
-          System.out.println(value);
-          for (ItemType itemType : ItemType.values()) {
-            System.out.println("  as " + itemType.name() + ": "
-                + filter.isAllowed(value, itemType));
-          }
-          System.out.println();
-        } catch (NoSuchElementException e) {
-          return;
-        }
+
+    Scanner in = new Scanner(inStream);
+    while (in.hasNext()) {
+      String value = in.next();
+      System.out.println(value);
+      for (ItemType itemType : ItemType.values()) {
+        System.out.println("  as " + itemType.name() + ": "
+            + filter.isAllowed(value, itemType));
       }
+      System.out.println();
     }
   }
 }

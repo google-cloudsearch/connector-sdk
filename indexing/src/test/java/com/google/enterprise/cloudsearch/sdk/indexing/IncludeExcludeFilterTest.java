@@ -34,6 +34,7 @@ import java.util.Properties;
 import java.util.regex.PatternSyntaxException;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ErrorCollector;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
@@ -46,6 +47,7 @@ import org.junit.runners.JUnit4;
 public class IncludeExcludeFilterTest {
   private static final boolean IS_WINDOWS = System.getProperty("file.separator").equals("\\");
 
+  @Rule public ErrorCollector errorCollector = new ErrorCollector();
   @Rule public ExpectedException thrown = ExpectedException.none();
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public SetupConfigRule setupConfig = SetupConfigRule.uninitialized();
@@ -398,7 +400,6 @@ public class IncludeExcludeFilterTest {
         "http://WWW.EXAMPLE.COM/",
         "http://www.example.com/anyPath");
     eval(false, rules,
-        "http://www.example.com:80",
         "http://docs.example.com",
         "http://docs.example.com/",
         "https://www.example.com",
@@ -443,6 +444,69 @@ public class IncludeExcludeFilterTest {
   }
 
   @Test
+  public void urlPrefixRule_defaultPort_acceptsExpectedPatterns() {
+    List<IncludeExcludeFilter.Rule> rules;
+
+    rules = Arrays.asList(
+        urlPrefixRule("http://www.example.com", "INCLUDE"),
+        urlPrefixRule("http://www.example.com/", "INCLUDE"),
+        urlPrefixRule("http://www.example.com:80", "INCLUDE"),
+        urlPrefixRule("http://www.example.com:80/", "INCLUDE"));
+    eval(true, rules,
+        "http://www.example.com",
+        "http://www.example.com/",
+        "http://www.example.com:80",
+        "http://www.example.com:80/",
+        "http://www.example.com/folder/file.txt",
+        "http://www.example.com:80/folder/file.txt"
+      );
+
+    rules = Arrays.asList(
+        urlPrefixRule("http://www.example.com/folder/path", "INCLUDE"),
+        urlPrefixRule("http://www.example.com:80/folder/path", "INCLUDE"));
+    eval(true, rules,
+        "http://www.example.com",
+        "http://www.example.com/",
+        "http://www.example.com:80",
+        "http://www.example.com:80/",
+        "http://www.example.com:80/folder",
+        "http://www.example.com/folder/path",
+        "http://www.example.com/folder/path/",
+        "http://www.example.com:80/folder/path",
+        "http://www.example.com:80/folder/path/",
+        "http://www.example.com/folder/path/file.txt",
+        "http://www.example.com:80/folder/path/file.txt"
+      );
+    eval(false, rules,
+        "http://www.example.com/folder/file.txt",
+        "http://www.example.com:80/folder/file.txt",
+        "http://www.example.com/folder2/file.txt",
+        "http://www.example.com/folder/path2"
+      );
+
+    rules = Arrays.asList(
+        urlPrefixRule("https://www.example.com", "INCLUDE"),
+        urlPrefixRule("https://www.example.com/", "INCLUDE"),
+        urlPrefixRule("https://www.example.com:443", "INCLUDE"),
+        urlPrefixRule("https://www.example.com:443/", "INCLUDE"));
+    eval(true, rules,
+        "https://www.example.com",
+        "https://www.example.com/",
+        "https://www.example.com:443",
+        "https://www.example.com:443/",
+        "https://www.example.com/folder/file.txt",
+        "https://www.example.com:443/folder/file.txt"
+      );
+
+    rules = Arrays.asList(
+        urlPrefixRule("http://www.example.com:1234", "INCLUDE"),
+        urlPrefixRule("http://www.example.com:1234/", "INCLUDE"));
+    eval(false, rules,
+        "http://www.example.com",
+        "http://www.example.com:80");
+  }
+
+  @Test
   public void urlPrefixExcludeRule_acceptsExpectedPatterns() {
     List<IncludeExcludeFilter.Rule> rules;
 
@@ -480,7 +544,7 @@ public class IncludeExcludeFilterTest {
   private void eval(boolean expected, List<IncludeExcludeFilter.Rule> rules, String... values) {
     for (IncludeExcludeFilter.Rule rule : rules) {
       for (String s : values) {
-        assertEquals(rule + " = " + s, expected, rule.eval(s));
+        errorCollector.checkThat(rule + " = " + s, rule.eval(s), is(expected));
       }
     }
   }
@@ -505,10 +569,11 @@ public class IncludeExcludeFilterTest {
         new IncludeExcludeFilter.Rule.Builder("rule6").setFilterType("REGEX")
         .setAction("EXCLUDE").setFilterPattern("\\.txt.bak$").setItemType("CONTENT_ITEM").build());
     IncludeExcludeFilter filter = new IncludeExcludeFilter(rules);
-    assertEquals(2, filter.prefixIncludeRules.size());
-    assertEquals(1, filter.prefixExcludeRules.size());
-    assertEquals(2, filter.regexIncludeRules.get(ItemType.CONTENT_ITEM).size());
-    assertEquals(3, filter.regexExcludeRules.get(ItemType.CONTENT_ITEM).size());
+
+    assertSizeEquals(filter.prefixIncludeRules, 2);
+    assertSizeEquals(filter.prefixExcludeRules, 1);
+    assertSizeEquals(filter.regexIncludeRules.get(ItemType.CONTENT_ITEM), 2);
+    assertSizeEquals(filter.regexExcludeRules.get(ItemType.CONTENT_ITEM), 3);
   }
 
   @Test
@@ -521,13 +586,13 @@ public class IncludeExcludeFilterTest {
   public void fromConfiguration_initializedNoConfig_emptyRulesCreated() {
     setupConfig.initConfig(new Properties());
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
-    assertEquals(0, filter.prefixIncludeRules.size());
-    assertEquals(0, filter.prefixExcludeRules.size());
+    assertSizeEquals(filter.prefixIncludeRules, 0);
+    assertSizeEquals(filter.prefixExcludeRules, 0);
     assertEquals(IncludeExcludeFilter.allowedItemTypes.size(), filter.regexIncludeRules.size());
     assertEquals(IncludeExcludeFilter.allowedItemTypes.size(), filter.regexExcludeRules.size());
     for (ItemType itemType : IncludeExcludeFilter.allowedItemTypes) {
-      assertEquals(0, filter.regexIncludeRules.get(itemType).size());
-      assertEquals(0, filter.regexExcludeRules.get(itemType).size());
+      assertSizeEquals(filter.regexIncludeRules.get(itemType), 0);
+      assertSizeEquals(filter.regexExcludeRules.get(itemType), 0);
     }
     assertTrue(filter.isAllowed("anything is allowed", ItemType.CONTENT_ITEM));
     assertTrue(filter.isAllowed("anything is allowed", ItemType.CONTAINER_ITEM));
@@ -578,7 +643,7 @@ public class IncludeExcludeFilterTest {
 
     List<IncludeExcludeFilter.Rule> includeRules =
         filter.regexIncludeRules.get(ItemType.CONTENT_ITEM);
-    assertEquals(2, includeRules.size());
+    assertSizeEquals(includeRules, 2);
 
     IncludeExcludeFilter.Rule rule = includeRules.stream()
         .filter(r -> r.getName().equals("includeText"))
@@ -598,7 +663,7 @@ public class IncludeExcludeFilterTest {
 
     List<IncludeExcludeFilter.Rule> excludeRules =
         filter.regexExcludeRules.get(ItemType.CONTENT_ITEM);
-    assertEquals(1, excludeRules.size());
+    assertSizeEquals(excludeRules, 1);
 
     rule = excludeRules.stream()
         .filter(r -> r.getName().equals("excludeHtml"))
@@ -625,13 +690,13 @@ public class IncludeExcludeFilterTest {
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
 
     List<IncludeExcludeFilter.Rule> includeRules = filter.prefixIncludeRules;
-    assertEquals(1, includeRules.size());
+    assertSizeEquals(includeRules, 1);
     IncludeExcludeFilter.Rule rule = includeRules.get(0);
     assertEquals(IncludeExcludeFilter.Action.INCLUDE, rule.getAction());
     assertEquals("/path/to/records", rule.getPredicate().toString());
 
     List<IncludeExcludeFilter.Rule> excludeRules = filter.prefixExcludeRules;
-    assertEquals(1, excludeRules.size());
+    assertSizeEquals(excludeRules, 1);
     rule = excludeRules.get(0);
     assertEquals(IncludeExcludeFilter.Action.EXCLUDE, rule.getAction());
     assertEquals("/path/to/records/butNotThese", rule.getPredicate().toString());
@@ -654,13 +719,13 @@ public class IncludeExcludeFilterTest {
     IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
 
     List<IncludeExcludeFilter.Rule> includeRules = filter.prefixIncludeRules;
-    assertEquals(1, includeRules.size());
+    assertSizeEquals(includeRules, 1);
     IncludeExcludeFilter.Rule rule = includeRules.get(0);
     assertEquals(IncludeExcludeFilter.Action.INCLUDE, rule.getAction());
     assertEquals("\\\\share\\folder\\path", rule.getPredicate().toString());
 
     List<IncludeExcludeFilter.Rule> excludeRules = filter.prefixExcludeRules;
-    assertEquals(1, excludeRules.size());
+    assertSizeEquals(excludeRules, 1);
     rule = excludeRules.get(0);
     assertEquals(IncludeExcludeFilter.Action.EXCLUDE, rule.getAction());
     assertEquals("\\\\share\\folder\\path\\notThese", rule.getPredicate().toString());
@@ -1041,6 +1106,19 @@ public class IncludeExcludeFilterTest {
   }
 
   @Test
+  public void toString_succeeds() throws Exception {
+    Properties config = createProperties(
+        "includeExcludeFilter.rule1.filterType = REGEX",
+        "includeExcludeFilter.rule1.itemType = CONTENT_ITEM",
+        "includeExcludeFilter.rule1.filterPattern = \\\\.(pdf|doc)$",
+        "includeExcludeFilter.rule1.action = INCLUDE"
+      );
+    setupConfig.initConfig(config);
+    IncludeExcludeFilter filter = IncludeExcludeFilter.fromConfiguration();
+    assertTrue(filter.toString().startsWith("Include"));
+  }
+
+  @Test
   public void mainHelper_succeeds() throws Exception {
     // No rules, one test value.
     IncludeExcludeFilter.mainHelper(new String[0],
@@ -1052,5 +1130,9 @@ public class IncludeExcludeFilterTest {
     Properties p = new Properties();
     p.load(new java.io.StringReader(in));
     return p;
+  }
+
+  private void assertSizeEquals(List list, int expectedSize) {
+    assertEquals("Checking size for " + list, expectedSize, list.size());
   }
 }
