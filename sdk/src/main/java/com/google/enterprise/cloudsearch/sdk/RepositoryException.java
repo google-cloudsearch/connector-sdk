@@ -59,6 +59,12 @@ public class RepositoryException extends IOException {
     return error;
   }
 
+  @Override
+  public String toString() {
+    return getRepositoryError().toString()
+        + ((getCause() != null) ? ", cause=" + getCause() : "");
+  }
+
   /** Builder for creating {@link RepositoryException} */
   public static class Builder {
     private String message;

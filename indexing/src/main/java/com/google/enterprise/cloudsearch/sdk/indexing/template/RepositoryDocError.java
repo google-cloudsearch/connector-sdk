@@ -56,4 +56,20 @@ public class RepositoryDocError implements ApiOperation {
       throw new IOException("Error pushing repository error", e.getCause());
     }
   }
+
+  public String getId() {
+    return itemId;
+  }
+
+  public RepositoryException getException() {
+    return repositoryDocException;
+  }
+
+  @Override
+  public String toString() {
+    return "RepositoryDocError ["
+        + "itemId=" + itemId
+        + ", exception=" + repositoryDocException
+        + "]";
+  }
 }

@@ -77,6 +77,15 @@ public class DeleteItem implements ApiOperation {
     }
   }
 
+  public String getId() {
+    return id;
+  }
+
+  @Override
+  public String toString() {
+    return "DeleteItem [itemId=" + id + "]";
+  }
+
   @Override
   public int hashCode() {
     return Objects.hash(id, Arrays.hashCode(version), requestMode);

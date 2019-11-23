@@ -58,6 +58,15 @@ public class DeleteQueueItems implements ApiOperation {
     }
   }
 
+  public String getQueueName() {
+      return queueName;
+  }
+
+  @Override
+  public String toString() {
+    return "DeleteQueueItems [queueName=" + queueName + "]";
+  }
+
   @Override
   public int hashCode() {
     return Objects.hash(queueName);

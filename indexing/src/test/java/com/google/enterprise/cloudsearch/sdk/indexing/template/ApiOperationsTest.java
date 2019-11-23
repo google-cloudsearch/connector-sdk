@@ -23,6 +23,7 @@ import static org.junit.Assert.assertThat;
 
 import com.google.api.services.cloudsearch.v1.model.PushItem;
 import com.google.common.collect.ImmutableList;
+import com.google.enterprise.cloudsearch.sdk.RepositoryException;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService.RequestMode;
 import junitparams.JUnitParamsRunner;
 import junitparams.Parameters;
@@ -101,5 +102,51 @@ public class ApiOperationsTest {
     if (!(subject instanceof BatchApiOperation)) { // See BatchApiOperation.hashCode()
       assertThat(subject.hashCode(), not(equalTo(other.hashCode())));
     }
+  }
+
+  @Test
+  public void deleteItem_helpers() {
+    DeleteItem deleteItem = (DeleteItem) ApiOperations.deleteItem("itemId");
+    assertThat(deleteItem.getId(), equalTo("itemId"));
+    assertThat(deleteItem.toString(), equalTo("DeleteItem [itemId=itemId]"));
+  }
+
+  @Test
+  public void deleteQueueItems_helpers() {
+    DeleteQueueItems deleteQueueItems =
+        (DeleteQueueItems) ApiOperations.deleteQueueItems("queueName");
+    assertThat(deleteQueueItems.getQueueName(), equalTo("queueName"));
+    assertThat(deleteQueueItems.toString(), equalTo("DeleteQueueItems [queueName=queueName]"));
+  }
+
+  @Test
+  public void pushItems_helpers() {
+    PushItems pushItems = new PushItems.Builder()
+        .addPushItem("item1", new PushItem())
+        .addPushItem("item2", new PushItem().setQueue("test queue"))
+        .addPushItem("item3", new PushItem())
+        .build();
+    assertThat(pushItems.getPushItemResources().size(), equalTo(3));
+    assertThat(pushItems.getPushItemResources().stream()
+        .map(item -> item.getId()).collect(ImmutableList.toImmutableList()),
+        equalTo(ImmutableList.of("item1", "item2", "item3")));
+    assertThat(pushItems.toString(), equalTo("PushItems [items=[[itemId=item1, pushItem={}], "
+            + "[itemId=item2, pushItem={queue=test queue}], [itemId=item3, pushItem={}]]]"));
+    assertThat(pushItems.getPushItemResources().get(0),
+        equalTo(new PushItemResource("item1", new PushItem())));
+  }
+
+  @Test
+  public void repositoryDocError_helpers() {
+    RepositoryDocError error = new RepositoryDocError("itemId",
+        new RepositoryException.Builder()
+        .setErrorMessage("error message")
+        .setErrorType(RepositoryException.ErrorType.UNKNOWN)
+        .setCause(new Exception("test cause"))
+        .build());
+    assertThat(error.getId(), equalTo("itemId"));
+    assertThat(error.toString(), equalTo("RepositoryDocError [itemId=itemId, "
+            + "exception={errorMessage=error message, type=UNKNOWN}, "
+            + "cause=java.lang.Exception: test cause]"));
   }
 }
