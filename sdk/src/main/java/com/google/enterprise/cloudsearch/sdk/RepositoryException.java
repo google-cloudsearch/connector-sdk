@@ -61,7 +61,7 @@ public class RepositoryException extends IOException {
 
   @Override
   public String toString() {
-    return getRepositoryError().toString()
+    return getRepositoryError()
         + ((getCause() != null) ? ", cause=" + getCause() : "");
   }
 

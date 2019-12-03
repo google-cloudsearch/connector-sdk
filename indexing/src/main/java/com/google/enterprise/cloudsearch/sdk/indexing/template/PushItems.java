@@ -92,7 +92,7 @@ public class PushItems implements ApiOperation {
 
   @Override
   public String toString() {
-    return "PushItems [items=" + items.toString() + "]";
+    return "PushItems [items=" + items + "]";
   }
 
   @Override
