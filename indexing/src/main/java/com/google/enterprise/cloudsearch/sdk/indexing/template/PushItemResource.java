@@ -22,22 +22,30 @@ import com.google.api.services.cloudsearch.v1.model.PushItem;
 import com.google.common.base.Strings;
 import java.util.Objects;
 
-class PushItemResource {
+/**
+ * Wrapper to pair the item id and PushItem.
+ */
+public class PushItemResource {
   private final String id;
   private final PushItem item;
 
-  PushItemResource(String id, PushItem item) {
+  public PushItemResource(String id, PushItem item) {
     checkArgument(!Strings.isNullOrEmpty(id), "id can not be null or empty");
     this.id = id;
     this.item = checkNotNull(item, "item can not be null");
   }
 
-  String getId() {
+  public String getId() {
     return id;
   }
 
-  PushItem getItem() {
+  public PushItem getItem() {
     return item;
+  }
+
+  @Override
+  public String toString() {
+    return "[itemId=" + id + ", pushItem=" + item + "]";
   }
 
   @Override

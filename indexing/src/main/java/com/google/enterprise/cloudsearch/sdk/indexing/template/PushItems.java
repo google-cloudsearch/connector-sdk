@@ -19,6 +19,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.api.client.json.GenericJson;
 import com.google.api.services.cloudsearch.v1.model.PushItem;
+import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingService;
@@ -83,6 +84,15 @@ public class PushItems implements ApiOperation {
     } catch (ExecutionException e) {
       throw new IOException(e.getCause());
     }
+  }
+
+  public List<PushItemResource> getPushItemResources() {
+    return ImmutableList.copyOf(items);
+  }
+
+  @Override
+  public String toString() {
+    return "PushItems [items=" + items + "]";
   }
 
   @Override
