@@ -427,7 +427,7 @@ public class Acl {
         .setUserResourceName(String.format(USER_RESOURCE_NAME_FORMAT, identitySourceId, userId));
   }
 
-  private static Supplier<Set<String>> externalGroupNamesSupplier = () -> {
+  private static final Supplier<Set<String>> externalGroupNamesSupplier = () -> {
     try {
       ExternalGroups groups = ExternalGroups.fromConfiguration();
       return groups.getExternalGroups().stream()
@@ -441,7 +441,7 @@ public class Acl {
 
   private static Supplier<Set<String>> externalGroupNames = memoize(externalGroupNamesSupplier);
 
-  private static Supplier<String> externalGroupsIdentitySourceIdSupplier = () -> {
+  private static final Supplier<String> externalGroupsIdentitySourceIdSupplier = () -> {
     return Configuration.getString("externalgroups.identitySourceId", "").get();
   };
 
@@ -452,7 +452,7 @@ public class Acl {
   public static class ResetExternalGroupsRule implements TestRule {
     @Override
     public Statement apply(Statement base, Description description) {
-      externalGroupsIdentitySourceId = memoize(externalGroupsIdentitySourceIdSupplier);
+      externalGroupNames = memoize(externalGroupNamesSupplier);
       externalGroupsIdentitySourceId = memoize(externalGroupsIdentitySourceIdSupplier);
       return base;
     }
@@ -467,6 +467,11 @@ public class Acl {
    */
   public static Principal getGroupPrincipal(String groupId) {
     checkArgument(!Strings.isNullOrEmpty(groupId), "Group ID can not be empty or null");
+
+    // TODO(gemerson): the group name comparison here is case-sensitive; is that an issue?
+
+    // In a connector, the Configuration class will be almost certainly be initialized,
+    // but there are unit tests that don't set it up, so add a check here.
     if (Configuration.isInitialized()
         && !externalGroupsIdentitySourceId.get().isEmpty()
         && externalGroupNames.get().contains(groupId)) {
