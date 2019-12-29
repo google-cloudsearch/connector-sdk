@@ -37,6 +37,44 @@ import java.util.logging.Logger;
 
 /**
  * Indexes external groups and their members.
+ * <p>
+ * Example config to run the external groups connector:
+ * <pre>
+ * api.serviceAccountPrivateKeyFile = /path/to/file
+ * api.customerId = ABCDE123
+ * connector.runOnce = true
+ * ## This property must be set to GROUPS to avoid an error trying to sync users
+ * connector.IdentitySyncType = GROUPS
+ * ## This is the identity source in which the groups will be created. This must be a
+ * ## dedicated identity source for this connector.
+ * api.identitySourceId = 1234567890abcde
+ * externalgroups.filename = /path/to/groups.json
+ * </pre>
+ *
+ * <p>
+ * Mapping an external group to the customer principal (all users) is a special case. You
+ * need to create a Google group containing the customer principal and then set that Google
+ * group as the member of the external group to be created here. For example:
+ * <pre>
+ * {
+ *     "externalGroups":[
+ *         {"name":"Everyone",
+ *          "members":[
+ *              {"id":"everyone-group@example.com"}
+ *          ]
+ *         }
+ *     ]
+ * }
+ * </pre>
+ *
+ * <p>
+ * In a content connector, you need to supply two properties to map external group names
+ * present in the source repository ACLs to the groups created in the dedicated identity
+ * source:
+ * <pre>
+ * externalgroups.identitySourceId = 1234567890abcde
+ * externalgroups.filename = /path/to/groups.json
+ * </pre>
  */
 public class ExternalGroupsRepository implements Repository {
   private static final Logger logger = Logger.getLogger(ExternalGroupsRepository.class.getName());
