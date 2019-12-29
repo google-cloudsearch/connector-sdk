@@ -39,6 +39,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import org.junit.rules.TestRule;
@@ -57,6 +59,8 @@ import org.junit.runners.model.Statement;
  * <p>Instances are immutable.
  */
 public class Acl {
+  private static final Logger log = Logger.getLogger(Acl.class.getName());
+
   /** Prefix for identity source ID */
   public static final String IDENTITY_SOURCES_PREFIX = "identitysources";
 
@@ -427,9 +431,10 @@ public class Acl {
     try {
       ExternalGroups groups = ExternalGroups.fromConfiguration();
       return groups.getExternalGroups().stream()
-      .map(group -> group.getName())
-      .collect(ImmutableSet.toImmutableSet());
+          .map(group -> group.getName())
+          .collect(ImmutableSet.toImmutableSet());
     } catch (IOException e) {
+      log.log(Level.INFO, "Not mapping external group names", e);
       return ImmutableSet.of();
     }
   };

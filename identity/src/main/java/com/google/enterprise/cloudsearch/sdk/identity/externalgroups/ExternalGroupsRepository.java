@@ -31,7 +31,6 @@ import com.google.enterprise.cloudsearch.sdk.identity.IdentitySourceConfiguratio
 import com.google.enterprise.cloudsearch.sdk.identity.IdentityUser;
 import com.google.enterprise.cloudsearch.sdk.identity.Repository;
 import com.google.enterprise.cloudsearch.sdk.identity.RepositoryContext;
-import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.logging.Logger;
@@ -43,8 +42,7 @@ public class ExternalGroupsRepository implements Repository {
   private static final Logger logger = Logger.getLogger(ExternalGroupsRepository.class.getName());
 
   private RepositoryContext repositoryContext;
-  private File groupsFile;
-  private GroupsReader groupsReader;
+  private final GroupsReader groupsReader;
 
   public ExternalGroupsRepository() {
     this(ExternalGroups::fromConfiguration);
@@ -90,10 +88,11 @@ public class ExternalGroupsRepository implements Repository {
       groupsBuilder.add(
           repositoryContext.buildIdentityGroup(group.getName(), membersBuilder::build));
     }
-    return new CheckpointCloseableIterableImpl.Builder<IdentityGroup>(
-        groupsBuilder.build()).build();
+    return new CheckpointCloseableIterableImpl.Builder<IdentityGroup>(groupsBuilder.build())
+        .build();
   }
 
+  @FunctionalInterface
   interface GroupsReader {
     ExternalGroups getGroups() throws IOException;
   }

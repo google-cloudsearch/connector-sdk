@@ -45,20 +45,18 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.junit.rules.TemporaryFolder;
-import org.junit.rules.TestName;
 import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.junit.runners.JUnit4;
 
 /**
  * Tests for {@link ExternalGroupsRepository}.
  */
-@RunWith(MockitoJUnitRunner.class)
+@RunWith(JUnit4.class)
 public class ExternalGroupsRepositoryTest {
 
   @Rule public SetupConfigRule setupConfig = SetupConfigRule.uninitialized();
   @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
   @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
-  @Rule public TestName testName = new TestName();
   @Rule public ExpectedException thrown = ExpectedException.none();
 
   // The connector requires api.identitySourceId implicitly through the use of
@@ -67,7 +65,7 @@ public class ExternalGroupsRepositoryTest {
   public void init_missingIdentitySourceId_throwsException() throws IOException {
     setupConfig.initConfig(new Properties());
     thrown.expect(InvalidConfigurationException.class);
-    RepositoryContext repositoryContext = RepositoryContext.fromConfiguration();
+    RepositoryContext.fromConfiguration();
   }
 
   @Test
@@ -127,9 +125,7 @@ public class ExternalGroupsRepositoryTest {
     groupsRepository.init(repositoryContext);
 
     List<IdentityGroup> groups = getAll(groupsRepository.listGroups(null));
-    assertEquals(1, groups.size());
-    IdentityGroup identityGroup = groups.get(0);
-    assertEquals(expected, identityGroup);
+    assertEquals(Arrays.asList(expected), groups);
   }
 
   @Test
@@ -158,7 +154,6 @@ public class ExternalGroupsRepositoryTest {
     groupsRepository.init(repositoryContext);
 
     List<IdentityGroup> groups = getAll(groupsRepository.listGroups(null));
-    assertEquals(2, groups.size());
     assertEquals(expected, groups);
   }
 
@@ -228,8 +223,17 @@ public class ExternalGroupsRepositoryTest {
 
   @Test
   public void close_doesNothing() throws Exception {
-    ExternalGroupsRepository groupsRepository = new ExternalGroupsRepository();
+    ExternalGroupsRepository groupsRepository =
+        new ExternalGroupsRepository(() -> fromString("{}"));
     groupsRepository.close();
+    // Can still list groups...
+    try (CheckpointCloseableIterable<IdentityGroup> iterable = groupsRepository.listGroups(null)) {
+      assertNull(iterable.getCheckpoint());
+      assertFalse(iterable.hasMore());
+      Iterator<IdentityGroup> iterator = iterable.iterator();
+      assertNotNull(iterator);
+      assertFalse(iterator.hasNext());
+    }
   }
 
   private EntityKey makeEntityKey(String id) {
