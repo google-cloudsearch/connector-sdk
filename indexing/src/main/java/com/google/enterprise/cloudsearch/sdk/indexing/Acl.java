@@ -450,6 +450,7 @@ public class Acl {
 
   /** TestRule to reset the static cached external groups data for tests. */
   public static class ResetExternalGroupsRule implements TestRule {
+    // This reset rule may fail to work as desired in a multi-threaded test environment.
     @Override
     public Statement apply(Statement base, Description description) {
       externalGroupNames = memoize(externalGroupNamesSupplier);
@@ -468,6 +469,8 @@ public class Acl {
   public static Principal getGroupPrincipal(String groupId) {
     checkArgument(!Strings.isNullOrEmpty(groupId), "Group ID can not be empty or null");
 
+    // Map external group names to a separate identity source, when configured, rather
+    // than assigning them to the connector's default identity source.
     // TODO(gemerson): the group name comparison here is case-sensitive; is that an issue?
 
     // In a connector, the Configuration class will be almost certainly be initialized,
