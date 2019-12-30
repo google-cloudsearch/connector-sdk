@@ -31,13 +31,22 @@ import com.google.api.services.cloudsearch.v1.model.ItemAcl;
 import com.google.api.services.cloudsearch.v1.model.Principal;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRule;
+import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.Acl.InheritanceType;
+import com.google.enterprise.cloudsearch.sdk.indexing.Acl.ResetExternalGroupsRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Properties;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 
@@ -46,8 +55,11 @@ import org.mockito.junit.MockitoJUnitRunner;
 @RunWith(MockitoJUnitRunner.class)
 public class AclTest {
 
-  @Rule
-  public ExpectedException thrown = ExpectedException.none();
+  @Rule public ResetConfigRule resetConfig = new ResetConfigRule();
+  @Rule public SetupConfigRule setupConfig = SetupConfigRule.uninitialized();
+  @Rule public ResetExternalGroupsRule resetExternalGroups = new ResetExternalGroupsRule();
+  @Rule public ExpectedException thrown = ExpectedException.none();
+  @Rule public TemporaryFolder temporaryFolder = new TemporaryFolder();
 
   @Test
   public void testBuilderSimple() {
@@ -292,6 +304,32 @@ public class AclTest {
     assertEquals(
         new Principal().setGroupResourceName("identitysources/idSource1/groups/groupId"),
         principal);
+  }
+
+  @Test
+  public void getGroupPrincipal_externalGroups_addsConfiguredIdentitySource() throws IOException {
+    File groupsFile = temporaryFolder.newFile();
+    createFile(groupsFile, "{\"externalGroups\":["
+        + " {\"name\":\"Group1\", \"members\":[ ]},"
+        + " {\"name\":\"Group 2\",\"members\":[ ]}"
+        + " ]}");
+
+    Properties config = new Properties();
+    config.setProperty("externalgroups.filename", groupsFile.toString());
+    config.setProperty("externalgroups.identitySourceId", "1234567890");
+    setupConfig.initConfig(config);
+    assertEquals(
+        new Principal().setGroupResourceName("identitysources/1234567890/groups/Group1"),
+        Acl.getGroupPrincipal("Group1"));
+    assertEquals(
+        new Principal().setGroupResourceName("identitysources/1234567890/groups/Group%202"),
+        Acl.getGroupPrincipal("Group 2"));
+    assertEquals(
+        new Principal().setGroupResourceName("otherGroup"),
+        Acl.getGroupPrincipal("otherGroup"));
+    assertEquals(
+        new Principal().setGroupResourceName("identitysources/testIdSource/groups/otherGroup"),
+        Acl.getGroupPrincipal("otherGroup", "testIdSource"));
   }
 
   @Test
@@ -549,5 +587,11 @@ public class AclTest {
   return Arrays.stream(names)
       .map(name -> new Principal().setGroupResourceName(name))
       .collect(ImmutableSet.toImmutableSet());
+  }
+
+  private void createFile(File file, String content) throws IOException {
+    try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
+      pw.write(content);
+    }
   }
 }

@@ -17,6 +17,7 @@ package com.google.enterprise.cloudsearch.sdk.indexing;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Suppliers.memoize;
 
 import com.google.api.services.cloudsearch.v1.model.GSuitePrincipal;
 import com.google.api.services.cloudsearch.v1.model.Item;
@@ -25,18 +26,26 @@ import com.google.api.services.cloudsearch.v1.model.Principal;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableSet;
+import com.google.enterprise.cloudsearch.sdk.ExternalGroups;
 import com.google.enterprise.cloudsearch.sdk.GroupIdEncoder;
 import com.google.enterprise.cloudsearch.sdk.InvalidConfigurationException;
 import com.google.enterprise.cloudsearch.sdk.config.Configuration;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
+import org.junit.rules.TestRule;
+import org.junit.runner.Description;
+import org.junit.runners.model.Statement;
 
 /**
  * Represents all aspects of access permissions for an uploaded document.
@@ -50,6 +59,8 @@ import java.util.stream.Collectors;
  * <p>Instances are immutable.
  */
 public class Acl {
+  private static final Logger log = Logger.getLogger(Acl.class.getName());
+
   /** Prefix for identity source ID */
   public static final String IDENTITY_SOURCES_PREFIX = "identitysources";
 
@@ -416,6 +427,38 @@ public class Acl {
         .setUserResourceName(String.format(USER_RESOURCE_NAME_FORMAT, identitySourceId, userId));
   }
 
+  private static final Supplier<Set<String>> externalGroupNamesSupplier = () -> {
+    try {
+      ExternalGroups groups = ExternalGroups.fromConfiguration();
+      return groups.getExternalGroups().stream()
+          .map(group -> group.getName())
+          .collect(ImmutableSet.toImmutableSet());
+    } catch (IOException e) {
+      log.log(Level.INFO, "Not mapping external group names", e);
+      return ImmutableSet.of();
+    }
+  };
+
+  private static Supplier<Set<String>> externalGroupNames = memoize(externalGroupNamesSupplier);
+
+  private static final Supplier<String> externalGroupsIdentitySourceIdSupplier = () -> {
+    return Configuration.getString("externalgroups.identitySourceId", "").get();
+  };
+
+  private static Supplier<String> externalGroupsIdentitySourceId =
+      memoize(externalGroupsIdentitySourceIdSupplier);
+
+  /** TestRule to reset the static cached external groups data for tests. */
+  public static class ResetExternalGroupsRule implements TestRule {
+    // This reset rule may fail to work as desired in a multi-threaded test environment.
+    @Override
+    public Statement apply(Statement base, Description description) {
+      externalGroupNames = memoize(externalGroupNamesSupplier);
+      externalGroupsIdentitySourceId = memoize(externalGroupsIdentitySourceIdSupplier);
+      return base;
+    }
+  }
+
   /**
    * Returns an external group principal. This method encodes groupId using {@link
    * GroupIdEncoder#encodeGroupId}
@@ -425,6 +468,18 @@ public class Acl {
    */
   public static Principal getGroupPrincipal(String groupId) {
     checkArgument(!Strings.isNullOrEmpty(groupId), "Group ID can not be empty or null");
+
+    // Map external group names to a separate identity source, when configured, rather
+    // than assigning them to the connector's default identity source.
+    // TODO(gemerson): the group name comparison here is case-sensitive; is that an issue?
+
+    // In a connector, the Configuration class will be almost certainly be initialized,
+    // but there are unit tests that don't set it up, so add a check here.
+    if (Configuration.isInitialized()
+        && !externalGroupsIdentitySourceId.get().isEmpty()
+        && externalGroupNames.get().contains(groupId)) {
+      return getGroupPrincipal(groupId, externalGroupsIdentitySourceId.get());
+    }
     return new Principal().setGroupResourceName(GroupIdEncoder.encodeGroupId(groupId));
   }
 
