@@ -62,7 +62,6 @@ public class GroupsServiceImpl extends BaseApiService<CloudIdentity> implements 
 
   private static final Set<String> APPLICATION_SCOPES =
       ImmutableSet.of("https://www.googleapis.com/auth/cloud-identity");
-  private static final String GROUPS_SERVICE_BATCH_PATH = "/groups/batch";
   private static final OperationStats GROUP_SERVICE_STATS =
       StatsManager.getComponent("GroupsService");
   private static final String SEARCH_QUERY_FORMAT =
@@ -191,8 +190,7 @@ public class GroupsServiceImpl extends BaseApiService<CloudIdentity> implements 
         HttpTransport transport,
         JsonFactory jsonFactory,
         HttpRequestInitializer requestInitializer) {
-      return new CloudIdentity.Builder(transport, jsonFactory, requestInitializer)
-          .setBatchPath(GROUPS_SERVICE_BATCH_PATH);
+      return new CloudIdentity.Builder(transport, jsonFactory, requestInitializer);
     }
 
     /** Builds an instance of {@link GroupsServiceImpl} */
