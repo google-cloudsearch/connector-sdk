@@ -38,7 +38,7 @@ public class TestUtils {
   private static final Logger logger = Logger.getLogger(TestUtils.class.getName());
   private static final Duration ITEM_DELETION_TIMEOUT = new Duration(20, TimeUnit.SECONDS);
   private static final Duration ITEM_DELETION_POLL_INTERVAL = Duration.TWO_SECONDS;
-  private static final Duration ITEM_EQUAL_TIMEOUT = Duration.TEN_SECONDS;
+  private static final Duration ITEM_EQUAL_TIMEOUT = Duration.TEN_SECONDS.plus(Duration.TEN_SECONDS);
   private static final Duration ITEM_EQUAL_POLL_INTERVAL = Duration.TWO_SECONDS;
 
   private final CloudSearchService service;
