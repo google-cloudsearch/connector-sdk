@@ -398,7 +398,7 @@ public class FakeIndexingRepositoryIT {
     String itemId = Util.getItemId(indexingSourceId, itemName);
     Properties config = new Properties();
     config.setProperty("defaultAcl.readers.users", String.format("google:%s", testUser1));
-    config.setProperty("defaultAcl.readers.group", String.format("google:%s", testGroup));
+    config.setProperty("defaultAcl.readers.groups", String.format("google:%s", testGroup));
     config.setProperty("defaultAcl.denied.users", String.format("google:%s", testUserGroupMember));
     config.setProperty("defaultAcl.public", "false");
     config.setProperty("defaultAcl.mode", DefaultAclMode.FALLBACK.toString());
