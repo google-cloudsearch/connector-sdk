@@ -411,7 +411,7 @@ public class UploaderTest {
             schemaFile,
             // append is false. Overwrite file
             false)) {
-      outputStream.write(new Schema().toPrettyString().getBytes(StandardCharsets.UTF_8));
+      outputStream.write("{}".getBytes(StandardCharsets.UTF_8));
       outputStream.flush();
     }
     when(uploaderHelper.createTransport())
@@ -621,7 +621,7 @@ public class UploaderTest {
     uploadRequest.sourceId = "ds1";
     UploadRequest.IndexItemAndContentRequest indexRequest =
         new UploadRequest.IndexItemAndContentRequest();
-    indexRequest.item = new Item().setName("item1").setVersion("1");
+    indexRequest.item = new Item().setName("item1").setVersion("v1");
     indexRequest.isIncremental = true;
     uploadRequest.requests = Collections.singletonList(indexRequest);
     uploader.execute(uploadRequest);
