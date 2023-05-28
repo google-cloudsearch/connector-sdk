@@ -21,6 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.api.client.util.DateTime;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.ItemMetadata;
+import com.google.api.services.cloudsearch.v1.model.ContextAttribute;
 import com.google.api.services.cloudsearch.v1.model.ItemStructuredData;
 import com.google.api.services.cloudsearch.v1.model.SearchQualityMetadata;
 import com.google.common.base.Converter;
@@ -150,6 +151,7 @@ public class IndexingItemBuilder {
   private final Optional<FieldOrValue<String>> configObjectType;
 
   private SearchQualityMetadata searchQuality;
+  private List<ContextAttribute> contextAttributes;
   private String queue;
   private byte[] payload;
   private byte[] version;
@@ -210,8 +212,7 @@ public class IndexingItemBuilder {
   public static IndexingItemBuilder fromConfiguration(String name) {
     String objectType = Configuration.getString(OBJECT_TYPE, "").get();
     if (!objectType.isEmpty()) {
-      logger.log(Level.WARNING, "{0} is deprecated, use {1}={2}.",
-          new Object[] { OBJECT_TYPE, OBJECT_TYPE_VALUE, objectType });
+      logger.log(Level.WARNING, "{0} is deprecated, use {1}={2}.", new Object[] { OBJECT_TYPE, OBJECT_TYPE_VALUE, objectType });
     }
 
     ConfigDefaults config = new ConfigDefaults()
@@ -224,13 +225,13 @@ public class IndexingItemBuilder {
         .setHash(fieldOrValue(HASH, Configuration.STRING_PARSER))
         .setContainerName(fieldOrValue(CONTAINER_NAME, Configuration.STRING_PARSER))
         .setSearchQualityMetadataQuality(fieldOrValue(SEARCH_QUALITY_METADATA_QUALITY,
-                Configuration.DOUBLE_PARSER))
+            Configuration.DOUBLE_PARSER))
         .setObjectType(
             fieldOrValue(
                 OBJECT_TYPE,
                 Configuration.getString(OBJECT_TYPE_FIELD, "").get(),
                 Configuration.getOverriden(
-                    OBJECT_TYPE_VALUE, Configuration.getString(OBJECT_TYPE, ""))
+                        OBJECT_TYPE_VALUE, Configuration.getString(OBJECT_TYPE, ""))
                     .get(),
                 Configuration.STRING_PARSER));
     return new IndexingItemBuilder(name, config);
@@ -429,6 +430,20 @@ public class IndexingItemBuilder {
   }
 
   /**
+   * Set the {@code contextAttributes} field value for the {@code ItemMetadata}.
+   * <p>
+   *     Using this setter will override the default value for contextAttributes field which is empty.
+   * </p>
+   *
+   * @param contextAttributes the {@code contextAttributes} instance
+   * @return this instance
+   */
+  public IndexingItemBuilder setContextAttributes(List<ContextAttribute> contextAttributes) {
+    this.contextAttributes = contextAttributes;
+    return this;
+  }
+
+  /**
    * Sets the {@code hash} field value for the {@code ItemMetadata}, either from
    * the given field (or key) in the {@code values} multimap, or a literal value.
    *
@@ -529,6 +544,7 @@ public class IndexingItemBuilder {
    * hash, containerName})
    * can be set explicitly in the setter, from the {@code values} map, or using the
    * {@link #fromConfiguration configuration properties}.
+   * The metadata attribute {@code contextAttributes} can be set through the setter only.
    *
    * @return fully built {@link Item} object
    */
@@ -577,6 +593,9 @@ public class IndexingItemBuilder {
         metadata.setSearchQualityMetadata(searchQualityMetadata);
       }
     }
+    if (contextAttributes != null) {
+      metadata.setContextAttributes(contextAttributes);
+    }
     if (version != null) {
       item.encodeVersion(version);
     }
@@ -606,12 +625,12 @@ public class IndexingItemBuilder {
    * @param isEmpty a predicate to check whether a value is present or missing
    */
   private static <T, M> void setFromFieldOrValues(FieldOrValue<T> primary,
-      Optional<FieldOrValue<T>> backup,
-      Multimap<String, Object> values,
-      Converter<Object, T> converter,
-      Predicate<T> isEmpty,
-      Function<T, M> extractor,
-      Consumer<M> setter) {
+                                                  Optional<FieldOrValue<T>> backup,
+                                                  Multimap<String, Object> values,
+                                                  Converter<Object, T> converter,
+                                                  Predicate<T> isEmpty,
+                                                  Function<T, M> extractor,
+                                                  Consumer<M> setter) {
     T value = getSingleValue(primary, values, converter);
     if (isEmpty.test(value) && backup.isPresent()) {
       value = getSingleValue(backup.get(), values, converter);
@@ -708,7 +727,7 @@ public class IndexingItemBuilder {
    *     {@code String} or {@code DateTime}
    */
   private static <T> Optional<FieldOrValue<T>> fieldOrValue(String configKey,
-      Configuration.Parser<T> parser) {
+                                                            Configuration.Parser<T> parser) {
     String field = Configuration.getString(dotField(configKey), "").get();
     String value = Configuration.getString(dotValue(configKey), "").get();
     return fieldOrValue(configKey, field, value, parser);
@@ -726,7 +745,7 @@ public class IndexingItemBuilder {
    *     {@code String} or {@code DateTime}
    */
   private static <T> Optional<FieldOrValue<T>> fieldOrValue(String configKey, String field,
-      String value, Configuration.Parser<T> parser) {
+                                                            String value, Configuration.Parser<T> parser) {
     if (field.isEmpty()) {
       if (value.isEmpty()) {
         return Optional.empty();

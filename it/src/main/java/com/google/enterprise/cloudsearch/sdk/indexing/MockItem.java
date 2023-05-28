@@ -19,6 +19,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.api.services.cloudsearch.v1.model.Item;
+import com.google.api.services.cloudsearch.v1.model.ContextAttribute;
 import com.google.common.base.Strings;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableMultimap;
@@ -27,6 +28,7 @@ import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.FieldO
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.ItemType;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
+import java.util.List;
 
 /**
  * Generates an Item using {@link IndexingItemBuilder} with specified values for metadata.
@@ -51,6 +53,7 @@ public class MockItem {
   private static final String CREATE_TIME = "createTime";
   private static final String UPDATE_TIME = "updateTime";
   private static final String ACL = "acl";
+  private static final String CONTEXT_ATTRIBUTES = "contextAttributes";
 
   private final String name;
   private final Multimap<String, Object> values;
@@ -85,6 +88,7 @@ public class MockItem {
         .setVersion(getByteArrayValue(values, VERSION))
         .setPayload(getByteArrayValue(values, PAYLOAD))
         .setAcl(MockItem.<Acl>getSingleValue(values, ACL).orElse(null))
+        .setContextAttributes(MockItem.<List<ContextAttribute>>getSingleValue(values, CONTEXT_ATTRIBUTES).orElse(null))
         .build();
   }
 
@@ -196,6 +200,11 @@ public class MockItem {
 
     public Builder setUpdateTime(String updateTime) {
       values.put(UPDATE_TIME, updateTime);
+      return this;
+    }
+
+    public Builder setContextAttributes(List<ContextAttribute> contextAttributes) {
+      values.put(CONTEXT_ATTRIBUTES, contextAttributes);
       return this;
     }
 

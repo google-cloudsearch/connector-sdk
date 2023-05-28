@@ -24,6 +24,7 @@ import static org.junit.Assert.assertThat;
 import com.google.api.client.util.DateTime;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.api.services.cloudsearch.v1.model.ItemMetadata;
+import com.google.api.services.cloudsearch.v1.model.ContextAttribute;
 import com.google.api.services.cloudsearch.v1.model.ItemStructuredData;
 import com.google.api.services.cloudsearch.v1.model.ObjectDefinition;
 import com.google.api.services.cloudsearch.v1.model.Schema;
@@ -34,7 +35,10 @@ import com.google.enterprise.cloudsearch.sdk.config.Configuration.ResetConfigRul
 import com.google.enterprise.cloudsearch.sdk.config.Configuration.SetupConfigRule;
 import com.google.enterprise.cloudsearch.sdk.indexing.IndexingItemBuilder.FieldOrValue;
 import com.google.enterprise.cloudsearch.sdk.indexing.StructuredData.ResetStructuredDataRule;
+
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Properties;
 import org.junit.Rule;
 import org.junit.Test;
@@ -328,6 +332,33 @@ public class IndexingItemBuilderTest {
                 new ItemMetadata()
                 .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
               )));
+  }
+
+  @Test
+  public void build_contextAttributes() {
+    StructuredData.init(new Schema());
+
+    Multimap<String, Object> values = ArrayListMultimap.create();
+    ContextAttribute c1 = new ContextAttribute().setName("math").setValues(Arrays.asList("pi", "epsilon"));
+    ContextAttribute c2 = new ContextAttribute().setName("job").setValues(Arrays.asList("engineer", "doctor", "pilot"));
+    List<ContextAttribute> contextAttributes =  Arrays.asList(c1, c2);
+
+    Item subject = new IndexingItemBuilder("foo")
+        .setValues(values)
+        .setMimeType(FieldOrValue.withValue("text/plain"))
+        .setSearchQualityMetadataQuality(FieldOrValue.withValue(0.5d))
+        .setContextAttributes(contextAttributes)
+        .build();
+    assertThat(subject,
+        equalTo(
+            new Item()
+                .setName("foo")
+                .setMetadata(
+                    new ItemMetadata()
+                        .setMimeType("text/plain")
+                        .setSearchQualityMetadata(new SearchQualityMetadata().setQuality(0.5d))
+                        .setContextAttributes(contextAttributes)
+                )));
   }
 
   @Test
