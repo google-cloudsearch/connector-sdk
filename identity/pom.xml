@@ -122,10 +122,6 @@
           <groupId>com.google.guava</groupId>
           <artifactId>guava-jdk5</artifactId>
         </exclusion>
-        <exclusion>
-          <groupId>com.google.api-client</groupId>
-          <artifactId>google-api-client</artifactId>
-        </exclusion>
       </exclusions>
     </dependency>
     <!-- https://mvnrepository.com/artifact/com.google.apis/google-api-services-admin-directory -->
@@ -137,10 +133,6 @@
         <exclusion>
           <groupId>com.google.guava</groupId>
           <artifactId>guava-jdk5</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>com.google.api-client</groupId>
-          <artifactId>google-api-client</artifactId>
         </exclusion>
       </exclusions>
     </dependency>

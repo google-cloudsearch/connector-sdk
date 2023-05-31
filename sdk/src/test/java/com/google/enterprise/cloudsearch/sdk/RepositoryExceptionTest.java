@@ -35,7 +35,7 @@ public class RepositoryExceptionTest {
     assertNull(error.getErrorMessage());
     assertNull(error.getHttpStatusCode());
     assertNull(error.getType());
-    assertEquals("{}", exception.toString());
+    assertEquals("GenericData{classInfo=[errorMessage, httpStatusCode, type], {}}", exception.toString());
   }
 
   @Test
@@ -50,8 +50,7 @@ public class RepositoryExceptionTest {
     // RepositoryError doesn't preserve cause
     assertNull(error.getHttpStatusCode());
     assertNull(error.getType());
-    assertEquals("{errorMessage=error message}, cause=java.lang.Throwable: cause",
-        exception.toString());
+    assertEquals("GenericData{classInfo=[errorMessage, httpStatusCode, type], {errorMessage=error message}}, cause=java.lang.Throwable: cause", exception.toString());
   }
 
   @Test
@@ -61,7 +60,7 @@ public class RepositoryExceptionTest {
         .build();
     RepositoryError error = exception.getRepositoryError();
     assertEquals(RepositoryException.ErrorType.UNKNOWN.name(), error.getType());
-    assertEquals("{type=UNKNOWN}", exception.toString());
+    assertEquals("GenericData{classInfo=[errorMessage, httpStatusCode, type], {type=UNKNOWN}}", exception.toString());
   }
 
   @Test
@@ -71,6 +70,6 @@ public class RepositoryExceptionTest {
         .build();
     RepositoryError error = exception.getRepositoryError();
     assertEquals(Integer.valueOf(400), error.getHttpStatusCode());
-    assertEquals("{httpStatusCode=400}", exception.toString());
+    assertEquals("GenericData{classInfo=[errorMessage, httpStatusCode, type], {httpStatusCode=400}}", exception.toString());
   }
 }

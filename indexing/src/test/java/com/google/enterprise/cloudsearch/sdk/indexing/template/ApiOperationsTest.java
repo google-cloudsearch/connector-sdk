@@ -36,9 +36,9 @@ public class ApiOperationsTest {
   private ImmutableList<ApiOperation> parametersForSingleArgumentTests() {
     ImmutableList.Builder<ApiOperation> builder = new ImmutableList.Builder<>();
     builder
-        .add(ApiOperations.deleteItem("foo"))
-        .add(ApiOperations.deleteQueueItems("foo"))
-        .add(new PushItems.Builder().build());
+      .add(ApiOperations.deleteItem("foo"))
+      .add(ApiOperations.deleteQueueItems("foo"))
+      .add(new PushItems.Builder().build());
     builder.add(ApiOperations.batch(builder.build().iterator()));
     return builder.build();
   }
@@ -128,10 +128,9 @@ public class ApiOperationsTest {
         .build();
     assertThat(pushItems.getPushItemResources().size(), equalTo(3));
     assertThat(pushItems.getPushItemResources().stream()
-        .map(item -> item.getId()).collect(ImmutableList.toImmutableList()),
-        equalTo(ImmutableList.of("item1", "item2", "item3")));
-    assertThat(pushItems.toString(), equalTo("PushItems [items=[[itemId=item1, pushItem={}], "
-            + "[itemId=item2, pushItem={queue=test queue}], [itemId=item3, pushItem={}]]]"));
+            .map(item -> item.getId()).collect(ImmutableList.toImmutableList()),
+            equalTo(ImmutableList.of("item1", "item2", "item3")));
+    assertThat(pushItems.toString(), equalTo("PushItems [items=[[itemId=item1, pushItem=GenericData{classInfo=[contentHash, metadataHash, payload, queue, repositoryError, structuredDataHash, type], {}}], [itemId=item2, pushItem=GenericData{classInfo=[contentHash, metadataHash, payload, queue, repositoryError, structuredDataHash, type], {queue=test queue}}], [itemId=item3, pushItem=GenericData{classInfo=[contentHash, metadataHash, payload, queue, repositoryError, structuredDataHash, type], {}}]]]"));
     assertThat(pushItems.getPushItemResources().get(0),
         equalTo(new PushItemResource("item1", new PushItem())));
   }
@@ -140,13 +139,11 @@ public class ApiOperationsTest {
   public void repositoryDocError_helpers() {
     RepositoryDocError error = new RepositoryDocError("itemId",
         new RepositoryException.Builder()
-        .setErrorMessage("error message")
-        .setErrorType(RepositoryException.ErrorType.UNKNOWN)
-        .setCause(new Exception("test cause"))
-        .build());
+            .setErrorMessage("error message")
+            .setErrorType(RepositoryException.ErrorType.UNKNOWN)
+            .setCause(new Exception("test cause"))
+            .build());
     assertThat(error.getId(), equalTo("itemId"));
-    assertThat(error.toString(), equalTo("RepositoryDocError [itemId=itemId, "
-            + "exception={errorMessage=error message, type=UNKNOWN}, "
-            + "cause=java.lang.Exception: test cause]"));
+    assertThat(error.toString(), equalTo("RepositoryDocError [itemId=itemId, exception=GenericData{classInfo=[errorMessage, httpStatusCode, type], {errorMessage=error message, type=UNKNOWN}}, cause=java.lang.Exception: test cause]"));
   }
 }
