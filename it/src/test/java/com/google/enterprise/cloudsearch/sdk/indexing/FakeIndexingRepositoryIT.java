@@ -25,6 +25,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.google.api.services.cloudsearch.v1.model.ContextAttribute;
 import com.google.api.services.cloudsearch.v1.model.Date;
 import com.google.api.services.cloudsearch.v1.model.Item;
 import com.google.common.base.Strings;
@@ -43,6 +44,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
@@ -806,6 +808,39 @@ public class FakeIndexingRepositoryIT {
       testUtils.waitUntilEqual(escapedFullId, mockItem.getItem());
     } finally {
       v1Client.deleteItemsIfExist(asList(escapedFullId));
+    }
+  }
+
+  @Test
+  public void contextAttributesTest() throws InterruptedException, IOException {
+    String engineeringItemId = Util.getItemId(indexingSourceId, "engineering");
+    String financeItemId = Util.getItemId(indexingSourceId, "finance");
+    String commonTitle = "TeamInfo";
+
+    ContextAttribute engineeringContextAttribute = new ContextAttribute().setName("department").setValues(Arrays.asList("engineering"));
+    ContextAttribute financeContextAttribute = new ContextAttribute().setName("department").setValues(Arrays.asList("finance"));
+    MockItem engineeringItem = new MockItem.Builder(engineeringItemId)
+        .setTitle(commonTitle)
+        .setItemType(ItemType.CONTAINER_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
+        .setContextAttributes(Collections.singletonList(engineeringContextAttribute))
+        .build();
+    MockItem financeItem = new MockItem.Builder(financeItemId)
+        .setTitle(commonTitle)
+        .setItemType(ItemType.CONTAINER_ITEM.toString())
+        .setAcl(PUBLIC_ACL)
+        .setContextAttributes(Collections.singletonList(financeContextAttribute))
+        .build();
+    FakeIndexingRepository mockRepo = new FakeIndexingRepository.Builder()
+        .addPage(asList(engineeringItem, financeItem))
+        .build();
+    runAwaitFullTraversalConnector(mockRepo, setupConfiguration(new Properties()));
+    try {
+      testUtils.waitUntilEqual(engineeringItemId, engineeringItem.getItem());
+      testUtils.waitUntilEqual(financeItemId, financeItem.getItem());
+      searchUtilUser1.waitUntilItemServed(commonTitle, commonTitle);
+    } finally {
+      v1Client.deleteItemsIfExist(asList(engineeringItemId, financeItemId));
     }
   }
 
