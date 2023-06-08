@@ -1,5 +1,14 @@
 # Connector release changelog
 
+## v1-0.0.6 changelist
+### Indexing
+* Add IndexingItemBuilder support for context attributes. Use the `setContextAttributes` method to create/update the context attributes of an item.
+### SDK
+* Update google-api-client version from 1.25.0 to 2.2.0.
+* Update google-api-services-cloudsearch version from v1-rev18-1.25.0 to v1-rev20230214-2.0.0.
+### IT
+* Update google-api-client version from 1.25.0 to 1.35.2.
+
 ## v1-0.0.5 changelist
 ### SDK
 * Avoid inheritance when DefaultAcl is configured to be public
@@ -40,4 +49,3 @@
 ### CSV connector changes
 
 * CSV - Support different CSV Formats
-
